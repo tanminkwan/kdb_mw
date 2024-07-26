@@ -1,0 +1,66 @@
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+
+{% block content %}
+<link rel="stylesheet" href="/static/css/summernote-lite.css" />
+<script src="/static/js/summernote-lite.js"></script>
+<script src="/static/js/lang/summernote-ko-KR.js"></script>
+
+{{ lib.panel_begin(title, "edit") }}
+
+{% if related_views is defined %}
+    <ul class="nav nav-tabs"  style="{{"display: none;" if not related_views else "" }}">
+    <li class="active"><a href="#Home" data-toggle="tab">{{ _("Detail") }}</a> </li>
+        {% for view in related_views %}
+        <li><a href="#{{view.__class__.__name__}}" data-toggle="tab">{{view.title}}</a></li>
+        {% endfor %}
+        </ul>
+
+        <div class="tab-content">
+        {% for view in related_views %}
+        <div id="{{view.__class__.__name__}}" class="tab-pane">
+        {{ widgets.get('related_views')[loop.index - 1]()|safe }}
+    </div>
+    {% endfor %}
+{% endif %}
+
+{% block edit_form %}
+    <div id="Home" class="tab-pane active">
+        {{ widgets.get('edit')(form_action=form_action)|safe }}
+    </div>
+{% endblock %}
+
+    {% if related_views is defined %} </div> {% endif %}
+
+{{ lib.panel_end() }}
+{% endblock %}
+
+{% block add_tail_js %}
+<script>
+$(document).ready(function() {
+	//여기 아래 부분
+	$('#{{summer_column}}').summernote({
+toolbar: [
+  ['style', ['style']],
+  ['font', ['bold', 'underline', 'clear', 'forecolor']],
+  ['fontname', ['fontname']],
+  ['fontsize', ['fontsize']],
+  ['color', ['color']],
+  ['para', ['ul', 'ol', 'paragraph']],
+  ['table', ['table']],
+  ['insert', ['link', 'picture', 'video']],
+  ['view', ['fullscreen', 'codeview', 'help']],
+],
+		  height: 700,                 // 에디터 높이
+		  minHeight: null,             // 최소 높이
+		  maxHeight: null,             // 최대 높이
+		  focus: true,                  // 에디터 로딩후 포커스를 맞출지 여부
+		  lang: "ko-KR",					// 한글 설정
+		  placeholder: '리발소 KMS'	//placeholder 설정
+		  //toolbar: [['fontsize',['fontsize']]]
+          
+	});
+});
+</script>
+<script src="{{url_for('appbuilder.static',filename='js/ab_keep_tab.js')}}"></script>
+{% endblock %}

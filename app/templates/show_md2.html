@@ -1,0 +1,130 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/toastui-editor.min.css" />
+<link rel="stylesheet" href="/static/css/toastui-editor-plugin-table-merged-cell.min.css" />
+<link rel="stylesheet" href="/static/css/tui-color-picker.min.css"/>
+<link rel="stylesheet" href="/static/css/toastui-editor-plugin-color-syntax.min.css"/>
+<link rel="stylesheet" href="/static/css/prism.min.css"/>
+<link rel="stylesheet" href="/static/css/toastui-editor-plugin-code-syntax-highlight.min.css"/>
+<link rel="stylesheet" href="/static/css/toastui-chart.min.css" />
+<script src="/static/js/toastui-editor-all.min.js"></script>
+<script src="/static/js/toastui-editor-plugin-table-merged-cell.min.js"></script>
+<script src="/static/js/toastui-editor-plugin-uml.min.js"></script>
+<script src="/static/js/tui-color-picker.min.js"></script>
+<script src="/static/js/toastui-editor-plugin-color-syntax.min.js"></script>
+<script src="/static/js/prism.min.js"></script>
+<script src="/static/js/prism-clojure.min.js"></script>
+<script src="/static/js/toastui-editor-plugin-code-syntax-highlight-all.min.js"></script>
+<script src="/static/js/toastui-chart.min.js"></script>
+<script src="/static/js/toastui-editor-plugin-chart.min.js"></script>
+<style>
+    table, th, td {
+        border: 4px solid white;
+    }
+    th, td {
+        background-color:white;
+        border: 1px solid gray;
+    }
+    #content {
+        background-color:white;
+        border: 1px solid gray;
+    }
+</style>
+<div class="well well-sm">    
+    <a onclick="history.back()" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="뒤로">
+        <i class="fa fa-arrow-left"></i>
+    </a>
+    <a href="{{update_page}}" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 수정">
+        <i class="fa fa-edit"></i>
+    </a>
+    <a onclick="this.href='data:text/html;charset=UTF-8,'+encodeURIComponent(document.getElementById('toast-viewer').innerHTML)" href="#" download="{{title}}.html"  class="btn btn-sm btn-default" >Download(HTML)
+        <i class="fa fa-chevron-down"></i>
+    </a>
+    <a onclick="this.href='data:text/html;charset=UTF-8,'+encodeURIComponent(document.getElementById('content_md').innerText)" href="#" download="{{title}}.md"  class="btn btn-sm btn-default" >Download(markdown)
+        <i class="fa fa-chevron-down"></i>
+    </a>
+</div>
+<table id=content-table style="width: 100%;">
+    <tr>
+        <th>
+            <h2>{{title}}</h2>
+        </th>
+    </tr>
+    {% if update_on %}
+    <tr>
+        <th>
+            <p style="color: blue;">update date : {{update_on}}</p>
+        </th>
+    </tr>
+    {% endif %}
+    <tr>
+        <td>
+            {% if copy %}
+            <button onclick="copy()">Copy</button>
+            {% endif %}
+            <div id=content>
+                <textarea id=content_md style="border: solid 10px white;">{{md}}</textarea>
+            </div>
+        </td>
+    </tr>
+    {% if files|length > 0 %}
+    <tr>
+        <th>
+            <p>[첨부파일]</p>
+        {% for f in files %}
+            <p><a href="/filemodelview/download/{{f['file']}}">{{f['file_name']}}</a></p>
+        {% endfor %}
+        </th>
+    </tr>
+    {% endif %}
+
+</table>
+<div class="well well-sm">    
+    <a onclick="history.back()" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="뒤로">
+        <i class="fa fa-arrow-left"></i>
+    </a>
+    <a href="{{update_page}}" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 수정">
+        <i class="fa fa-edit"></i>
+    </a>
+    <a onclick="this.href='data:text/html;charset=UTF-8,'+encodeURIComponent(document.getElementById('toast-viewer').innerHTML)" href="#" download="{{title}}.html"  class="btn btn-sm btn-default" >Download(HTML)
+        <i class="fa fa-chevron-down"></i>
+    </a>
+    <a onclick="this.href='data:text/html;charset=UTF-8,'+encodeURIComponent(document.getElementById('content_md').innerText)" href="#" download="{{title}}.md"  class="btn btn-sm btn-default" >Download(markdown)
+        <i class="fa fa-chevron-down"></i>
+    </a>
+</div>
+<script>
+    $(document).ready(function() {
+
+    var content_md = document.getElementById("content_md");
+	content_md.style="display: none;"
+	var div_content = document.createElement('div');
+	div_content.id = "toast-viewer";
+	content_md.parentNode.insertBefore(div_content, content_md); 
+	var initial_content = content_md.value;
+
+    const { Editor } = toastui;
+    const { tableMergedCell, uml, colorSyntax, codeSyntaxHighlight, chart } = Editor.plugin;
+    const umlOptions = {
+        rendererURL: 'https://mwm-plantuml.kdb.co.kr:20443/png/'
+    }
+
+    const viewer = Editor.factory({
+        el: document.querySelector('#toast-viewer'),
+        viewer: true,
+        height: '1000px',
+        initialValue: initial_content,
+        plugins: [tableMergedCell, [uml, umlOptions], codeSyntaxHighlight, chart]
+      });
+
+    });
+    function copy(){
+        var r = document.createRange();
+        r.selectNode(document.getElementById("content-html"));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(r);
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+    }
+</script>
+{% endblock %}

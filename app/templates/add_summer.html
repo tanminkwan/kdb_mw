@@ -1,0 +1,41 @@
+{% extends "appbuilder/base.html" %}
+{% import 'appbuilder/general/lib.html' as lib %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/summernote-lite.css" />
+<script src="/static/js/summernote-lite.js"></script>
+<script src="/static/js/lang/summernote-ko-KR.js"></script>
+
+{{ lib.panel_begin(title) }}
+
+{% block add_form %}
+    {{ widgets.get('add')(form_action=form_action)|safe }}
+{% endblock %}
+
+{{ lib.panel_end() }}
+<script>
+$(document).ready(function() {
+	//여기 아래 부분
+	$('#{{summer_column}}').summernote({
+toolbar: [
+  ['style', ['style']],
+  ['font', ['bold', 'underline', 'clear','forecolor']],
+  ['fontname', ['fontname']],
+['fontsize',['fontsize']],
+  ['color', ['color']],
+  ['para', ['ul', 'ol', 'paragraph']],
+  ['table', ['table']],
+  ['insert', ['link', 'picture', 'video']],
+  ['view', ['fullscreen', 'codeview', 'help']],
+],
+		  height: 700,                 // 에디터 높이
+		  minHeight: null,             // 최소 높이
+		  maxHeight: null,             // 최대 높이
+		  focus: true,                  // 에디터 로딩후 포커스를 맞출지 여부
+		  lang: "ko-KR",					// 한글 설정
+		  placeholder: '리발소 KMS'	//placeholder 설정
+		  //toolbar: [['fontsize',['fontsize']]]
+          
+	});
+});
+</script>
+{% endblock %}

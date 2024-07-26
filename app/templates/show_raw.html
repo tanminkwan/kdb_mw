@@ -1,0 +1,78 @@
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<style>
+    table, th, td {
+        border: 4px solid white;
+    }
+    th, td {
+        background-color:azure;
+    }
+    #content {
+        background-color:white;
+        border: 1px solid gray;
+    }
+</style>
+<div class="well well-sm">    
+    <a onclick="history.back()" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="뒤로">
+        <i class="fa fa-arrow-left"></i>
+    </a>
+    <a href="{{update_page}}" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 수정">
+        <i class="fa fa-edit"></i>
+    </a>
+</div>
+<table id=content-table style="width: 100%;">
+    <tr>
+        <th>
+            <h2>{{title}}</h2>
+        </th>
+    </tr>
+    {% if update_on %}
+    <tr>
+        <th>
+            <p style="color: blue;">update date : {{update_on}}</p>
+        </th>
+    </tr>
+    {% endif %}
+    <tr>
+        <td>
+            {% if copy %}
+            <button onclick="copy()">Copy</button>
+            {% endif %}
+            <div id=content>
+                <div id=content-html style="border: solid 10px white;">
+                    {{html|safe}}
+                </div>
+            </div>
+        </td>
+    </tr>
+    {% if files|length > 0 %}
+    <tr>
+        <th>
+            <p>[첨부파일]</p>
+        {% for f in files %}
+            <p><a href="/filemodelview/download/{{f['file']}}">{{f['file_name']}}</a></p>
+        {% endfor %}
+        </th>
+    </tr>
+    {% endif %}
+
+</table>
+<div class="well well-sm">    
+    <a onclick="history.back()" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="뒤로">
+        <i class="fa fa-arrow-left"></i>
+    </a>
+    <a href="{{update_page}}" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 수정">
+        <i class="fa fa-edit"></i>
+    </a>
+</div>
+<script>
+    function copy(){
+        var r = document.createRange();
+        r.selectNode(document.getElementById("content-html"));
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(r);
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+    }
+</script>
+{% endblock %}

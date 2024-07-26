@@ -1,0 +1,360 @@
+<!--meta http-equiv="refresh" content="0; url=/servermodelview/list/"/-->
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<html>
+<head>
+    <meta charset="utf-8" />
+</head>
+<style>
+    div.left {
+        width:50%;
+        float: left;
+        padding:10px;
+    }
+    div.right {
+        width:50%;
+        float: right;
+        padding:10px;
+    }
+    #main-title {
+        font-size: 32px;
+        font-weight: bold;
+        font-family: 'Lucida Sans Unicode';
+    }
+    #sub-title {
+        color: #00f;
+        font-size: 20px;
+        font-weight: bold;
+    }
+    #sub-2nd-title {
+        font-size: 16px;
+        font-weight: bold;
+    }
+    #bottom4 {
+        background-color:#fdf2e9;
+        clear:both;
+        padding:3px;
+        width: 100%;
+    }
+    #bottom2 {
+        background-color: #fee;
+        clear:both;
+        padding:3px;
+        width: 100%;
+    }
+    #bottom4 tr, #bottom4 th{
+        background-color: #7b241c;
+        color: #fff;
+        text-align: center;
+    }
+    #bottom2 tr, #bottom2 th{
+        background-color: #31d;
+        color: #fff;
+        text-align: center;
+    }
+    #bottom2 td, #bottom4 td{
+        background-color: #dee;
+        word-break: break-all;
+        text-align: left;
+        border: 1px solid black;
+        color: #006;
+        padding:3px;
+    }
+    #bottom1 {
+        background-color: #ffe;
+        clear:both;
+        padding:3px;
+        width: 100%;
+    }
+    #bottom1 tr, #bottom1 th{
+        background-color: cadetblue;
+        text-align: center;
+    }
+    #bottom1 td{
+        background-color: #dee;
+        word-break: break-all;
+        text-align: left;
+        border: 1px solid black;
+        padding:3px;
+    }
+    #agentStat, #offline, #uncheckedWasList, #notRunnigWasList {
+      font-family: Arial, Helvetica, sans-serif;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    
+    #agentStat td, #agentStat th, #offline td, #offline th, #uncheckedWasList td, #uncheckedWasList th, #notRunnigWasList td, #notRunnigWasList th {
+      border: 1px solid #ddd;
+      padding: 5px;
+    }
+    
+    #agentStat tr:nth-child(even){background-color: #f2f2f2;}
+    #agentStat tr:hover {background-color: #ddd;}
+    #offline tr:nth-child(even){background-color: #f2f2f2;}
+    #offline tr:hover {background-color: #ddd;}
+    #uncheckedWasList tr:nth-child(even){background-color: #f2f2f2;}
+    #uncheckedWasList tr:hover {background-color: #ddd;}
+    #notRunnigWasList tr:nth-child(even){background-color: #f2f2f2;}
+    #notRunnigWasList tr:hover {background-color: #ddd;}
+    
+    #agentStat th {
+      padding-top: 7px;
+      padding-bottom: 7px;
+      text-align: center;
+      background-color: #04AA6D;
+      color: white;
+    }
+    #offline th {
+      padding-top: 5px;
+      padding-bottom: 5px;
+      text-align: center;
+      background-color: #643A6D;
+      color: white;
+    }
+    #uncheckedWasList th {
+      padding-top: 5px;
+      padding-bottom: 5px;
+      text-align: center;
+      background-color: #97AA6D;
+      color: white;
+    }
+    #notRunnigWasList th {
+      padding-top: 5px;
+      padding-bottom: 5px;
+      text-align: center;
+      background-color: #014404;
+      color: white;
+    }
+    .overlay {
+      display: none;
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      z-index: 999;
+      background: rgba(255,255,255,0.8) url("/static/css/images/loader2.gif") center no-repeat;
+    }
+    body.loading{
+      overflow: hidden;
+    }
+    body.loading .overlay {
+      display: block;
+    }
+    #recheck-message{
+        color: #31d;
+        font-size:14px
+    }
+    #recheck-trace{
+        color: red;
+        font-size:12px
+    }
+    #result-message{
+        color: #31d;
+        font-size:20px
+    }
+    #result-trace{
+        color: red;
+        font-size:12px
+    }
+
+</style>
+
+<body>
+<!--h2><center>{{_('Welcome')}}<center></h2-->
+<h2 id="main-title"><center>리발소 늬우스<center></h2>
+<div id="upper">
+    <div class="left">
+        <h3 id="sub-title">[Agent 상태]</h3>
+        <h4 id="sub-2nd-title">1) Agent 상태 현황</h4>
+        <table id="agentStat"></table>
+        <h4 id="sub-2nd-title">2) Offline Agent 목록</h4>
+        <table id="offline"></table>
+    </div>
+    <div class="right">        
+        <h3 id="sub-title">[WAS 상태]</h3>
+        <button id="recheck-button" onclick="recheckStatus()" style="font-size:16px;">WAS상태update</button>
+        <div id="recheck-message"></div>
+        <div id="recheck-trace"></div>
+        <h4 id="sub-2nd-title">1) 상태 Check 불가 WAS List</h4>
+        <table id="uncheckedWasList"></table>
+        <h4 id="sub-2nd-title">2) 비정상 WAS Instance List</h4>
+        <table id="notRunnigWasList"></table>        
+    </div>
+</div>
+<div id="bottom2">
+    <h3 id="sub-title">[Config 변경 소식]</h3>
+    <div class="left">
+        <h4 id="sub-2nd-title">1) WAS Config 변경 List</h4>
+        <table id="changedWASList"></table>
+    </div>
+    <div class="right">        
+        <h4 id="sub-2nd-title">2) WEB Config 변경 List</h4>
+        <table id="changedWEBList"></table>
+    </div>
+</div>
+<div id="bottom4">
+    <h3 id="sub-title">[신규지식 등록 소식]</h3>
+    <table id="recentKmList"></table>
+</div>
+<div id="bottom1">
+    <h3 id="sub-title">[Command 수행 실패 소식]</h3>
+    <h4 id="sub-2nd-title">1) Config 파일 Error List</h4>
+    <table id="configFilesList"></table>
+    <h4 id="sub-2nd-title">2) WAS 상태 조회 Error List</h4>
+    <table id="erroWasList"></table>
+</div>
+<div id="bottom3">
+    <h3 id="sub-title">[일일점검 보고서 발송]</h3>
+    <div>       
+        <button id="report-button" onclick="sendDailyReport()" style="font-size:20px;">WAS 상태 Check</button>
+        <button id="report-button" onclick="sendDailyReport0()" style="font-size:20px;">WAS 상태 모두 정상</button>
+    </div>
+    <div id="result-message"></div>
+    <div id="result-trace"></div>
+</div>
+<div class="overlay"></div>
+<script>
+
+    $(document).on({
+        ajaxStart: function(){
+          $('body').addClass("loading");
+        },
+        ajaxStop: function(){
+          $('body').removeClass("loading");
+        }
+    })
+
+    function sendDailyReport(){
+        $.ajax({
+        url: "/monitor/sendDailyReport",
+            success: function(data){
+                $('#result-message').html(data.message);
+                $('#result-trace').html(data.trace);
+            }
+        });
+    }
+
+    function sendDailyReport0(){
+        $.ajax({
+        url: "/monitor/sendDailyReport/0",
+            success: function(data){
+                $('#result-message').html(data.message);
+                $('#result-trace').html(data.trace);
+            }
+        });
+    }
+
+    function recheckStatus(){
+        $.ajax({
+        url: "/monitor/recheckStatus",
+            success: function(data){
+                $('#recheck-message').html(data.message);
+                $('#recheck-trace').html(data.trace);
+            }
+        });
+    }
+
+    $.ajax({
+        url: "/monitor/agentStat",
+            success: function(data){
+                //var obj = jQuery.parseJSON(data.list)
+                var obj1 = data.agentStat
+                var obj2 = data.offlineAgents
+                $(obj1).each(function(key, item){
+                    //console.log(item.pk+" : "+item.value)
+                    if (key==0){
+                        $('#agentStat').append("<tr><th>Landscape</th><th>offline개수</th><th>total개수</th></tr>");            
+                    }
+                    $('#agentStat').append("<tr><td>"+item.landscape+"</td><td>"+item.offline+"</td><td>"+item.total+"</td></tr>");            
+                });
+                $(obj2).each(function(key, item){
+                    //console.log(item.pk+" : "+item.value)
+                    if (key==0){
+                        $('#offline').append("<tr><th>Landscape</th><th>Agent ID</th><th>Agent 이름</th><th>최종통신일시</th></tr>");            
+                    }
+                    $('#offline').append("<tr><td>"+item.landscape+"</td><td>"+item.agent_id+"</td><td>"+item.agent_name+"</td><td>"+item.last_checked_date+"</td></tr>");            
+                });
+            }
+        });
+    $.ajax({
+        url: "/monitor/getNotRunningWasList",
+            success: function(data){
+                //var obj = jQuery.parseJSON(data.list)
+                var obj1 = data.uncheckedWas
+                var obj2 = data.notRunningWas
+                $(obj1).each(function(key, item){
+                    //console.log(item.pk+" : "+item.value)
+                    if (key==0){
+                        $('#uncheckedWasList').append("<tr><th>Domain ID</th><th>Host ID</th><th>System User</th></tr>");            
+                    }
+                    $('#uncheckedWasList').append("<tr><td>"+item.domain_id+"</td><td>"+item.host_id+"</td><td>"+item.system_user+"</td></tr>");            
+                });
+                $(obj2).each(function(key, item){
+                    //console.log(item.pk+" : "+item.value)
+                    if (key==0){
+                        $('#notRunnigWasList').append("<tr><th>Domain ID</th><th>설명</th><th>Instance ID</th><th>상태</th></tr>");            
+                    }
+                    $('#notRunnigWasList').append("<tr><td>"+item.domain_id+"</td><td>"+item.was_instance_group+"</td><td>"+item.was_instance_id+"</td><td>"+item.was_instance_stat+"</td></tr>");            
+                });
+            }
+        });
+    $.ajax({
+        url: "/monitor/getErrorResults",
+            success: function(data){
+                //var obj = jQuery.parseJSON(data.list)
+                var obj1 = data.configFilesList
+                var obj2 = data.erroWasList
+                $(obj1).each(function(key, item){
+                    if (key==0){
+                        $('#configFilesList').append("<tr><th>상세조회</th><th>Agent ID</th><th>Host ID</th><th>file명</th><th>file경로</th><th>상태</th><th>수신일시</th></tr>");
+                    }
+                    $('#configFilesList').append("<tr><td><a href=\"/resultmodelview/show/"+ item.id +"\" target=\"_blank\">"+item.command_id+"</a></td><td>"+item.agent_id+"</td><td>"+item.host_id+"</td><td>"+item.key_value1+"</td><td>"+item.key_value2+"</td><td>"+item.result_status+"</td><td>"+item.create_on+"</td></tr>");
+                });
+                $(obj2).each(function(key, item){
+                    //console.log(item.pk+" : "+item.value)
+                    if (key==0){
+                        $('#erroWasList').append("<tr><th>상세조회</th><th>Agent ID</th><th>Host ID</th><th>조회조건</th><th>상태</th><th>수신내용</th><th>수신일시</th></tr>");
+                    }
+                    $('#erroWasList').append("<tr><td><a href=\"/resultmodelview/show/"+ item.id +"\" target=\"_blank\">"+item.command_id+"</a></td><td>"+item.agent_id+"</td><td>"+item.host_id+"</td><td>"+item.key_value2+"</td><td>"+item.result_status+"</td><td>"+item.result_text+"</td><td>"+item.create_on+"</td></tr>");
+                });
+            }
+        });
+    $.ajax({
+        url: "/monitor/getChangedConfigs",
+            success: function(data){
+                //var obj = jQuery.parseJSON(data.list)
+                var obj1 = data.changedWASList
+                var obj2 = data.changedWEBList
+                $(obj1).each(function(key, item){
+                    if (key==0){
+                        $('#changedWASList').append("<tr><th>Domain ID</th><th>Landscape</th><th>Host ID</th><th>WAS 명</th><th>변경일시</th></tr>");
+                    }
+                    $('#changedWASList').append("<tr><td><a href=\"/waschangehistorymodelview/show/"+ item.id +"\" target=\"_blank\">"+item.was_id+"</a></td><td>"+item.landscape+"</td><td>"+item.host_id+"</td><td>"+item.was_name+"</td><td>"+item.create_on+"</td></tr>");
+                });
+                $(obj2).each(function(key, item){
+                    //console.log(item.pk+" : "+item.value)
+                    if (key==0){
+                        $('#changedWEBList').append("<tr><th>Host ID</th><th>Port</th><th>Landscape</th><th>WEB 서버 명</th><th>변경일시</th></tr>");
+                    }
+                    $('#changedWEBList').append("<tr><td><a href=\"/webchangehistorymodelview/show/"+ item.id +"\" target=\"_blank\">"+item.host_id+"</a></td><td>"+item.port+"</td><td>"+item.landscape+"</td><td>"+item.web_name+"</td><td>"+item.create_on+"</td></tr>");
+                });
+            }
+        });
+        $.ajax({
+        url: "/monitor/recentKmList",
+            success: function(data){
+                //var obj = jQuery.parseJSON(data.list)
+                var obj1 = data.recentKmList
+                $(obj1).each(function(key, item){
+                    if (key==0){
+                        $('#recentKmList').append("<tr><th>분류</th><th>Title</th><th>작성일시</th><th>최초작성일시</th><th>작성자ID</th></tr>");
+                    }
+                    $('#recentKmList').append("<tr><td>"+item.category+"</td><td><a href=\"/ut/htmlcontent/"+ item.id +"\" target=\"_blank\">"+item.content_name+"</a></td><td>"+item.update_on+"</td><td>"+item.create_on+"</td><td>"+item.user_id+"</td></tr>");
+                });
+            }
+        });
+</script>
+</body>
+</html>
+{% endblock %}
