@@ -16,7 +16,7 @@ SECRET_KEY = "\2\1thisismyscretkey\1\2\e\y\y\h"
 # SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
 # SQLALCHEMY_DATABASE_URI = 'mysql://myapp@localhost/myapp'
 # SQLALCHEMY_DATABASE_URI = 'postgresql://root:password@localhost/myapp'
-SQLALCHEMY_DATABASE_URI = 'postgresql://tiffanie:1q2w3e4r!!@10.0.20.117/mw'
+SQLALCHEMY_DATABASE_URI = 'postgresql://tiffanie:1q2w3e4r!!@localhost:25432/mw'
 
 # Kafka brokers
 #KAFKA_BROKERS = ['10.0.20.117:9092']
@@ -26,8 +26,8 @@ KAFKA_CONSUMER_4_WAS_MONITORING = 'g_w_mw_server'
 
 # GitLab
 GITLAB_CONFIG = dict()
-GITLAB_CONFIG['api_connection'] = 'http://10.1.10.100:8080/api/v4/'
-GITLAB_CONFIG['giblab_api_private_key'] = 'rHpBszAcBi-p9zSkuHgA'
+#GITLAB_CONFIG['api_connection'] = 'http://10.1.10.100:8080/api/v4/'
+#GITLAB_CONFIG['giblab_api_private_key'] = 'rHpBszAcBi-p9zSkuHgA'
 
 # Flask-WTF flag for CSRF
 CSRF_ENABLED = True

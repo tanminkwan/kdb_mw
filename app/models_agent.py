@@ -6,7 +6,7 @@ from sqlalchemy import Column, Text, Integer, String, ForeignKey\
 , Table, Date
 from sqlalchemy.orm import relationship
 import enum
-from jinja2 import escape
+from markupsafe import escape
 from datetime import datetime
 from flask_appbuilder.models.mixins import FileColumn
 from flask_appbuilder.filemanager import get_file_original_name

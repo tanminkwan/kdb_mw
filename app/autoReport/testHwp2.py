@@ -1,12 +1,12 @@
-import win32com.client as win32
-import win32gui
+#import win32com.client as win32
+#import win32gui
 from time import sleep
 from datetime import datetime
 from pythoncom import CoInitialize
 
 def recreateHwp(master_file_name, new_file_name, replace_text_list):
 
-    hwp = win32.gencache.EnsureDispatch('HWPFrame.HwpObject',CoInitialize())
+    #hwp = win32.gencache.EnsureDispatch('HWPFrame.HwpObject',CoInitialize())
     #hwp = win32.dynamic.Dispatch('HWPFrame.HwpObject')
     #hwp.XHwpWindows.Item(0).Visible = True
     hwp.RegisterModule('FilePathCheckDLL','FilePathCheckerModuleExample')

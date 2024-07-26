@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from .testGetWasStatus import getAccessToken, getWasStatus, getNotRunningWasList
 from .testXlsx import createDailyCheckXlsx
 from .testSelenium import getTasks
-from .testHwp2 import recreateHwp
+#from .testHwp2 import recreateHwp
 from .testSmtp import send_kdbMail
 
 def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True):
@@ -87,7 +87,7 @@ def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True)
         ('<<education>>',''),
     ]
 
-    recreateHwp(master_file_name2, new_file_name2, replace_text_list)
+    #recreateHwp(master_file_name2, new_file_name2, replace_text_list)
 
     #시스템 작업 보고
     master_file_name3 = WORKING_DIR + '시스템 작업 보고_template.hwp'
@@ -98,7 +98,7 @@ def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True)
         ('<<description>>', t_task if t_task else '- 없음')
     ]
 
-    recreateHwp(master_file_name3, new_file_name3, replace_text_list)
+    #recreateHwp(master_file_name3, new_file_name3, replace_text_list)
 
     ###########################################################################
     #5. Send Report e-mail

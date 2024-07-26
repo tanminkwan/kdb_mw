@@ -20,7 +20,10 @@ from .sqls_agent import checkAgentUpdated, checkAgentAproved\
     , sendCommands, addAgent, addResult, cancelCommands, createCommandDetail_bySch\
     , getLatestFile, updateResultStatus, updateExpiration
 from sqlalchemy import event
-from wtforms.fields import TextField
+
+from wtforms import Form, StringField
+
+#from wtforms.fields import TextField
 from wtforms.validators import Regexp, EqualTo
 from datetime import datetime, timedelta
 from .scheduled_jobs  import job_ag_createJob
@@ -87,10 +90,10 @@ class AgentModelView(ModelView):
     edit_columns = ['agent_id', 'agent_version', 'agent_name', 'landscape', 'agent_sub_type', 'ip_address', 'host_id', 'approved_yn']
 
     edit_form_extra_fields = {
-        'agent_id': TextField('Agent Id', widget=ReadOnlyField())
-      , 'agent_version': TextField('Agent Version', widget=ReadOnlyField())
-      , 'ip_address': TextField('IP Address', widget=ReadOnlyField())
-      , 'host_id': TextField('Host Id', widget=ReadOnlyField())
+        'agent_id': StringField('Agent Id', widget=ReadOnlyField())
+      , 'agent_version': StringField('Agent Version', widget=ReadOnlyField())
+      , 'ip_address': StringField('IP Address', widget=ReadOnlyField())
+      , 'host_id': StringField('Host Id', widget=ReadOnlyField())
     }
 
     base_permissions = ['can_list', 'can_show', 'can_edit']
@@ -139,7 +142,7 @@ class CommandTypeModelView(ModelView):
                     ,'target_file_name':'파일명(기능명)'
                      }
     edit_form_extra_fields = {
-        'command_type_id': TextField('Command Type Id', widget=ReadOnlyField())
+        'command_type_id': StringField('Command Type Id', widget=ReadOnlyField())
     }
     edit_columns = ['command_type_id', 'command_type_name', 'command_class', 'target_file_name', 'target_file_path']
 
