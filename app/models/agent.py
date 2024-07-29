@@ -11,7 +11,7 @@ from datetime import datetime
 from flask_appbuilder.models.mixins import FileColumn
 from flask_appbuilder.filemanager import get_file_original_name
 from flask_appbuilder.models.decorators import renders
-from .models_com import get_user, getColoredText, PeriodicTypeEnum, CommandClassEnum\
+from .common import get_user, getColoredText, PeriodicTypeEnum, CommandClassEnum\
     , CommandStatusEnum, YnEnum, ResultStatusEnum, AgentTypeEnum, IntervalTypeEnum\
     , TargetToSendEnum, AutorunFuncEnum, AutorunTypeEnum, LocationEnum, AgentSubTypeEnum, get_uuid
 

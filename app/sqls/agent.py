@@ -1,15 +1,15 @@
-from . import appbuilder, db, log, producer4Kafka
+from app import appbuilder, db, log, producer4Kafka
 from flask import g
 from sqlalchemy.sql import select, update, func
 from sqlalchemy import null, text, or_, not_, case
 from datetime import datetime, timedelta
 from sqlalchemy.dialects.postgresql import insert, JSON
-from .models_com import get_uuid
-from .models_agent import AgCommandType, AgCommandMaster, AgCommandDetail\
+from app.models.common import get_uuid
+from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgResult, AgAgentGroup, AgAgent, AgFile, AgCommandHelper, AgAutorunResult
-from .models_monitor import MoWasInstanceStatus
-from .sqls_mw import getHostId, getDomainIdAsPK
-from .sqls_monitor import selectRow
+from app.models.monitor import MoWasInstanceStatus
+from .was import getHostId, getDomainIdAsPK
+from .monitor import select_row
 from sys import exc_info
 import json
 import re
@@ -325,28 +325,6 @@ def createCommandDetail_bySch(command_id):
         log.error('An Error Occured : %s %s %s', excType, excValue, traceback)
         db.session.rollback()
 
-    """
-    filter_dict = dict(
-        command_id = command_id
-       ,command_status    = 'KAFKA'
-    )
-
-    recs, _ = selectRows('ag_command_detail', filter_dict)
-
-    if recs:
-        prod = Producer4Kafka(kafka_brokers)
-
-        for rec in recs:
-
-            topic = 't_DESKTOP-310KSJN_KDB_J'
-            message = {'aaa':'bbb'}
-            key = 'ggg'
-            rtn = prod.sendMessage(topic, message, key=key)
-
-            if rtn < 0:
-                # flag error 
-                pass
-    """
     return 1, 'OK'
 
 def sendCommandImmediately(agent_id, command_type_id):
@@ -655,7 +633,7 @@ def getCommandMaster(command_id):
 
     return command_rec
 
-def getCommands():
+def get_commands():
 
     command_recs = db.session.query(AgCommandMaster)\
                     .filter(AgCommandMaster.cancel_yn=='NO'
@@ -712,7 +690,7 @@ def updateWasStatus(key_value2, result_text, host_id_of_agent):
     domain_id = getDomainIdAsPK(host_id, real_domain_id)
 
     #print('host_id, real_domain_id, domain_id of getDomainIdAsPK: ',host_id, real_domain_id, domain_id)
-    was_rec, _ = selectRow('mw_was', {'was_id':domain_id})
+    was_rec, _ = ('mw_was', {'was_id':domain_id})
 
     if was_rec and was_rec.landscape:
         landscape = was_rec.landscape.name

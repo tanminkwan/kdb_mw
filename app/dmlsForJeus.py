@@ -4,12 +4,12 @@ from . import appbuilder, db
 from datetime import datetime
 from sqlalchemy import null, text
 from sqlalchemy.dialects.postgresql import insert, JSON
-from .models import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
+from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, DailyReport\
     , MwWebServer, MwAppMaster, MwDBMaster
-from .sqls_mw import getLandscape, getRealWebHostId
-from .sqls_monitor import selectRow 
-from .sqls_util import insertTag
+from app.sqls.was import getLandscape, getRealWebHostId
+from app.sqls.monitor import select_row 
+from app.sqls.knowledge import insert_tag
 
 import re
 
@@ -330,8 +330,8 @@ class JeusDomain(ABC):
             tag1 = self.domain_id.replace('_Domain','')[1:]
             tag2 = was_instance_id.split('_M')[0]
             tag = 'MS-' + tag1 + '_Domain-' + tag2
-            tag_id = insertTag(tag)
-            row, _ = selectRow('ut_tag',{'id':tag_id})
+            tag_id = insert_tag(tag)
+            row, _ = select_row('ut_tag',{'id':tag_id})
             rtn.append(row)
         return rtn
 

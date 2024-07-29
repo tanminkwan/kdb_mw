@@ -10,7 +10,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
 import enum
 from datetime import datetime
-from .models_com import get_user, get_group, get_date, get_uuid, YnEnum, getTagWithType\
+from .common import get_user, get_group, get_date, get_uuid, YnEnum, getTagWithType\
     , getTagValueWithType, getHtmlButton
 
 assoc_tag_resource = Table('ut_tag_resource', Model.metadata,

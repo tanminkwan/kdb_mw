@@ -8,20 +8,19 @@ from flask_appbuilder.actions import action
 from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, protect
 from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
     , FilterEqualFunction, FilterNotEqual, FilterInFunction, FilterStartsWith, FilterEqual
-from . import appbuilder, db, mongoClient, dbMongo, footprint, vv_P_secs, admin4Kafka\
-    , WAS_STATUS
+from app import appbuilder, db, admin4Kafka, WAS_STATUS
 from flask_jwt_extended import create_refresh_token
 #from .models import Server, JeusContainer, Host
-from .models_monitor import MoWasStatusTemplate, MoWasStatusReport, MoGridConfig, MoWasInstanceStatus
-from .views_com import FilterStartsWithFunction, get_mw_user, get_userid, get_reporttime
+from app.models.monitor import MoWasStatusTemplate, MoWasStatusReport, MoGridConfig, MoWasInstanceStatus
+from .common import FilterStartsWithFunction, get_mw_user, get_userid, get_reporttime
 from datetime import datetime, timedelta
-from .sqls_monitor import selectRow, getGridConfig, createWasStatusReport\
+from app.sqls.monitor import select_row, getGridConfig, createWasStatusReport\
                     , getNotRunningWasList, getColType, getTargetTableName\
                     , getAllFromTable
-from .sqls_agent import getAgentStat, getErrorResults, insertCommandMaster
-from .sqls_mw import getChangedWAS, getChangedWEB
+from app.sqls.agent import getAgentStat, getErrorResults, insertCommandMaster
+from app.sqls.was import getChangedWAS, getChangedWEB
 from wtforms import FieldList, StringField
-from .autoReport.runAutoReport import runAutoReport
+from app.autoReport.runAutoReport import runAutoReport
 import sys
 
 class SimpleListWidget(ListWidget):
@@ -227,7 +226,7 @@ class MonitorApi(BaseApi):
     @has_access
     def getAccessToken(self):
 
-        row, _ = selectRow('ab_user',{'username':'agent'})
+        row, _ = select_row('ab_user',{'username':'agent'})
         data = create_access_token(identity=row.id)
         return render_template('show_raw.html', title='agent access token', html=data
                 , copy=True
@@ -237,7 +236,7 @@ class MonitorApi(BaseApi):
     @has_access
     def getRefleshToken(self):
 
-        row, _ = selectRow('ab_user',{'username':'agent'})
+        row, _ = select_row('ab_user',{'username':'agent'})
         data = create_refresh_token(identity=row.id, expires_delta=timedelta(hours=1))
         return render_template('show_raw.html', title='agent reflesh token (short-term)', html=data
                 , copy=True
@@ -292,7 +291,7 @@ class MonitorApi(BaseApi):
                         command_type_id = 'NOAGENT.JMX.MONITOR'
                         agent_id = 'ESX05_syper_J'
                     else:
-                        rec, _ = selectRow('ag_command_helper', dict(mapping_key='ASIS_JMX_PARAMS',agent_id=w[1]))
+                        rec, _ = select_row('ag_command_helper', dict(mapping_key='ASIS_JMX_PARAMS',agent_id=w[1]))
                         if rec:
                             command_type_id = 'ASIS.P.JMX.MONITOR'
                         else:

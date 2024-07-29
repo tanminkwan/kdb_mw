@@ -1,12 +1,12 @@
-from . import db, log
+from app import db, log
 from .dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
 from .dmlsForWebtob import WebtobHttpm, WebtobHttpmFactory, NewHttpm, httpmToDict
-from .sqls_mw import getDomainIdAsPK, getWasInstanceId
-from .sqls_agent import updateResultStatus, updateWasStatus, getResult, getAutorunFunc\
+from app.sqls.was import getDomainIdAsPK, getWasInstanceId
+from app.sqls.agent import updateResultStatus, updateWasStatus, getResult, getAutorunFunc\
     , sendCommandImmediately, getOrInsertCommandType, insertCommandMaster\
     , getCommandMaster
-from .sqls_monitor import updateRows, insertRow, selectRow, selectRows
-from .models_com import get_date
+from app.sqls.monitor import updateRows, insertRow, select_row, select_rows
+from app.models.common import get_date
 from datetime import datetime, timedelta
 from deepdiff import DeepDiff
 import json
@@ -117,7 +117,7 @@ class AutorunResult:
         if not domain:
             return -1, 'domain item doesn\'t exist'
 
-        rec, _ = selectRow('mw_was',{'was_id':domain_id})
+        rec, _ = select_row('mw_was',{'was_id':domain_id})
         
         if rec and rec.was_object:
 
@@ -151,7 +151,7 @@ class AutorunResult:
         result = self.result
         
         filter_dict = dict(command_id=result.command_id)
-        cmaster, _ = selectRow('ag_command_master', filter_dict)
+        cmaster, _ = select_row('ag_command_master', filter_dict)
 
         urlrewrite_config = cmaster.additional_params
 
@@ -416,7 +416,7 @@ class AutorunResult:
             port = 0
             dict2_type['NODE'][0]['PORT'] = "0"
 
-        rec, _ = selectRow('mw_web',{'host_id':host_id,'port':port})
+        rec, _ = select_row('mw_web',{'host_id':host_id,'port':port})
 
         if rec:
             diff = DeepDiff(rec.httpm_object, dict2_type, ignore_order=True)
@@ -697,7 +697,7 @@ class AutorunResult:
 
         result = self.result
 
-        row, _ = selectRow('mw_web',{'agent_id':result.agent_id})
+        row, _ = select_row('mw_web',{'agent_id':result.agent_id})
         
         if not row:
             return 0, 'WEB not found'
@@ -705,7 +705,7 @@ class AutorunResult:
         dicts = self._getSi(result.result_text, result.create_on.strftime('%Y.%m.%d %H:%M'))
 
         for r in dicts:
-            srow, _ = selectRow('mw_web_server',{'svr_id':r['svr_id'],'mw_web_id':row.id})
+            srow, _ = select_row('mw_web_server',{'svr_id':r['svr_id'],'mw_web_id':row.id})
 
             if srow:
                 srow.monitor_now = r
@@ -754,7 +754,7 @@ class AutorunResult:
 
         result = self.result
 
-        row, _ = selectRow('mw_web',{'agent_id':result.agent_id})
+        row, _ = select_row('mw_web',{'agent_id':result.agent_id})
         
         if not row:
             return 0, 'WEB not found'
@@ -771,7 +771,7 @@ class AutorunResult:
            ,string_to_replace = jeusprop_location
         )
 
-        recs, _ = selectRows('ag_command_helper', filter_dict)
+        recs, _ = select_rows('ag_command_helper', filter_dict)
 
         if recs:
             return [ r.target_file_name for r in recs]
@@ -780,7 +780,7 @@ class AutorunResult:
             agent_id    = agent_id
         )
 
-        recs, _ = selectRows('mw_was', filter_dict)
+        recs, _ = select_rows('mw_was', filter_dict)
         
         if recs:
             return [ r.was_id for r in recs]

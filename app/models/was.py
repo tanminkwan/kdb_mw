@@ -10,7 +10,7 @@ from datetime import datetime
 from flask_appbuilder.models.mixins import FileColumn
 from flask_appbuilder.models.decorators import renders
 from flask_appbuilder.filemanager import get_file_original_name
-from .models_com import get_user, EncodingEnum, WarEnum, WebconnEnum, BuiltEnum\
+from .common import get_user, EncodingEnum, WarEnum, WebconnEnum, BuiltEnum\
     , ApmEnum, SvrTypeEnum, RunEnum, YnEnum, LocationEnum, OSEnum, RuningTypeEnum\
     , getColoredText, isNotNull, getJsonButton, getDiagramButton
 

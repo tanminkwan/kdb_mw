@@ -6,10 +6,10 @@ from . import appbuilder, db
 from datetime import datetime
 from sqlalchemy import select, null, text
 from sqlalchemy.dialects.postgresql import insert, JSON
-from .models import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
+from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, MwWebUri, MwWebServer
-from .sqls_mw import getLandscape
-from .sqls_batch import createDomainNameInfo, createSslInfo
+from app.sqls.was import getLandscape
+from app.sqls.batch import createDomainNameInfo, createSslInfo
 
 class WebtobHttpm(ABC):
 

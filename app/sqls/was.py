@@ -1,14 +1,14 @@
-from . import appbuilder, db
+from app import appbuilder, db
 from flask import g
 from sqlalchemy.sql import select, update, func
 from sqlalchemy import null, text, or_, not_
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import insert, JSON
-from .models import MwWasInstance, MwServer, MwWas, MwWeb, MwWaschangeHistory\
+from app.models.was import MwWasInstance, MwServer, MwWas, MwWeb, MwWaschangeHistory\
             , MwWebchangeHistory, MwWasWebtobConnector, MwWebServer\
             , MwDatasource, MwApplication, MwWebVhost, MwWasHttpListener\
             , MwWebDomain, MwWebReverseproxy
-from .sqls_monitor import selectRow
+from .monitor import select_row
 import re
 
 def getChangedWAS(create_on=None):
@@ -403,7 +403,7 @@ def getRealWebHostId(web_host_id, host_id):
 
 def getRProxyServers(host_id, port):
 
-    row, _ = selectRow('mw_server',{'host_id':host_id})
+    row, _ = select_row('mw_server',{'host_id':host_id})
 
     if not row:
         return None

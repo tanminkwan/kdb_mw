@@ -1,11 +1,11 @@
 from . import db, scheduler
 from datetime import datetime, timedelta
 from sqlalchemy.sql import select, update
-from .models_agent import AgCommandType, AgCommandMaster, AgCommandDetail\
+from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgResult, AgAgentGroup, AgAgent
-from .sqls_agent import finishCommands_bySch, createCommandDetail_bySch\
-    , getCommands, getCloseToTokenExpiry_bySch, getLastRundatetime
-from .sqls_batch import runBatch_bySch
+from app.sqls.agent import finishCommands_bySch, createCommandDetail_bySch\
+    , get_commands, getCloseToTokenExpiry_bySch, getLastRundatetime
+from app.sqls.batch import runBatch_bySch
 
 @scheduler.task('cron', id='job_ag_finishCommands', name='Remove Finished Commands', minute='*/1')
 def job_ag_finishCommands():
@@ -34,7 +34,9 @@ def job_ag_closeToTokenExpiry():
 def job_ag_startJobs():
     print(datetime.now(),'job_ag_startJobs is invoked!!')
 
-    commands = getCommands()
+    commands = get_commands()
+    print(datetime.now(),'get_commands!!',commands)
+
     for cmd in commands:
         job_ag_createJob(cmd)
 

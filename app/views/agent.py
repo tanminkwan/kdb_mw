@@ -9,14 +9,14 @@ from flask_appbuilder.actions import action
 from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, protect
 from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
     , FilterEqualFunction, FilterNotEqual,FilterInFunction,FilterStartsWith, FilterEqual
-from . import appbuilder, db, scheduler, log, KAFKA_BROKERS
-from .models_agent import AgCommandType, AgCommandMaster, AgCommandDetail\
+from app import appbuilder, db, scheduler, log, KAFKA_BROKERS
+from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgAgentGroup, AgAgent, AgResult, AgFile, AgCommandHelper, AgAutorunResult
-from .dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
-from .dmlsForAgent import AutorunResult
-from .views_com import FilterStartsWithFunction, get_mw_user, get_userid, ReadOnlyField, RequiredOnContidion
-from .sqls_mw import getWasInstanceId, getLandscape, getDomainIdAsPK
-from .sqls_agent import checkAgentUpdated, checkAgentAproved\
+from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
+from app.dmlsForAgent import AutorunResult
+from .common import FilterStartsWithFunction, get_mw_user, get_userid, ReadOnlyField, RequiredOnContidion
+from app.sqls.was import getWasInstanceId, getLandscape, getDomainIdAsPK
+from app.sqls.agent import checkAgentUpdated, checkAgentAproved\
     , sendCommands, addAgent, addResult, cancelCommands, createCommandDetail_bySch\
     , getLatestFile, updateResultStatus, updateExpiration
 from sqlalchemy import event
@@ -26,7 +26,7 @@ from wtforms import Form, StringField
 #from wtforms.fields import TextField
 from wtforms.validators import Regexp, EqualTo
 from datetime import datetime, timedelta
-from .scheduled_jobs  import job_ag_createJob
+from app.scheduled_jobs  import job_ag_createJob
 from flask_appbuilder.filemanager import get_file_original_name
 import apscheduler
 from flask_jwt_extended import create_refresh_token

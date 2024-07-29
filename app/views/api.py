@@ -1,9 +1,9 @@
-from . import appbuilder, app
+from app import appbuilder, app
 from flask import jsonify, request
 from flask_appbuilder import Model
 from collections.abc import Iterable
 from flask_appbuilder.api import BaseApi, expose, safe, rison, protect
-from .sqls_monitor import getGridConfig, getAllFromTable, getModelInfo, getAllTables
+from app.sqls.monitor import getGridConfig, getAllFromTable, getModelInfo, getAllTables
 import enum
 import sys
 from datetime import datetime, time

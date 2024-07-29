@@ -7,14 +7,14 @@ from flask_appbuilder.api import BaseApi, expose, protect
 from flask_appbuilder.filemanager import get_file_original_name, FileManager
 from wtforms import TextAreaField
 from flask_appbuilder.fieldwidgets import BS3TextAreaFieldWidget
-from . import db, appbuilder, con_val
-from .models_util import UtTag, UtTagKm, UtFile, UtResource, UtResourceAddedText, UtHtmlContent\
+from app import db, appbuilder, con_val
+from app.models.knowledge import UtTag, UtTagKm, UtFile, UtResource, UtResourceAddedText, UtHtmlContent\
     , UtMdContent
-from .models_com import get_user, get_date, get_uuid
-from .views_com import FilterStartsWithFunction, FilterContainsFunction, TagType, TagMustContains\
+from app.models.common import get_user, get_date, get_uuid
+from .common import FilterStartsWithFunction, FilterContainsFunction, TagType, TagMustContains\
     , ListAdvanced, ShowWithIds, get_group_str
-from .sqls_monitor import selectRow
-from .autoReport.testSmtp import send_kdbMail
+from app.sqls.monitor import select_row
+from app.autoReport.testSmtp import send_kdbMail
 
 
 @db.event.listens_for(UtFile, 'before_insert')
@@ -282,7 +282,7 @@ class UtApi(BaseApi):
         update_on = ''
         files = []
 
-        row, _ = selectRow('ut_html_content',{'id':int(param)})
+        row, _ = select_row('ut_html_content',{'id':int(param)})
 
         if row:
             title = row.content_name
@@ -315,7 +315,7 @@ class UtApi(BaseApi):
         update_on = ''
         files = []
 
-        row, _ = selectRow('ut_md_content',{'id':int(param)})
+        row, _ = select_row('ut_md_content',{'id':int(param)})
 
         if row:
             title = row.content_name
@@ -343,7 +343,7 @@ class UtApi(BaseApi):
     @has_access
     def mddownload(self, content_id):
 
-        row, _ = selectRow('ut_md_content',{'content_id':content_id})
+        row, _ = select_row('ut_md_content',{'content_id':content_id})
 
         md = row.content_md if row else ''
 

@@ -1,14 +1,14 @@
-from . import appbuilder, app, gitConfig, db
+from app import appbuilder, app, gitConfig, db
 from flask import jsonify, request
 from flask_appbuilder import ModelView
 from flask_appbuilder.api import BaseApi, expose, safe, rison, protect
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from .models_git import GtGroupUsers
-from .views_com import FilterStartsWithFunction, get_mw_user, get_userid, get_reporttime
+from app.models.git import GtGroupUsers
+from .common import FilterStartsWithFunction, get_mw_user, get_userid, get_reporttime
 
 import requests
 import json
-from .autoReport.testSmtp import send_kdbMail
+from app.autoReport.testSmtp import send_kdbMail
 
 class GtGroupUsersView(ModelView):
     

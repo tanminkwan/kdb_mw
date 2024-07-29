@@ -7,21 +7,21 @@ from flask_appbuilder.actions import action
 from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, protect
 from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
     , FilterEqualFunction, FilterNotEqual, FilterInFunction, FilterStartsWith, FilterEqual
-from . import appbuilder, db, mongoClient, dbMongo, footprint, vv_P_secs
+from app import appbuilder, db #, mongoClient, dbMongo, footprint, vv_P_secs
 #from .models import Server, JeusContainer, Host
-from .models import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
+from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, DailyReport\
     , MwWebServer, MwWebUri, MwWaschangeHistory, MwWebchangeHistory\
     , MwBizCategory, MwAppMaster, MwDBMaster, MwWebDomain, MwWebSsl
-from .models_util import UtTag
-from .sqls_mw import getWasInstanceId, getLandscape\
+from app.models.knowledge import UtTag
+from app.sqls.was import getWasInstanceId, getLandscape\
     , getWasRelationship, getWebRelationship
-from .sqls_agent import createConnectSSL, createFileSSL, insertCommandMaster, getAgent
-from .sqls_batch import createDomainNameInfo, createSslInfo
-from .sqls_monitor import selectRow, selectItem, selectItems
-from .dmlsForAgent import AutorunResult
-from .dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
-from .views_com import FilterStartsWithFunction, get_mw_user, get_userid, ShowWithIds, ListAdvanced
+from app.sqls.agent import createConnectSSL, createFileSSL, insertCommandMaster, getAgent
+from app.sqls.batch import createDomainNameInfo, createSslInfo
+from app.sqls.monitor import select_row, selectItem, selectItems
+from app.dmlsForAgent import AutorunResult
+from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
+from .common import FilterStartsWithFunction, get_mw_user, get_userid, ShowWithIds, ListAdvanced
 
 import json
 import xmltodict
@@ -382,7 +382,7 @@ class WasLicenseView(ModelView):
             filter_dict = dict(mapping_key='DOMAIN_HOME'
                             , target_file_name=item.was_id
                             , agent_id=agent_id)
-            rec, _ = selectRow('ag_command_helper', filter_dict)
+            rec, _ = select_row('ag_command_helper', filter_dict)
 
             if rec:
                 addparam += ' ' + rec.string_to_replace

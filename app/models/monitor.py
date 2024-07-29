@@ -11,8 +11,8 @@ from datetime import datetime
 from flask_appbuilder.models.mixins import FileColumn
 from flask_appbuilder.models.decorators import renders
 from flask_appbuilder.filemanager import get_file_original_name
-from .models import MwWas
-from .models_com import get_user, WasInstanceStatusEnum, LocationEnum
+from .was import MwWas
+from .common import get_user, WasInstanceStatusEnum, LocationEnum
 
 class MoGridConfig(Model):
     __tablename__ = "mo_grid_config"

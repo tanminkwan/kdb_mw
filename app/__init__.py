@@ -4,7 +4,7 @@ import os
 from flask import Flask
 from flask_migrate import Migrate
 from flask_appbuilder import AppBuilder, SQLA, IndexView
-from pymongo import MongoClient
+#from pymongo import MongoClient
 
 from flask_apscheduler import APScheduler
 from .producer4Kafka import Producer4Kafka
@@ -35,7 +35,7 @@ app.config.from_object("config")
 @app.route('/health')
 def health():
     return jsonify(status="healthy"), 200
-    
+
 db = SQLA(app)
 migrate = Migrate(app, db)
 
@@ -54,7 +54,6 @@ KAFKA_CONSUMER_4_WAS_MONITORING=''
 
 if app.config.get('KAFKA_BROKERS'):
 
-    print('JJJ : ', app.config['KAFKA_BROKERS'])
     try:
         producer4Kafka = Producer4Kafka(app.config['KAFKA_BROKERS'])
         admin4Kafka = Admin4Kafka(app.config['KAFKA_BROKERS'])
@@ -72,7 +71,6 @@ consumer4WasMonitoring = None
 if app.config.get('KAFKA_CONSUMER_4_WAS_MONITORING'):
     KAFKA_CONSUMER_4_WAS_MONITORING = app.config['KAFKA_CONSUMER_4_WAS_MONITORING']
 
-
 #GitLab
 gitConfig = dict()
 if app.config.get('GITLAB_CONFIG'):
@@ -87,10 +85,10 @@ con_val = dict(
    ,KDB_SMTP_PORT  = 50025
 )
 #MongoDB
-mongoClient = MongoClient("mongodb://localhost:27017/")
-dbMongo = mongoClient["WHEREAMI"]
-footprint = dbMongo["Footprint"]
-vv_P_secs = dbMongo["VV_P_SECS"]
+#mongoClient = MongoClient("mongodb://localhost:27017/")
+#dbMongo = mongoClient["WHEREAMI"]
+#footprint = dbMongo["Footprint"]
+#vv_P_secs = dbMongo["VV_P_SECS"]
 
 #scheduler = BlockingScheduler(timezone='Asia/Seoul')
 #os.environ['TZ']='Asia/Seoul'
@@ -111,5 +109,6 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 """
-
-from . import views, views_util, views_agent, views_monitor, views_com, views_api, views_git, dmlsForJeus, dmlsForWebtob, sqls_agent, sqls_mw, sqls_monitor, scheduled_jobs
+from app.views import was, agent, monitor, knowledge, api, git
+from app.sqls import was, agent, monitor, knowledge
+from . import dmlsForJeus, dmlsForWebtob, scheduled_jobs

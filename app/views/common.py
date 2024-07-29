@@ -4,8 +4,8 @@ from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
 from flask_appbuilder.widgets import ShowWidget, ListWidget
 from wtforms.validators import ValidationError, StopValidation
 import enum
-from .sqls_monitor import getLastReportedTime, selectRow
-from .models_com import get_group
+from app.sqls.monitor import getLastReportedTime, select_row
+from app.models.common import get_group
 
 def get_mw_user():
     roles = [ r.name for r in g.user.roles]

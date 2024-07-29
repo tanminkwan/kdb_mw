@@ -1,16 +1,16 @@
-from . import appbuilder, db, log, KAFKA_BROKERS, KAFKA_CONSUMER_4_WAS_MONITORING\
+from app import appbuilder, db, log, KAFKA_BROKERS, KAFKA_CONSUMER_4_WAS_MONITORING\
         , producer4Kafka, WAS_STATUS, consumer4WasMonitoring
-from .models import MwWasWebtobConnector, MwWebServer, MwWas, MwWeb, MwWebVhost\
+from app.models.was import MwWasWebtobConnector, MwWebServer, MwWas, MwWeb, MwWebVhost\
         , MwWebDomain, MwWebSsl
-from .sqls_mw import getWebServers
-from .sqls_util import insertTag
-from .sqls_agent import finishCommands, getAgent
-from .sqls_monitor import updateRows, insertRow, selectRows, selectRow, getWasStatusTemplate
+from .was import getWebServers
+from .knowledge import insert_tag
+from .agent import finishCommands, getAgent
+from .monitor import updateRows, insertRow, select_rows, select_row, getWasStatusTemplate
 from sqlalchemy.dialects.postgresql import insert
 import re, json
-from .autoReport.runAutoReport import runAutoReport
+from app.autoReport.runAutoReport import runAutoReport
 from datetime import datetime, timedelta
-from .consumer4Kafka import Consumer4Kafka
+from app.consumer4Kafka import Consumer4Kafka
 
 def runBatch_bySch(command_id, function_name, fix_param, additional_param=''):
 
@@ -58,7 +58,7 @@ def updateResourceTag():
 
 def __updateResourceTag():
 
-    recs, _ = selectRows('mw_was_instance', {})
+    recs, _ = select_rows('mw_was_instance', {})
 
     for rec in recs:
 
@@ -67,12 +67,12 @@ def __updateResourceTag():
             tag2 = rec.was_instance_id.split('_M')[0]
             tag = 'MS-' + tag1 + '_Domain-' + tag2
             tag_id = __upsertTag(tag)
-            row, _ = selectRow('ut_tag',{'id':tag_id})
+            row, _ = select_row('ut_tag',{'id':tag_id})
             rec.ut_tag = [row]
 
 def __upsertTag(tag):
 
-    rtn = insertTag(tag)
+    rtn = insert_tag(tag)
     return rtn
            
 """

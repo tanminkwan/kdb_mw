@@ -1,4 +1,4 @@
-from . import appbuilder, db, log
+from app import appbuilder, db, log
 from flask import g, current_app
 from flask_appbuilder import Model
 from sqlalchemy.sql import update, func, sqltypes
@@ -9,8 +9,8 @@ from sqlalchemy.dialects.postgresql import insert, JSON
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm.attributes import InstrumentedAttribute, ScalarAttributeImpl, ScalarObjectAttributeImpl, CollectionAttributeImpl
-from .models_agent import AgResult
-from .models_monitor import MoWasInstanceStatus, MoWasStatusTemplate, MoWasStatusReport\
+from app.models.agent import AgResult
+from app.models.monitor import MoWasInstanceStatus, MoWasStatusTemplate, MoWasStatusReport\
     , MoGridConfig
 import json
 import enum
@@ -114,29 +114,12 @@ def test():
 
     recs = sql.all()
     print('recs : ', recs)
-    #recs, _ = selectTags(table_name, column_name, seperator, filter_list)
-    #print(recs)
 
-    #rec, _ = selectRow('mw_was',{'resource_tag':'WAS-PPMS_Domain-pprmar11-jeus'})
-
-    """
-    try:
-        table_name = 'TEST'
-        tag = 'TEST-TEST'
-    except AttributeError as e:
-        excType, excValue, traceback = exc_info()
-        return -101, str(excType)+':'+excValue
-
-    insert_dict = {'tag':tag, 'source':table_name}
-    rtn, _ = insertRow('ut_resource_tag',insert_dict)
-    if rtn > 0:
-        print("inserted")
-    """
 def getAllTables():
 
     return [ t for t in table_dict ]
 
-def selectRow(table_name, filter_dict):
+def select_row(table_name, filter_dict):
 
     filter_list = []
     table = table_dict[table_name]
@@ -180,7 +163,7 @@ def selectItems(table_name, column_name, filter_dict):
     
     return values, 1 if values else 0
 
-def selectRows(table_name, filter_dict):
+def select_rows(table_name, filter_dict):
 
     filter_list = []
     table = table_dict[table_name]
@@ -516,7 +499,7 @@ def getNotRunningWasList():
 
     for domain_id in uncheckedDomains:
 
-        was_rec, _ = selectRow('mw_was', {'was_id':domain_id})
+        was_rec, _ = select_row('mw_was', {'was_id':domain_id})
 
         host_id = ''
         system_user = ''
