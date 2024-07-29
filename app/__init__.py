@@ -32,8 +32,10 @@ log.setLevel(logging.ERROR)
 app = Flask(__name__)
 app.config.from_object("config")
 
-print('GGG KAFKA_BROKERS :',  app.config['KAFKA_BROKERS'])
-
+@app.route('/health')
+def health():
+    return jsonify(status="healthy"), 200
+    
 db = SQLA(app)
 migrate = Migrate(app, db)
 
