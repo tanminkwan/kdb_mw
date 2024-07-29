@@ -16,7 +16,8 @@ SECRET_KEY = "\2\1thisismyscretkey\1\2\e\y\y\h"
 # SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
 # SQLALCHEMY_DATABASE_URI = 'mysql://myapp@localhost/myapp'
 # SQLALCHEMY_DATABASE_URI = 'postgresql://root:password@localhost/myapp'
-SQLALCHEMY_DATABASE_URI = 'postgresql://tiffanie:1q2w3e4r!!@localhost:25432/mw'
+MWM_DATABASE_URI = os.getenv("MWM_DATABASE_URI", "localhost:5432")
+SQLALCHEMY_DATABASE_URI = f"postgresql://tiffanie:1q2w3e4r!!@{MWM_DATABASE_URI}/mw"
 
 # Kafka brokers
 #KAFKA_BROKERS = ['10.0.20.117:9092']
@@ -36,7 +37,7 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20240308.001)"
+APP_NAME = "리발소(VER:20240729.001)"
 
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"
