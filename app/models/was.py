@@ -228,7 +228,7 @@ class MwWas(Model):
     standby_host_id    = Column(String(30), comment='HA구성이 A-S인 경우 StandBy 서버 Host id') #Active-StandBy 인 경우 StandBy 장비
     located_host_id  = Column(String(30), ForeignKey('mw_server.host_id'), nullable=False, comment='설치서버') #WAS 도메인 설치 node (auto:adminServer->node-name)
     production_mode  = Column(String(30)) # Production 구분
-    system_user      = Column(String(50), comment='서버 계정') # WEB 서버 이름 (manual)
+    sys_user      = Column(String(50), comment='서버 계정') # WEB 서버 이름 (manual)
     use_yn           = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("YES"), nullable=False, comment='사용여부') #사용여부 (Manual)
     cluster_object   = Column(JSONB, comment='Clustering 정보') # Clustering 정보(auto:json)
 
@@ -510,7 +510,7 @@ class MwWeb(Model):
     web_home         = Column(String(200), comment='web서버 home') # WEB 설치 위치(http.m WEBTOBDIR) (auto)
     doc_dir          = Column(String(200), comment='doc root 위치') # doc root 위치 (auto)
     acc_dir          = Column(String(200), comment='access log 위치') # log 파일 위치 (auto)
-    system_user      = Column(String(50), comment='서버 계정') # WEB 서버 이름 (manual)
+    sys_user      = Column(String(50), comment='서버 계정') # WEB 서버 이름 (manual)
     running_type     = Column(Enum(RuningTypeEnum), info={'enum_class':RuningTypeEnum}, comment='HA구성') #Active/StandBy 구분 (Manual)
     standby_host_id  = Column(String(30), comment='HA구성이 A-S인 경우 StandBy 서버 Host id') #Active-StandBy 인 경우 StandBy 장비
     use_yn           = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("YES"), nullable=False, comment='사용여부') #사용여부 (Manual)

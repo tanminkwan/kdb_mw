@@ -7,8 +7,8 @@ from flask_appbuilder import AppBuilder, SQLA, IndexView
 #from pymongo import MongoClient
 
 from flask_apscheduler import APScheduler
-from .producer4Kafka import Producer4Kafka
-from .admin4Kafka import Admin4Kafka
+from .kafka_producer import Producer4Kafka
+from .kafka_admin import Admin4Kafka
 from kafka.errors import NoBrokersAvailable
 #from .ksql4Kafka import Ksql4Kafka
 
@@ -42,8 +42,8 @@ migrate = Migrate(app, db)
 appbuilder = AppBuilder(app, db.session, indexview=MyIndexView)
 
 #Kafka
-producer4Kafka =None
-admin4Kafka=None
+kafka_producer =None
+kafka_admin=None
 KAFKA_BROKERS=[]
 KAFKA_CONSUMER_4_WAS_MONITORING=''
 
@@ -55,13 +55,12 @@ KAFKA_CONSUMER_4_WAS_MONITORING=''
 if app.config.get('KAFKA_BROKERS'):
 
     try:
-        producer4Kafka = Producer4Kafka(app.config['KAFKA_BROKERS'])
-        admin4Kafka = Admin4Kafka(app.config['KAFKA_BROKERS'])
+        kafka_producer = Producer4Kafka(app.config['KAFKA_BROKERS'])
+        kafka_admin = Admin4Kafka(app.config['KAFKA_BROKERS'])
         KAFKA_BROKERS = app.config['KAFKA_BROKERS']
     except NoBrokersAvailable as e:
         print('Brokers are not connected.')
         pass
-
 
 #Current WAS Status
 WAS_STATUS = dict()

@@ -8,7 +8,7 @@ class Admin4Kafka:
         self.admin = KafkaAdminClient(bootstrap_servers=brokers)
         self.brokers = brokers
 
-    def deleteTopic(self, topic):
+    def delete_topic(self, topic):
 
         try:
             self.admin.delete_topics([topic])
@@ -19,7 +19,7 @@ class Admin4Kafka:
             log.error('deleteTopic Error Occured : %s %s %s', excType, excValue, traceback)
             return -1
 
-    def getOffSets(self, topic, partition):
+    def get_offsets(self, topic, partition):
 
         results = []
         try:

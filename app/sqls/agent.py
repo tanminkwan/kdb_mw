@@ -1,4 +1,4 @@
-from app import appbuilder, db, log, producer4Kafka
+from app import appbuilder, db, log, kafka_producer
 from flask import g
 from sqlalchemy.sql import select, update, func
 from sqlalchemy import null, text, or_, not_, case
@@ -266,7 +266,7 @@ def createCommandDetail(command_id):
             command_status = 'CREATE'
 
             # Kafka
-            if command_rec.command_sender.name == 'KAFKA' and producer4Kafka:
+            if command_rec.command_sender.name == 'KAFKA' and kafka_producer:
 
                 topic = 't_' + ag.agent_id
                 key = command_rec.command_id + '_' + str(repetition_seq + i)
@@ -282,7 +282,7 @@ def createCommandDetail(command_id):
                     result_hash       = getResultHash(ag.agent_id, command_rec.command_id, repetition_seq + i)
                 )
 
-                rtn = producer4Kafka.sendMessage(topic, message, key=key)
+                rtn = kafka_producer.sendMessage(topic, message, key=key)
 
                 if rtn > 0:
                     command_status = 'KAFKA'

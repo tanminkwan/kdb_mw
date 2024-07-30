@@ -21,101 +21,7 @@ from flask_jwt_extended import create_refresh_token
 table_dict = {table.__tablename__: table for table in db.Model.__subclasses__()}
 table_args = {table.__tablename__: table.t__table_comment if hasattr(table, 't__table_comment') else {} for table in db.Model.__subclasses__()}
 
-def test2():
-    print("HHH2")
-
-    table_name  = 'mw_was_instance'
-    table_name2 = 'ut_tag'
-    table = table_dict[table_name]
-    table2 = table_dict[table_name2]
-    #data = create_refresh_token(identity='tiffanie')
-    #print("token : ",data)
-    #recs, _ = getAllFromTable('mw_was_instance', sort_condition=[dict(column='create_on', option='desc'),dict(column='id')])
-    """
-    a = table2(tag='TESTTEST1',user_id='test')
-    db.session.add(a)
-    db.session.flush()
-    b = db.session.get(table2, {'tag':'TESTTEST1'})
-
-    #a = table2(tag='TESTTEST1',user_id='test2')
-    #db.session.merge(a)
-    
-    
-    print('a:',a)
-    print('b:',b)
-    stmt = insert(table2).values({'tag':'TESTTEST2','user_id':'test'})
-    do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['tag'],
-                set_={'label':'TEST'}
-            ).returning(table2.ut_parent_tag)
-    result = db.session.execute(do_update_stmt)
-
-    print('result : ', result)
-    for rec in result:
-        print(rec)
-    """
-    
-def test():
-    print("HHH")
-
-    table_name = 'ut_tag'
-    mn_column_name = 'ut_parent_tag'
-    join_table_name = 'ut_tag'
-    condition_column_name = 'tag'
-    filter_list = ['정보분석']
-    
-    mn_column_name2 = 'ut_child_tag'
-    join_table_name2 = 'ut_tag'
-    condition_column_name2 = 'tag'
-    filter_list2 = ['정보분석']
-    """
-    table_name = 'mw_was'
-    mn_column_name = 'mw_was_instance'
-    join_table_name = 'mw_was_instance'
-    condition_column_name = 'was_id'
-    """
-
-    table = table_dict[table_name]
-    join_table = table_dict[join_table_name]
-    aliased_table = aliased(join_table)
-    aliased_table2 = aliased(join_table)
-    condition_column = getattr(aliased_table, condition_column_name)
-    condition_column2 = getattr(aliased_table2, condition_column_name2)
-    mn_column = getattr(table, mn_column_name)
-    mn_column2 = getattr(table, mn_column_name2)
-
-    print('mn type : ', type(table))
-    print('mn type2 : ', type(mn_column.impl))
-    second = next( ( tt for it, tt in inspect(table).relationships.items() if it == mn_column_name), None)
-                    #print('HHH2 : ',second)
-    print('mn type3 : ', second.target.name)
-    print('mn type3 : ', second.direction.name)
-    print('mn type3 : ', second.remote_side)
-    print('mn type3 : ', second._reverse_property)
-    print('mn type3 : ', second.primaryjoin)
-    print('mn type3 : ', second.secondaryjoin)
-    print('mn type3 : ', second.backref)
-    print('mn type3 : ', second.secondary)
-
-    """
-    recs = db.session.query(table)\
-        .join(aliased_table, mn_column).first()
-
-
-    """
-    sql = db.session.query(table)\
-        .filter(table.tag=='담당자-업무-박훈')\
-        .join(aliased_table, mn_column)\
-        .join(aliased_table2, mn_column2)\
-        .filter(func.string_to_array(condition_column,'-').op("@>")(filter_list))\
-        .filter(func.string_to_array(condition_column2,'-').op("@>")(filter_list2))            
-
-    print('sql : ', sql)
-
-    recs = sql.all()
-    print('recs : ', recs)
-
-def getAllTables():
+def get_all_tables():
 
     return [ t for t in table_dict ]
 
@@ -133,36 +39,6 @@ def select_row(table_name, filter_dict):
 
     return rec, 1 if rec else 0
 
-def selectItem(table_name, column_name, filter_dict):
-
-    filter_list = []
-    table = table_dict[table_name]
-    column = getattr(table, column_name)
-
-    for item in filter_dict:
-        col = getattr(table, item)
-        filter_list.append(col==filter_dict[item])
-
-    value = db.session.query(column)\
-        .filter(*filter_list).first()
-
-    return value, 1 if value else 0
-
-def selectItems(table_name, column_name, filter_dict):
-
-    filter_list = []
-    table = table_dict[table_name]
-    column = getattr(table, column_name)
-
-    for item in filter_dict:
-        col = getattr(table, item)
-        filter_list.append(col==filter_dict[item])
-
-    values = db.session.query(column)\
-            .filter(*filter_list).distinct()
-    
-    return values, 1 if values else 0
-
 def select_rows(table_name, filter_dict):
 
     filter_list = []
@@ -177,7 +53,38 @@ def select_rows(table_name, filter_dict):
 
     return recs, 1 if recs else 0
 
-def insertRow(table_name, insert_dict):
+ 
+def select_item(table_name, column_name, filter_dict):
+
+    filter_list = []
+    table = table_dict[table_name]
+    column = getattr(table, column_name)
+
+    for item in filter_dict:
+        col = getattr(table, item)
+        filter_list.append(col==filter_dict[item])
+
+    value = db.session.query(column)\
+        .filter(*filter_list).first()
+
+    return value, 1 if value else 0
+
+def select_items(table_name, column_name, filter_dict):
+
+    filter_list = []
+    table = table_dict[table_name]
+    column = getattr(table, column_name)
+
+    for item in filter_dict:
+        col = getattr(table, item)
+        filter_list.append(col==filter_dict[item])
+
+    values = db.session.query(column)\
+            .filter(*filter_list).distinct()
+    
+    return values, 1 if values else 0
+
+def insert_row(table_name, insert_dict):
 
     table = table_dict[table_name]
 
@@ -198,7 +105,7 @@ def insertRow(table_name, insert_dict):
 
     return pk[0], 'OK'
 
-def updateRows(table_name, update_dict, filter_dict):
+def update_rows(table_name, update_dict, filter_dict):
 
     filter_list = []
     table = table_dict[table_name]
@@ -215,7 +122,7 @@ def updateRows(table_name, update_dict, filter_dict):
         return -1, table_name + ' data to update isn\'t found : '
     return 1, ''
 
-def selectTags(table_name, column_name, seperator, filter_list):
+def select_tags(table_name, column_name, seperator, filter_list):
 
     table = table_dict[table_name]
     column = getattr(table, column_name)
@@ -225,7 +132,7 @@ def selectTags(table_name, column_name, seperator, filter_list):
 
     return recs, 1 if recs else 0
 
-def getModelInfo(table_name):
+def get_model_info(table_name):
 
     table = None
     spec = dict(table_name=table_name,columns=[])
@@ -285,7 +192,7 @@ def getModelInfo(table_name):
     
     return spec
 
-def getColType(table_name, column_name):
+def get_column_type(table_name, column_name):
 
     obj = getattr(table_dict[table_name], column_name)
     print('TYPE : ',column_name, obj.type, type(obj.type))
@@ -303,7 +210,7 @@ def getColType(table_name, column_name):
 
     return col_v
 
-def getTargetTableName(table_name, column_name):
+def get_target_table_name(table_name, column_name):
 
     if isinstance(table_name, str):
         table = table_dict[table_name]
@@ -343,7 +250,7 @@ def __getCondition(table, condition):
 
     return results
 
-def getAllFromTable(table_name, column_name=None, condition=None, join_conditions=None\
+def select_rows2(table_name, column_name=None, condition=None, join_conditions=None\
                 , distinct=True, sort_condition=None):
 
     table     = table_dict[table_name]
@@ -375,7 +282,7 @@ def getAllFromTable(table_name, column_name=None, condition=None, join_condition
 
             mn_column = getattr(table, join_table_name)
 
-            real_joined_table_name = getTargetTableName(table, join_table_name)
+            real_joined_table_name = get_target_table_name(table, join_table_name)
 
             join_table = table_dict[real_joined_table_name]
             aliased_table = aliased(join_table)
@@ -502,15 +409,15 @@ def getNotRunningWasList():
         was_rec, _ = select_row('mw_was', {'was_id':domain_id})
 
         host_id = ''
-        system_user = ''
+        sys_user = ''
         if was_rec:
             host_id = was_rec.located_host_id
-            system_user = was_rec.system_user
+            sys_user = was_rec.sys_user
         
         results1.append(dict(
             domain_id=domain_id
            ,host_id=host_id
-           ,system_user=system_user
+           ,sys_user=sys_user
         ))
     
     return results1, results2, results3
@@ -569,3 +476,98 @@ def createWasStatusReport():
     db.session.commit()
 
     return 1, 'OK'
+
+
+def test2():
+    print("HHH2")
+
+    table_name  = 'mw_was_instance'
+    table_name2 = 'ut_tag'
+    table = table_dict[table_name]
+    table2 = table_dict[table_name2]
+    #data = create_refresh_token(identity='tiffanie')
+    #print("token : ",data)
+    """
+    a = table2(tag='TESTTEST1',user_id='test')
+    db.session.add(a)
+    db.session.flush()
+    b = db.session.get(table2, {'tag':'TESTTEST1'})
+
+    #a = table2(tag='TESTTEST1',user_id='test2')
+    #db.session.merge(a)
+    
+    
+    print('a:',a)
+    print('b:',b)
+    stmt = insert(table2).values({'tag':'TESTTEST2','user_id':'test'})
+    do_update_stmt = stmt.on_conflict_do_update(
+                index_elements=['tag'],
+                set_={'label':'TEST'}
+            ).returning(table2.ut_parent_tag)
+    result = db.session.execute(do_update_stmt)
+
+    print('result : ', result)
+    for rec in result:
+        print(rec)
+    """
+    
+def test():
+    print("HHH")
+
+    table_name = 'ut_tag'
+    mn_column_name = 'ut_parent_tag'
+    join_table_name = 'ut_tag'
+    condition_column_name = 'tag'
+    filter_list = ['정보분석']
+    
+    mn_column_name2 = 'ut_child_tag'
+    join_table_name2 = 'ut_tag'
+    condition_column_name2 = 'tag'
+    filter_list2 = ['정보분석']
+    """
+    table_name = 'mw_was'
+    mn_column_name = 'mw_was_instance'
+    join_table_name = 'mw_was_instance'
+    condition_column_name = 'was_id'
+    """
+
+    table = table_dict[table_name]
+    join_table = table_dict[join_table_name]
+    aliased_table = aliased(join_table)
+    aliased_table2 = aliased(join_table)
+    condition_column = getattr(aliased_table, condition_column_name)
+    condition_column2 = getattr(aliased_table2, condition_column_name2)
+    mn_column = getattr(table, mn_column_name)
+    mn_column2 = getattr(table, mn_column_name2)
+
+    print('mn type : ', type(table))
+    print('mn type2 : ', type(mn_column.impl))
+    second = next( ( tt for it, tt in inspect(table).relationships.items() if it == mn_column_name), None)
+                    #print('HHH2 : ',second)
+    print('mn type3 : ', second.target.name)
+    print('mn type3 : ', second.direction.name)
+    print('mn type3 : ', second.remote_side)
+    print('mn type3 : ', second._reverse_property)
+    print('mn type3 : ', second.primaryjoin)
+    print('mn type3 : ', second.secondaryjoin)
+    print('mn type3 : ', second.backref)
+    print('mn type3 : ', second.secondary)
+
+    """
+    recs = db.session.query(table)\
+        .join(aliased_table, mn_column).first()
+
+
+    """
+    sql = db.session.query(table)\
+        .filter(table.tag=='담당자-업무-박훈')\
+        .join(aliased_table, mn_column)\
+        .join(aliased_table2, mn_column2)\
+        .filter(func.string_to_array(condition_column,'-').op("@>")(filter_list))\
+        .filter(func.string_to_array(condition_column2,'-').op("@>")(filter_list2))            
+
+    print('sql : ', sql)
+
+    recs = sql.all()
+    print('recs : ', recs)
+

@@ -148,7 +148,7 @@ class UtResource(Model):
     resource_description  = Column(String(500), comment='Resource Description')
     host_id          = Column(String(30), ForeignKey('mw_server.host_id'), nullable=False, comment='HOST ID')
     service_port     = Column(String(50), comment='http service port') # Service port
-    system_user      = Column(String(50), comment='서버 계정') # WEB 서버 이름 (manual)
+    sys_user      = Column(String(50), comment='서버 계정') # WEB 서버 이름 (manual)
     agent_id         = Column(String(30), comment='MW Agent ID') # MW Agent ID
     use_yn           = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("YES"), nullable=False, comment='사용여부') #사용여부 (Manual)
     user_id          = Column(String(50), default=get_user, nullable=False)

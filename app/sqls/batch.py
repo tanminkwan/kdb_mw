@@ -1,16 +1,16 @@
 from app import appbuilder, db, log, KAFKA_BROKERS, KAFKA_CONSUMER_4_WAS_MONITORING\
-        , producer4Kafka, WAS_STATUS, consumer4WasMonitoring
+        , kafka_producer, WAS_STATUS, consumer4WasMonitoring
 from app.models.was import MwWasWebtobConnector, MwWebServer, MwWas, MwWeb, MwWebVhost\
         , MwWebDomain, MwWebSsl
 from .was import getWebServers
 from .knowledge import insert_tag
 from .agent import finishCommands, getAgent
-from .monitor import updateRows, insertRow, select_rows, select_row, getWasStatusTemplate
+from .monitor import update_rows, insert_row, select_rows, select_row, getWasStatusTemplate
 from sqlalchemy.dialects.postgresql import insert
 import re, json
 from app.autoReport.runAutoReport import runAutoReport
 from datetime import datetime, timedelta
-from app.consumer4Kafka import Consumer4Kafka
+from app.kafka_customer import Consumer4Kafka
 
 def runBatch_bySch(command_id, function_name, fix_param, additional_param=''):
 
@@ -83,9 +83,9 @@ def _getResourceTag(table_name, rec):
         user_id = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
         resource_tag = 'MWAGENT-' + rec.agent_type.name + '-' + rec.host_id + '-' + user_id
     elif table_name == 'mw_was':
-        resource_tag = 'WAS-' + rec.was_id + '-' + rec.located_host_id + '-' + (rec.system_user if rec.system_user else 'NOUSERID')
+        resource_tag = 'WAS-' + rec.was_id + '-' + rec.located_host_id + '-' + (rec.sys_user if rec.sys_user else 'NOUSERID')
     elif table_name == 'mw_web':
-        resource_tag = 'WEB-' + rec.host_id + '-' + str(rec.port) + '-' + (rec.system_user if rec.system_user else 'NOUSERID')
+        resource_tag = 'WEB-' + rec.host_id + '-' + str(rec.port) + '-' + (rec.sys_user if rec.sys_user else 'NOUSERID')
     elif table_name == 'mw_was_instance':
         resource_tag = 'MS-' + rec.was_id + '-' + rec.host_id + '-' + rec.was_instance_id.replace('_MS','_MS-')
 
@@ -138,13 +138,13 @@ def updateWasStatus():
 
 def deleteKafkaTopic(topic):
 
-    if producer4Kafka:
-        producer4Kafka.deleteTopic(topic)
+    if kafka_producer:
+        kafka_producer.deleteTopic(topic)
 
 def produceRepeatedMessage(topic, message, key):
 
-    if producer4Kafka:
-        producer4Kafka.sendMessage(topic, message, key=key)
+    if kafka_producer:
+        kafka_producer.send_message(topic, message, key=key)
 
 def sendDailyReport(daygap):
 
@@ -238,7 +238,7 @@ def updateAgentIdInfoInWeb():
 
     for rec in web_recs:
 
-        update_dict = {'agent_id':__getAgent(rec.system_user, rec.host_id)}
+        update_dict = {'agent_id':__getAgent(rec.sys_user, rec.host_id)}
         filter_dict = dict(
             host_id = rec.host_id
            ,port    = rec.port
@@ -257,7 +257,7 @@ def updateAgentIdInfoInWas():
 
     for rec in was_recs:
 
-        update_dict = {'agent_id':__getAgent(rec.system_user, rec.located_host_id)}
+        update_dict = {'agent_id':__getAgent(rec.sys_user, rec.located_host_id)}
         filter_dict = dict(
             was_id     = rec.was_id
         )
@@ -265,8 +265,8 @@ def updateAgentIdInfoInWas():
 
     return 1, 'OK'
 
-def __getAgent(system_user, host_id):
-    rec = getAgent(host_id + '_' + system_user + '_J', isApproved=True)
+def __getAgent(sys_user, host_id):
+    rec = getAgent(host_id + '_' + sys_user + '_J', isApproved=True)
     return rec.agent_id if rec else ''
 
 def updateUrlRewriteInfo():

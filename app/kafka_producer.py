@@ -12,7 +12,7 @@ class Producer4Kafka:
               , key_serializer=lambda x: dumps(x).encode('utf-8')
               , value_serializer=lambda x: dumps(x).encode('utf-8'))
 
-    def sendMessage(self, topic, message, key=''):
+    def send_message(self, topic, message, key=''):
 
         try:
             self.producer.send(topic, key=key, value=message).get(timeout=3)

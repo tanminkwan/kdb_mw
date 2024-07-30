@@ -8,15 +8,15 @@ from flask_appbuilder.actions import action
 from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, protect
 from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
     , FilterEqualFunction, FilterNotEqual, FilterInFunction, FilterStartsWith, FilterEqual
-from app import appbuilder, db, admin4Kafka, WAS_STATUS
+from app import appbuilder, db, kafka_admin, WAS_STATUS
 from flask_jwt_extended import create_refresh_token
 #from .models import Server, JeusContainer, Host
 from app.models.monitor import MoWasStatusTemplate, MoWasStatusReport, MoGridConfig, MoWasInstanceStatus
 from .common import FilterStartsWithFunction, get_mw_user, get_userid, get_reporttime
 from datetime import datetime, timedelta
 from app.sqls.monitor import select_row, getGridConfig, createWasStatusReport\
-                    , getNotRunningWasList, getColType, getTargetTableName\
-                    , getAllFromTable
+                    , getNotRunningWasList, get_column_type, get_target_table_name\
+                    , select_rows2
 from app.sqls.agent import getAgentStat, getErrorResults, insertCommandMaster
 from app.sqls.was import getChangedWAS, getChangedWEB
 from wtforms import FieldList, StringField
@@ -164,19 +164,19 @@ class MonitorApi(BaseApi):
                 
                 if '.' in c:
                     val = c.split('.')
-                    target_table_name = getTargetTableName(table_name, val[0])
+                    target_table_name = get_target_table_name(table_name, val[0])
                     cond_list.append(dict(
                         name = c
                        ,label = label
-                       ,type = getColType(target_table_name, val[1])
-                       ,operations=self.condtype_map[getColType(target_table_name, val[1])])
+                       ,type = get_column_type(target_table_name, val[1])
+                       ,operations=self.condtype_map[get_column_type(target_table_name, val[1])])
                     )
                 else:
                     cond_list.append(dict(
                         name = c
                        ,label = label
-                       ,type = getColType(table_name, c)
-                       ,operations=self.condtype_map[getColType(table_name, c)])
+                       ,type = get_column_type(table_name, c)
+                       ,operations=self.condtype_map[get_column_type(table_name, c)])
                     )
 
         else:
@@ -246,8 +246,8 @@ class MonitorApi(BaseApi):
     @has_access
     def agentOffsets(self):
 
-        if admin4Kafka:
-            result, _ = admin4Kafka.getOffSets(topic='t_agent_health', partition=0)
+        if kafka_admin:
+            result, _ = kafka_admin.getOffSets(topic='t_agent_health', partition=0)
         else:
             result = []
         return jsonify(result)
@@ -419,20 +419,20 @@ class MonitorApi(BaseApi):
 
         return jsonify({'configFilesList':configFiles_List,'erroWasList':erroWas_List})
 
-    @expose('/recentKmList', methods=['GET'])
+    @expose('/recent_knowledge_list', methods=['GET'])
     @has_access
-    def recentKmList(self):
+    def recent_knowledge_list(self):
 
         d3daysAgo = datetime.now() - timedelta(days=3)
 
-        recentKmList = []
+        recent_knowledge_list = []
         condition = [dict(column='update_on', operator='gt', value=d3daysAgo)]
         sort_condition = [dict(column='update_on', option='desc')]
         
-        recs, _ = getAllFromTable('ut_html_content', condition=condition, sort_condition=sort_condition)
+        recs, _ = select_rows2('ut_html_content', condition=condition, sort_condition=sort_condition)
         
         if recs:
-            [ recentKmList.append(
+            [ recent_knowledge_list.append(
                 {'id':r.id
                 ,'content_name':r.content_name
                 ,'user_id':r.user_id
@@ -441,12 +441,12 @@ class MonitorApi(BaseApi):
                 ,'create_on':r.create_on.strftime('%Y.%m.%d %H:%M')}
                 ) for r in recs ]
 
-        return jsonify({'recentKmList':recentKmList})
+        return jsonify({'recent_knowledge_list':recent_knowledge_list})
 
 
-    @expose('/getChangedConfigs', methods=['GET'])
+    @expose('/get_changed_configs', methods=['GET'])
     @has_access
-    def getChangedConfigs(self):
+    def get_changed_configs(self):
 
         d3daysAgo = datetime.now() - timedelta(days=3)
 

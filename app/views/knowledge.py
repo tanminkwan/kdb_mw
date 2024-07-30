@@ -250,7 +250,7 @@ class UtResourceModelView(ModelView):
     list_widget   = ListAdvanced
 
     list_title   = "Resource"
-    list_columns = ['resource_id', 'resource_name', 'host_id', 'mw_server.ip_address', 'service_port', 'system_user', 't__landscape', 't__resourcetype', 't__incharge', 't__ha', 'resource_description']
+    list_columns = ['resource_id', 'resource_name', 'host_id', 'mw_server.ip_address', 'service_port', 'sys_user', 't__landscape', 't__resourcetype', 't__incharge', 't__ha', 'resource_description']
     edit_exclude_columns = ['user_id','create_on']
     add_exclude_columns = ['user_id','create_on']
 

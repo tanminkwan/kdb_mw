@@ -5,7 +5,7 @@ from app.sqls.was import getDomainIdAsPK, getWasInstanceId
 from app.sqls.agent import updateResultStatus, updateWasStatus, getResult, getAutorunFunc\
     , sendCommandImmediately, getOrInsertCommandType, insertCommandMaster\
     , getCommandMaster
-from app.sqls.monitor import updateRows, insertRow, select_row, select_rows
+from app.sqls.monitor import update_rows, insert_row, select_row, select_rows
 from app.models.common import get_date
 from datetime import datetime, timedelta
 from deepdiff import DeepDiff
@@ -87,9 +87,9 @@ class AutorunResult:
         agent_id  = result.agent_id
 
         if result.ag_command_detail.command_class.name == 'ExeAgentFunc':
-            system_user = ''
+            sys_user = ''
         else:
-            system_user = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
+            sys_user = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
 
         #Getting domain id from file_path ex) /sw/jeus/domains/PPRM_Domain/config
         if file_name == 'domain.xml':
@@ -104,9 +104,9 @@ class AutorunResult:
         if host_id == 'uok01a' and 'usropt01/jeus60/jeusok' in file_path:
             domain_id = 'jeusok2_dev'
 
-        return self._updateJeusDomain(host_id, domain_id, content, system_user, agent_id)
+        return self._updateJeusDomain(host_id, domain_id, content, sys_user, agent_id)
 
-    def _updateJeusDomain(self, host_id, domain_id, content, system_user='', agent_id=''):
+    def _updateJeusDomain(self, host_id, domain_id, content, sys_user='', agent_id=''):
 
         doc        = xmltodict.parse(content)
         json_type  = json.dumps(doc)
@@ -133,14 +133,14 @@ class AutorunResult:
                 changed_object = diff.to_json()
             )
 
-            insertRow('mw_was_change_history', insert_dict)
+            insert_row('mw_was_change_history', insert_dict)
         
         fac = JeusDomainFactory()
         
         if dict2_type.get('domain'):
-            jeus = NewJeusDomain(domain_id, host_id, domain, system_user=system_user, agent_id=agent_id)
+            jeus = NewJeusDomain(domain_id, host_id, domain, sys_user=sys_user, agent_id=agent_id)
         elif dict2_type.get('jeus-system'):
-            jeus = OldJeusDomain(domain_id, host_id, domain, system_user=system_user, agent_id=agent_id)
+            jeus = OldJeusDomain(domain_id, host_id, domain, sys_user=sys_user, agent_id=agent_id)
 
         rtn , _ = fac.jeusDomain(jeus)
         
@@ -167,7 +167,7 @@ class AutorunResult:
            ,urlrewrite_config = urlrewrite_config
         )
 
-        updateRows('mw_web_vhost', update_dict, filter_dict)
+        update_rows('mw_web_vhost', update_dict, filter_dict)
 
         return 1, ''
 
@@ -200,7 +200,7 @@ class AutorunResult:
            ,ssl_certi = ssl_certi
         )
 
-        return updateRows('mw_web_ssl', update_dict, filter_dict)
+        return update_rows('mw_web_ssl', update_dict, filter_dict)
 
     def _getSslDatetime(self, certi):
 
@@ -258,7 +258,7 @@ class AutorunResult:
            ,port        = port
         )
 
-        return updateRows('mw_web_domain', update_dict, filter_dict)
+        return update_rows('mw_web_domain', update_dict, filter_dict)
 
     def updateConnectSSL(self):
 
@@ -303,7 +303,7 @@ class AutorunResult:
            ,port        = port
         )
 
-        return updateRows('mw_web_domain', update_dict, filter_dict)
+        return update_rows('mw_web_domain', update_dict, filter_dict)
 
     def updateFileSSL(self):
 
@@ -339,7 +339,7 @@ class AutorunResult:
            ,ssl_certi   = ssl_certi
         )
 
-        return updateRows('mw_web_ssl', update_dict, filter_dict)
+        return update_rows('mw_web_ssl', update_dict, filter_dict)
 
     def _parseSSLInfo(self, content):
 
@@ -395,14 +395,14 @@ class AutorunResult:
         agent_id = result.agent_id
 
         if result.ag_command_detail.command_class.name == 'ExeAgentFunc':
-            system_user = ''
+            sys_user = ''
         else:
-            system_user = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
+            sys_user = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
 
-        return self._updateHttpm(host_id, content, system_user=system_user\
+        return self._updateHttpm(host_id, content, sys_user=sys_user\
                         , domain_id=domain_id, agent_id=agent_id)
 
-    def _updateHttpm(self, host_id, content, system_user='', domain_id='', agent_id=''):
+    def _updateHttpm(self, host_id, content, sys_user='', domain_id='', agent_id=''):
 
         dict2_type = httpmToDict(content)
 
@@ -431,12 +431,12 @@ class AutorunResult:
                 changed_object    = diff.to_json()
             )
 
-            insertRow('mw_web_change_history', insert_dict)
+            insert_row('mw_web_change_history', insert_dict)
 
         fac = WebtobHttpmFactory()
         
         print('Hennry TT :', domain_id)
-        httpm = NewHttpm(host_id, dict2_type, system_user=system_user, domain_id=domain_id, agent_id=agent_id)
+        httpm = NewHttpm(host_id, dict2_type, sys_user=sys_user, domain_id=domain_id, agent_id=agent_id)
         
         rtn , _ = fac.webtobHttpm(httpm)
         return rtn, ''
@@ -527,7 +527,7 @@ class AutorunResult:
             was_id     = re_dict['domain']
         )
 
-        return updateRows('mw_was', update_dict, filter_list)
+        return update_rows('mw_was', update_dict, filter_list)
 
     def _parseJeusLicenseInfo(self, content):
 
@@ -584,7 +584,7 @@ class AutorunResult:
            ,application_home = re_dict['application_home']
         )
 
-        return updateRows('mw_application', update_dict, filter_list)
+        return update_rows('mw_application', update_dict, filter_list)
 
     def _parseFilteredInfo(self, content):
 
@@ -627,7 +627,7 @@ class AutorunResult:
            ,port     = re_dict['port']
         )
 
-        return updateRows('mw_web', update_dict, filter_list)
+        return update_rows('mw_web', update_dict, filter_list)
 
     def _parseWebtobLicenseInfo(self, content):
 
@@ -689,7 +689,7 @@ class AutorunResult:
                 was_id           = was_id
             )
 
-            updateRows('mw_was', update_dict, filter_dict)
+            update_rows('mw_was', update_dict, filter_dict)
 
         return 1, ''
 
@@ -821,6 +821,6 @@ class AutorunResult:
 
         filter_dict = dict(id = self.result.id)
 
-        updateRows('ag_result', update_dict, filter_dict)
+        update_rows('ag_result', update_dict, filter_dict)
 
 

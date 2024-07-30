@@ -3,7 +3,7 @@ from flask import jsonify, request
 from flask_appbuilder import Model
 from collections.abc import Iterable
 from flask_appbuilder.api import BaseApi, expose, safe, rison, protect
-from app.sqls.monitor import getGridConfig, getAllFromTable, getModelInfo, getAllTables
+from app.sqls.monitor import getGridConfig, select_rows2, get_model_info, get_all_tables
 import enum
 import sys
 from datetime import datetime, time
@@ -27,7 +27,7 @@ class ModelSpecView(BaseApi):
         else:
             condition = None
 
-        col_recs, _ = getAllFromTable(table_name, column_name, condition=condition, distinct=False)
+        col_recs, _ = select_rows2(table_name, column_name, condition=condition, distinct=False)
 
         col_list = []
         if col_recs:
@@ -41,7 +41,7 @@ class ModelSpecView(BaseApi):
 
         table_name, column_name = table_column.split('.')
 
-        col_recs, _ = getAllFromTable(table_name, column_name, distinct=True)
+        col_recs, _ = select_rows2(table_name, column_name, distinct=True)
 
         col_list = []
         if col_recs:
@@ -53,7 +53,7 @@ class ModelSpecView(BaseApi):
     @protect(allow_browser_login=True)
     def modelinfo(self, table):
 
-        dic = getModelInfo(table)
+        dic = get_model_info(table)
 
         return jsonify({'dict':dic})
 
@@ -61,7 +61,7 @@ class ModelSpecView(BaseApi):
     @protect(allow_browser_login=True)
     def tables(self):
 
-        tables = getAllTables()
+        tables = get_all_tables()
 
         print(tables)
 
@@ -258,7 +258,7 @@ class GridView(BaseApi):
                         ,value    = request.args[arg])
                     )
 
-            recs, _ = getAllFromTable(table_name, condition=condition, join_conditions=join_conditions)
+            recs, _ = select_rows2(table_name, condition=condition, join_conditions=join_conditions)
 
         except KeyError as e:
             return jsonify({'msg':'Table:'+table_name+' dose not exist'}), 500

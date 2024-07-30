@@ -7,8 +7,8 @@ from app.sqls.agent import finishCommands_bySch, createCommandDetail_bySch\
     , get_commands, getCloseToTokenExpiry_bySch, getLastRundatetime
 from app.sqls.batch import runBatch_bySch
 
-@scheduler.task('cron', id='job_ag_finishCommands', name='Remove Finished Commands', minute='*/1')
-def job_ag_finishCommands():
+@scheduler.task('cron', id='job_ag_finish_commands', name='Remove Finished Commands', minute='*/1')
+def job_ag_finish_commands():
     #print(datetime.now(),'test_job1 is invoked!!')
     #stmt = select([AgCommandMaster]).where(AgCommandType.command_type_id=='READHTTPM')
     #command_type_rec = db.session.execute(stmt).fetchone()
@@ -17,32 +17,22 @@ def job_ag_finishCommands():
     #print(command_type_rec)
 
 #@scheduler.task('cron', id='job_ag_closeToTokenExpiry', second='*/30')
-@scheduler.task('cron', id='job_ag_closeToTokenExpiry', name='Refrash Token Update to Agents', hour='*/12')
-def job_ag_closeToTokenExpiry():
-    print(datetime.now(),'job_ag_closeToTokenExpiry is invoked!!')
+@scheduler.task('cron', id='job_ag_extend_token_expiry', name='Refrash Token Update to Agents', hour='*/12')
+def job_ag_extend_token_expiry():
     getCloseToTokenExpiry_bySch(3)
 
-#@scheduler.task('cron', id='job_mo_createWasStatusReport', minute='*/10')
-#def job_mo_createWasStatusReport():
-#    createWasStatusReport_bySch()
-
-#@scheduler.task('cron', id='job_mo_updateWasStatus', minute='*/10')
-#def job_mo_updateWasStatus():
-#    updateWasStatus_bySch()
-
 @scheduler.task('date', id='job_ag_startJobs')
-def job_ag_startJobs():
-    print(datetime.now(),'job_ag_startJobs is invoked!!')
+def job_ag_start_jobs():
+    print(datetime.now(),'job_ag_start_jobs is invoked!!')
 
     commands = get_commands()
-    print(datetime.now(),'get_commands!!',commands)
-
+    
     for cmd in commands:
-        job_ag_createJob(cmd)
+        job_ag_create_job(cmd)
 
-def job_ag_createJob(target):
+def job_ag_create_job(target):
 
-    print('job_ag_createJob Started!')
+    print('job_ag_create_job Started!')
     # The reason 5 secs are added : when job runs immediately, the transaction triggered the job may not be committed yet.
     start_date = target.time_to_exe if target.time_to_exe else datetime.now() + timedelta(seconds=10)
     end_date = target.time_to_stop if target.time_to_stop else None
@@ -53,11 +43,13 @@ def job_ag_createJob(target):
     elif target.periodic_type.name == 'PERIODIC':
 
         #주기작업의 다음 실행 시각을 계산 : 마지막 수행시간 + 주기, 현재시간보다 과거인 경우 현재시간 적용
-        LastRundatetime = getLastRundatetime(target.command_id)
+        last_job_start_time = getLastRundatetime(target.command_id)
 
-        if LastRundatetime:
+        if last_job_start_time:
+
             param = {target.interval_type.name:target.cycle_to_exe}
-            nextTime = LastRundatetime + timedelta(**param)
+            nextTime = last_job_start_time + timedelta(**param)
+
             if nextTime > start_date:
                 start_date = nextTime
 

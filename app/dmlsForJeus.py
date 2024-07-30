@@ -15,11 +15,11 @@ import re
 
 class JeusDomain(ABC):
 
-    def __init__(self, domain_id, host_id, domain, system_user="", agent_id=""):
+    def __init__(self, domain_id, host_id, domain, sys_user="", agent_id=""):
         self.domain_id     = domain_id
         self.host_id       = host_id
         self.domain        = domain
-        self.system_user   = system_user
+        self.sys_user   = sys_user
         self.agent_id      = agent_id
         self.landscape     = ''
         self.databases     = []
@@ -187,7 +187,7 @@ class JeusDomain(ABC):
     def __getTagWas(self):
 
         tag = 'WAS-' + self.domain_id + '-' + self.host_id + '-'\
-                    + ( self.system_user if self.system_user else 'NOUSERID')
+                    + ( self.sys_user if self.sys_user else 'NOUSERID')
         tag_id = insertResourceTag('mw_was', tag)
         return tag_id
     """
@@ -588,8 +588,8 @@ class NewJeusDomain(JeusDomain):
                 create_on        = datetime.now()
             )
 
-        if self.system_user:
-            dict_['system_user'] = self.system_user
+        if self.sys_user:
+            dict_['sys_user'] = self.sys_user
 
         return dict_
 
@@ -832,7 +832,7 @@ class OldJeusDomain(JeusDomain):
             located_host_id  = domain['node']['name'].lower(),
             newgeneration_yn = 'NO',
             production_mode  = null(),
-            system_user      = self.system_user,
+            sys_user      = self.sys_user,
             cluster_object   = null(),
             was_object       = self.domain,
             agent_id         = self.agent_id,

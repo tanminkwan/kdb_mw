@@ -18,7 +18,7 @@ from app.sqls.was import getWasInstanceId, getLandscape\
     , getWasRelationship, getWebRelationship
 from app.sqls.agent import createConnectSSL, createFileSSL, insertCommandMaster, getAgent
 from app.sqls.batch import createDomainNameInfo, createSslInfo
-from app.sqls.monitor import select_row, selectItem, selectItems
+from app.sqls.monitor import select_row, select_item, select_items
 from app.dmlsForAgent import AutorunResult
 from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
 from .common import FilterStartsWithFunction, get_mw_user, get_userid, ShowWithIds, ListAdvanced
@@ -206,7 +206,7 @@ class WasModelView(ModelView):
 
     list_title   = "JEUS 목록"    
     list_columns = ['c_was_id', 'newgeneration_yn', 'was_name', 'colored_landscape'\
-                    , 'system_user', 'located_host_id', 'c_os_type', 'link_ip_address', 'running_type', 'standby_host_id'\
+                    , 'sys_user', 'located_host_id', 'c_os_type', 'link_ip_address', 'running_type', 'standby_host_id'\
                     , 'view_domaininfo','view_relationship']
     label_columns = {'c_was_id':'WAS Domain'
                     ,'was_name':'WAS 이름'
@@ -215,7 +215,7 @@ class WasModelView(ModelView):
                     ,'landscape':'Landscape'
                     ,'colored_landscape':'Landscape'
                     ,'t__it_incharge':'담당자'
-                    ,'system_user':'서버계정'
+                    ,'sys_user':'서버계정'
                     ,'running_type':'이중화'
                     ,'standby_host_id':'StandBy'
                     ,'located_host_id':'설치 node'
@@ -244,7 +244,7 @@ class WasModelView(ModelView):
             if not agent_rec:
                 continue
 
-            recs, _ = selectItems('mw_application', 'application_home', dict(was_id=item.was_id))
+            recs, _ = select_items('mw_application', 'application_home', dict(was_id=item.was_id))
 
             for rec in recs:
 
@@ -269,7 +269,7 @@ class WasModelView(ModelView):
                     filter_dict = dict(was_id=item.was_id
                                     , application_home=rec.application_home)
                     appRec, _ = \
-                            selectItem('mw_application', 'application_id', filter_dict)
+                            select_item('mw_application', 'application_id', filter_dict)
                     addparam += ' ' + '*log4*.jar' + ' ' + appRec.application_id
                     insertCommandMaster('EXE.FILTER', [agent_rec.agent_id], addparam)
 
@@ -368,9 +368,9 @@ class WasLicenseView(ModelView):
         for item in items:
 
             if item.mw_server.os_type.name == 'WINDOWS':
-                agent_id = item.located_host_id.upper() + '_' + item.system_user + '_J'
+                agent_id = item.located_host_id.upper() + '_' + item.sys_user + '_J'
             else:
-                agent_id = item.located_host_id + '_' + item.system_user + '_J'
+                agent_id = item.located_host_id + '_' + item.sys_user + '_J'
 
             agent_rec = getAgent(agent_id)
 
@@ -633,7 +633,7 @@ class WebDomainModelView(ModelView):
 
         for item in items:
 
-            print('Get Connect SSL : ', item.ssl_yn.name, item.mw_web_vhost, item.mw_web_vhost.mw_web, item.mw_web_vhost.mw_web.system_user)
+            print('Get Connect SSL : ', item.ssl_yn.name, item.mw_web_vhost, item.mw_web_vhost.mw_web, item.mw_web_vhost.mw_web.sys_user)
             if item.ssl_yn.name == 'YES':
 
                 createConnectSSL(item.mw_web_vhost.mw_web.agent_id, item.domain_name, item.port)
@@ -753,7 +753,7 @@ class WebModelView(ModelView):
 
     list_title   = "WEBTOB 목록"    
     list_columns = ['c_host_id', 'c_ip_address', 'jsv_port', 'colored_landscape','newgeneration_yn'\
-                    , 'web_name','colored_built_type', 'system_user', 'c_ssl_yn', 'dependent_was_id'\
+                    , 'web_name','colored_built_type', 'sys_user', 'c_ssl_yn', 'dependent_was_id'\
                     , 'service_port', 'c_domainInfo_yn', 'view_relationship', 'view_webinfo']
     label_columns = {'c_host_id':'Host ID'
                     ,'jsv_port':'JSV Port'
@@ -766,7 +766,7 @@ class WebModelView(ModelView):
                     ,'colored_built_type':'내장/외장'
                     ,'c_ssl_yn':'SSL설치여부'
                     ,'c_domainInfo_yn':'Domain정보생성'
-                    ,'system_user':'서버계정'
+                    ,'sys_user':'서버계정'
                     ,'dependent_was_id':'WAS Domain'
                     ,'view_relationship':'구성도'
                     ,'view_webinfo':'http.m' }
@@ -789,7 +789,7 @@ class WebModelView(ModelView):
 
         for item in items:
 
-            if item.ssl_object and item.system_user:
+            if item.ssl_object and item.sys_user:
 
                 agent_rec = getAgent(item.agent_id)
 
@@ -810,7 +810,7 @@ class WebModelView(ModelView):
 
         for item in items:
 
-            if item.ssl_object and item.system_user:
+            if item.ssl_object and item.sys_user:
 
                 for ssl in item.ssl_object:
                     createFileSSL(item.agent_id, ssl['CERTIFICATEFILE'])
@@ -1007,9 +1007,9 @@ class MWConfiguration(BaseApi):
     
         content   = data['content']
         host_id   = data['host_id']
-        system_user = data['system_user'] if data.get('system_user') else ''
+        sys_user = data['sys_user'] if data.get('sys_user') else ''
 
-        rtn, msg = AutorunResult()._updateHttpm(host_id, content, system_user=system_user)
+        rtn, msg = AutorunResult()._updateHttpm(host_id, content, sys_user=sys_user)
         db.session.commit()
 
         return jsonify({'return_code':rtn, 'msg':msg}), 201
@@ -1030,9 +1030,9 @@ class MWConfiguration(BaseApi):
         content   = data['content']
         host_id   = data['host_id']
         domain_id = data['domain_id']
-        system_user = data['system_user'] if data.get('system_user') else ''
+        sys_user = data['sys_user'] if data.get('sys_user') else ''
         
-        rtn, msg = AutorunResult()._updateJeusDomain(host_id, domain_id, content, system_user=system_user)
+        rtn, msg = AutorunResult()._updateJeusDomain(host_id, domain_id, content, sys_user=sys_user)
         db.session.commit()
 
         return jsonify({'return_code':rtn, 'msg':msg}), 201
@@ -1102,8 +1102,8 @@ class JsonView(BaseView):
     @has_access
     def htmlviewer(self, table_name, column_name, tcolumn_name, key):
 
-        html, _ = selectItem(table_name, column_name, {'id':key})
-        title, _ = selectItem(table_name, tcolumn_name, {'id':key})
+        html, _ = select_item(table_name, column_name, {'id':key})
+        title, _ = select_item(table_name, tcolumn_name, {'id':key})
 
         return jsonify({'html':html, 'title':title})
 
@@ -1112,10 +1112,10 @@ class JsonView(BaseView):
     def jsonviewer(self, category, key):
 
         if category == 'WAS':
-            item, _ = selectItem('mw_was', 'was_object', {'was_id':key})
+            item, _ = select_item('mw_was', 'was_object', {'was_id':key})
         elif category == 'WEB':
             host_id, port = key.split('__')
-            item, _ = selectItem('mw_web', 'httpm_object', {'host_id':host_id,'port':port})
+            item, _ = select_item('mw_web', 'httpm_object', {'host_id':host_id,'port':port})
 
         return jsonify({'json':item})
 

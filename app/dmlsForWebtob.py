@@ -13,11 +13,11 @@ from app.sqls.batch import createDomainNameInfo, createSslInfo
 
 class WebtobHttpm(ABC):
 
-    def __init__(self, host_id, httpm, system_user="", domain_id="", agent_id=""):
+    def __init__(self, host_id, httpm, sys_user="", domain_id="", agent_id=""):
         self.host_id   = host_id
         self.port      = 0
         self.httpm     = httpm
-        self.system_user = system_user
+        self.sys_user = sys_user
         self.agent_id  = agent_id
         self.landscape     = ''
         self.dependent_was_id = domain_id
@@ -196,8 +196,8 @@ class WebtobHttpm(ABC):
             create_on            = datetime.now()
         )
 
-        if self.system_user:
-            update_dict['system_user'] = self.system_user
+        if self.sys_user:
+            update_dict['sys_user'] = self.sys_user
 
         if self.dependent_was_id:
             update_dict['dependent_was_id'] = self.dependent_was_id
@@ -209,7 +209,7 @@ class WebtobHttpm(ABC):
     def __getTag(self):
 
         tag = 'WEB-' + self.host_id + '-' + str(self.port) + '-'\
-             + (self.system_user if self.system_user else 'NOUSERID')
+             + (self.sys_user if self.sys_user else 'NOUSERID')
         tag_id = insertResourceTag('mw_web', tag)
         return tag_id
     """

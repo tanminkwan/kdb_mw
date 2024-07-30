@@ -195,7 +195,7 @@
 </div>
 <div id="bottom4">
     <h3 id="sub-title">[신규지식 등록 소식]</h3>
-    <table id="recentKmList"></table>
+    <table id="recent_knowledge_list"></table>
 </div>
 <div id="bottom1">
     <h3 id="sub-title">[Command 수행 실패 소식]</h3>
@@ -288,7 +288,7 @@
                     if (key==0){
                         $('#uncheckedWasList').append("<tr><th>Domain ID</th><th>Host ID</th><th>System User</th></tr>");            
                     }
-                    $('#uncheckedWasList').append("<tr><td>"+item.domain_id+"</td><td>"+item.host_id+"</td><td>"+item.system_user+"</td></tr>");            
+                    $('#uncheckedWasList').append("<tr><td>"+item.domain_id+"</td><td>"+item.host_id+"</td><td>"+item.sys_user+"</td></tr>");            
                 });
                 $(obj2).each(function(key, item){
                     //console.log(item.pk+" : "+item.value)
@@ -321,7 +321,7 @@
             }
         });
     $.ajax({
-        url: "/monitor/getChangedConfigs",
+        url: "/monitor/get_changed_configs",
             success: function(data){
                 //var obj = jQuery.parseJSON(data.list)
                 var obj1 = data.changedWASList
@@ -342,15 +342,15 @@
             }
         });
         $.ajax({
-        url: "/monitor/recentKmList",
+        url: "/monitor/recent_knowledge_list",
             success: function(data){
                 //var obj = jQuery.parseJSON(data.list)
-                var obj1 = data.recentKmList
+                var obj1 = data.recent_knowledge_list
                 $(obj1).each(function(key, item){
                     if (key==0){
-                        $('#recentKmList').append("<tr><th>분류</th><th>Title</th><th>작성일시</th><th>최초작성일시</th><th>작성자ID</th></tr>");
+                        $('#recent_knowledge_list').append("<tr><th>분류</th><th>Title</th><th>작성일시</th><th>최초작성일시</th><th>작성자ID</th></tr>");
                     }
-                    $('#recentKmList').append("<tr><td>"+item.category+"</td><td><a href=\"/ut/htmlcontent/"+ item.id +"\" target=\"_blank\">"+item.content_name+"</a></td><td>"+item.update_on+"</td><td>"+item.create_on+"</td><td>"+item.user_id+"</td></tr>");
+                    $('#recent_knowledge_list').append("<tr><td>"+item.category+"</td><td><a href=\"/ut/htmlcontent/"+ item.id +"\" target=\"_blank\">"+item.content_name+"</a></td><td>"+item.update_on+"</td><td>"+item.create_on+"</td><td>"+item.user_id+"</td></tr>");
                 });
             }
         });

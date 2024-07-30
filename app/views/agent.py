@@ -26,7 +26,7 @@ from wtforms import Form, StringField
 #from wtforms.fields import TextField
 from wtforms.validators import Regexp, EqualTo
 from datetime import datetime, timedelta
-from app.scheduled_jobs  import job_ag_createJob
+from app.scheduled_jobs  import job_ag_create_job
 from flask_appbuilder.filemanager import get_file_original_name
 import apscheduler
 from flask_jwt_extended import create_refresh_token
@@ -54,7 +54,7 @@ def job_after_update_command(mapper, connection, target):
 @db.event.listens_for(AgCommandMaster, 'after_insert')
 def create_command_detail1(mapper, connection, target):
     
-    job_ag_createJob(target)
+    job_ag_create_job(target)
 
 @db.event.listens_for(AgCommandMaster, 'before_insert')
 def set_interval_type(mapper, connection, target):
