@@ -7,7 +7,6 @@ from .testSmtp import send_kdbMail
 
 def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True):
 
-    print('HERE!!!')
     now = datetime.now() + timedelta(days=daygap)
 
 

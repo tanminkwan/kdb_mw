@@ -7,6 +7,27 @@ WORKDIR /app
 # Install git and other dependencies
 RUN apt-get update && apt-get install -y git && apt-get clean
 
+# Install packages
+RUN apt-get update && apt-get install -y \
+    wget \
+    unzip \
+    gnupg \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install chrome
+RUN wget -q https://mirror.cs.uchicago.edu/google-chrome/pool/main/g/google-chrome-stable/google-chrome-stable_114.0.5735.90-1_amd64.deb \
+    && apt-get update \
+    && apt-get install -y ./google-chrome-stable_114.0.5735.90-1_amd64.deb \
+    && rm ./google-chrome-stable_114.0.5735.90-1_amd64.deb \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download & Install chromedriver
+RUN wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip \
+    && unzip /tmp/chromedriver.zip -d /usr/local/bin/ \
+    && rm /tmp/chromedriver.zip
+
 # Copy necessary files
 COPY requirements.txt requirements.txt
 

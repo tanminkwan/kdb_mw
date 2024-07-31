@@ -8,7 +8,7 @@ from .common import FilterStartsWithFunction, get_mw_user, get_userid, get_repor
 
 import requests
 import json
-from app.autoReport.testSmtp import send_kdbMail
+from app.auto_report.testSmtp import send_kdbMail
 
 class GtGroupUsersView(ModelView):
     

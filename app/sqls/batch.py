@@ -8,7 +8,7 @@ from .agent import finishCommands, getAgent
 from .monitor import update_rows, insert_row, select_rows, select_row, getWasStatusTemplate
 from sqlalchemy.dialects.postgresql import insert
 import re, json
-from app.autoReport.runAutoReport import runAutoReport
+from app.auto_report.runAutoReport import runAutoReport
 from datetime import datetime, timedelta
 from app.kafka_customer import Consumer4Kafka
 

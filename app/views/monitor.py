@@ -20,7 +20,7 @@ from app.sqls.monitor import select_row, getGridConfig, createWasStatusReport\
 from app.sqls.agent import getAgentStat, getErrorResults, insertCommandMaster
 from app.sqls.was import getChangedWAS, getChangedWEB
 from wtforms import FieldList, StringField
-from app.autoReport.runAutoReport import runAutoReport
+from app.auto_report.runAutoReport import runAutoReport
 import sys
 
 class SimpleListWidget(ListWidget):

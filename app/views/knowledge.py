@@ -14,7 +14,7 @@ from app.models.common import get_user, get_date, get_uuid
 from .common import FilterStartsWithFunction, FilterContainsFunction, TagType, TagMustContains\
     , ListAdvanced, ShowWithIds, get_group_str
 from app.sqls.monitor import select_row
-from app.autoReport.testSmtp import send_kdbMail
+from app.auto_report.testSmtp import send_kdbMail
 
 
 @db.event.listens_for(UtFile, 'before_insert')
