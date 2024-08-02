@@ -1,5 +1,9 @@
 version: '3.8'
 services:
+  mwm-redis:
+    image: "redis:alpine"
+#    ports:
+#      - "6379:6379"
   mwm-db:
     image: postgres:15.2-alpine
 #    restart: no
@@ -18,9 +22,12 @@ services:
 #    restart: no
     depends_on:
       - mwm-db
+      - mwm-redis
     ports:
       - 8000:8000
     environment:
       MWM_DATABASE_URI: mwm-db:5432
+      REDIS_URL: redis://mwm-redis:6379/0
     links:
       - mwm-db
+      - mwm-redis
