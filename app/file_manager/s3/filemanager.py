@@ -15,6 +15,7 @@ from flask.globals import _request_ctx_stack
 from flask_appbuilder.filemanager import FileManager, uuid_namegen
 from flask_appbuilder.upload import FileUploadField
 import boto3
+from botocore.client import Config
 
 try:
     from flask import _app_ctx_stack
@@ -41,13 +42,11 @@ class S3FileUploadField(FileUploadField):
                 Validators
         """
         super(S3FileUploadField, self).__init__(label, validators, **kwargs)
-
         if filemanager is not None:
             self.filemanager = filemanager()
         else:
             self.filemanager = FileManager()
         self._should_delete = False
-
 
 class S3FileManager(FileManager):
     """File upload to S3
@@ -62,6 +61,10 @@ class S3FileManager(FileManager):
 
         ctx = app_stack.top
 
+        if "AWS_URL" in ctx.app.config:
+            self.aws_url = ctx.app.config["AWS_URL"]
+        else:
+            self.aws_url = None
         if "AWS_ACCESS_KEY_ID" in ctx.app.config:
             self.aws_access_key_id = ctx.app.config["AWS_ACCESS_KEY_ID"]
         else:
@@ -70,11 +73,6 @@ class S3FileManager(FileManager):
             self.aws_secret_access_key = ctx.app.config["AWS_SECRET_ACCESS_KEY"]
         else:
             raise Exception('Config key AWS_SECRET_ACCESS_KEY is mandatory')
-        if "REGION_NAME" in ctx.app.config:
-            self.region_name = ctx.app.config["REGION_NAME"]
-        else:
-            raise Exception('Config key REGION_NAME is mandatory')
-
         if 'BUCKET_NAME' in ctx.app.config and not bucket_name:
             bucket_name = ctx.app.config['BUCKET_NAME']
         if not bucket_name:
@@ -92,10 +90,12 @@ class S3FileManager(FileManager):
         self._should_delete = False
 
     def get_s3_client(self):
+        
         s3_client = boto3.client('s3',
+                                 endpoint_url=self.aws_url,
                                  aws_access_key_id=self.aws_access_key_id,
                                  aws_secret_access_key=self.aws_secret_access_key,
-                                 region_name=self.region_name)
+                                 config=Config(signature_version='s3v4'))
         return s3_client
 
     def delete_file(self, filename):
@@ -104,6 +104,7 @@ class S3FileManager(FileManager):
         client.delete_object(Bucket=self.bucket_name, Key=file_path)
 
     def save_file(self, data, filename):
+        print("S3FileManager save_file")
         client = self.get_s3_client()
         file_path = os.path.join(self.relative_path, filename)
         client.put_object(Body=data, Bucket=self.bucket_name, Key=file_path)
@@ -115,7 +116,7 @@ class S3FileManager(FileManager):
         response = client.get_object(Bucket=self.bucket_name, Key=file_path)
         body = response['Body'].read()
         return body
-
+"""
 class FileUploadView(ModelView):
     datamodel = SQLAInterface(FileManage)
 
@@ -132,3 +133,4 @@ class FileUploadView(ModelView):
         filename = getattr(rel_obj, 'filename')
         file_obj = S3FileManager()
         file_obj.delete_file(filename)
+"""

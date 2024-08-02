@@ -1,4 +1,4 @@
-from flask import g, Markup, url_for
+from flask import g, url_for
 from flask_appbuilder import Model
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import Column, Text, Integer, String, ForeignKey\
@@ -6,7 +6,7 @@ from sqlalchemy import Column, Text, Integer, String, ForeignKey\
 , Table, Date
 from sqlalchemy.orm import relationship
 import enum
-from markupsafe import escape
+from markupsafe import Markup, escape
 from datetime import datetime
 from flask_appbuilder.models.mixins import FileColumn
 from flask_appbuilder.filemanager import get_file_original_name
@@ -262,11 +262,8 @@ class AgFile(Model):
     UniqueConstraint(agent_type, file_name, file_version)
 
     def download(self):
-        return Markup(
-            '<a href="'
-            + url_for("FileModelView.download", filename=str(self.file))
-            + '">Download</a>'
-        )
+        url='/common/download/'+str(self.file)
+        return Markup(f'<a href="{url}" target="_blank">Download</a>')
 
-    def getFile_name(self):
+    def get_filename(self):
         return get_file_original_name(str(self.file))

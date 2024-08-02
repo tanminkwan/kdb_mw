@@ -1,7 +1,8 @@
-from flask import g, Markup, url_for
+from flask import g, url_for
 from flask_appbuilder import Model
 from flask_appbuilder.filemanager import get_file_original_name
 from flask_appbuilder.models.mixins import FileColumn
+from markupsafe import Markup
 from sqlalchemy import Column, Integer, String, ForeignKey\
 , DateTime, Enum, UniqueConstraint, ForeignKeyConstraint\
 , Table, Date, Text, Index
@@ -95,6 +96,7 @@ class UtTag(Model):
         , secondaryjoin = "UtTag.id==ut_tag_tag.c.id_of_child_tag")
 
     ut_parent_tag = relationship('UtTag', secondary=assoc_tag_tag\
+        , overlaps = 'ut_child_tag'
         , primaryjoin   = "UtTag.id==ut_tag_tag.c.id_of_child_tag"\
         , secondaryjoin = "UtTag.id==ut_tag_tag.c.id_of_parent_tag")
 
@@ -129,12 +131,12 @@ class UtTagKm(Model):
         , secondaryjoin = "UtTagKm.id==ut_tagkm_tagkm.c.id_of_child_tag")
 
     ut_parent_tagkm = relationship('UtTagKm', secondary=assoc_tagkm_tagkm\
+        , overlaps = 'ut_child_tagkm'
         , primaryjoin   = "UtTagKm.id==ut_tagkm_tagkm.c.id_of_child_tag"\
         , secondaryjoin = "UtTagKm.id==ut_tagkm_tagkm.c.id_of_parent_tag")
 
     def __repr__(self):
         return self.tag
-
 
 class UtResource(Model):
 
@@ -293,14 +295,12 @@ class UtFile(Model):
     def __repr__(self):
         return self.file_name
 
-    def download(self):
-        return Markup(
-            '<a href="'
-            + url_for("FileModelView.download", filename=str(self.file))
-            + '">Download</a>'
-        )
 
-    def getFile_name(self):
+    def download(self):
+        url='/common/download/'+str(self.file)
+        return Markup(f'<a href="{url}" target="_blank">Download</a>')
+            
+    def get_filename(self):
         return get_file_original_name(str(self.file))
 
 """

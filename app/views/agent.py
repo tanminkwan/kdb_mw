@@ -19,6 +19,7 @@ from app.sqls.was import getWasInstanceId, getLandscape, getDomainIdAsPK
 from app.sqls.agent import checkAgentUpdated, checkAgentAproved\
     , sendCommands, addAgent, addResult, cancelCommands, createCommandDetail_bySch\
     , getLatestFile, updateResultStatus, updateExpiration
+from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
 from sqlalchemy import event
 
 from wtforms import Form, StringField
@@ -26,7 +27,7 @@ from wtforms import Form, StringField
 #from wtforms.fields import TextField
 from wtforms.validators import Regexp, EqualTo
 from datetime import datetime, timedelta
-from app.scheduled_jobs  import job_ag_create_job
+from app.jobs  import job_ag_create_job
 from flask_appbuilder.filemanager import get_file_original_name
 import apscheduler
 from flask_jwt_extended import create_refresh_token
@@ -127,9 +128,21 @@ class FileModelView(ModelView):
 
     validators_columns = {
                 'file_version':[Regexp('\d{4}\.\d{4}\.\d{4}', message='format 0000.0000.0000')]
-               , 'file_name':[EqualTo('getFile_name', message='파일명이 일치하지 않습니다.')]
+               , 'file_name':[EqualTo('get_filename', message='파일명이 일치하지 않습니다.')]
                 }
 
+    edit_form_extra_fields = add_form_extra_fields = {
+        "file": S3FileUploadField("S3 File",
+                                    description="",
+                                    filemanager=S3FileManager,
+                                )
+    }
+
+    def pre_delete(self, rel_obj):
+        filename = getattr(rel_obj, 'file')
+        file_obj = S3FileManager()
+        file_obj.delete_file(filename)
+        
 class CommandTypeModelView(ModelView):
     
     datamodel = SQLAInterface(AgCommandType)

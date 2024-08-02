@@ -18,6 +18,7 @@ SECRET_KEY = "\2\1thisismyscretkey\1\2\e\y\y\h"
 # SQLALCHEMY_DATABASE_URI = 'postgresql://root:password@localhost/myapp'
 MWM_DATABASE_URI = os.getenv("MWM_DATABASE_URI", "localhost:25432")
 SQLALCHEMY_DATABASE_URI = f"postgresql://tiffanie:1q2w3e4r!!@{MWM_DATABASE_URI}/mw"
+SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # Kafka brokers
 #KAFKA_BROKERS = ['10.0.20.117:9092']
@@ -29,6 +30,13 @@ KAFKA_CONSUMER_4_WAS_MONITORING = 'g_w_mw_server'
 GITLAB_CONFIG = dict()
 #GITLAB_CONFIG['api_connection'] = 'http://10.1.10.100:8080/api/v4/'
 #GITLAB_CONFIG['giblab_api_private_key'] = 'rHpBszAcBi-p9zSkuHgA'
+
+# S3
+AWS_URL = 'http://localhost:9000'
+AWS_ACCESS_KEY_ID = 'x7QobM7I5WNI5zGWbkr4'
+AWS_SECRET_ACCESS_KEY = 'pdoWz2Zw0yaJw9fW32jqZigaqiyXRuYLKK9x7PzJ'
+BUCKET_NAME = 'test'
+BUCKET_PREFIX = '/uploads/'
 
 # Flask-WTF flag for CSRF
 CSRF_ENABLED = True

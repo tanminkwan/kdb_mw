@@ -21,7 +21,7 @@ def job_ag_finish_commands():
 def job_ag_extend_token_expiry():
     getCloseToTokenExpiry_bySch(3)
 
-@scheduler.task('date', id='job_ag_startJobs')
+#@scheduler.task('date', id='job_ag_start_jobs')
 def job_ag_start_jobs():
     print(datetime.now(),'job_ag_start_jobs is invoked!!')
 
@@ -76,4 +76,6 @@ def job_ag_create_job(target):
                 , args    = (target.command_id,)
                 , **dynamic_dict
             )
+
+scheduler.add_job(id='job_ag_start_jobs', func=job_ag_start_jobs, trigger='date')
 

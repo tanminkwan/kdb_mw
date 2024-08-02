@@ -1,4 +1,5 @@
-from flask import g, Markup, url_for
+from flask import g, url_for
+from markupsafe import Markup
 from flask_appbuilder import Model
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import Column, Integer, String, ForeignKey\

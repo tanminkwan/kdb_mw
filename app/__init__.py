@@ -1,7 +1,7 @@
 import logging
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 import os
-from flask import Flask
+from flask import Flask, jsonify
 from flask_migrate import Migrate
 from flask_appbuilder import AppBuilder, SQLA, IndexView
 #from pymongo import MongoClient
@@ -31,10 +31,6 @@ log.setLevel(logging.ERROR)
 
 app = Flask(__name__)
 app.config.from_object("config")
-
-@app.route('/health')
-def health():
-    return jsonify(status="healthy"), 200
 
 db = SQLA(app)
 migrate = Migrate(app, db)
@@ -110,4 +106,4 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 """
 from app.views import was, agent, monitor, knowledge, api, git
 from app.sqls import was, agent, monitor, knowledge
-from . import dmlsForJeus, dmlsForWebtob, scheduled_jobs
+from . import dmlsForJeus, dmlsForWebtob, jobs

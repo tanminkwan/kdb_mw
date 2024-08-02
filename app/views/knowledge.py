@@ -1,4 +1,4 @@
-from flask import g, redirect, render_template, Response
+from flask import g, redirect, render_template, Response, send_file
 from flask_babel import lazy_gettext
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder import ModelView, expose, has_access
@@ -7,7 +7,7 @@ from flask_appbuilder.api import BaseApi, expose, protect
 from flask_appbuilder.filemanager import get_file_original_name, FileManager
 from wtforms import TextAreaField
 from flask_appbuilder.fieldwidgets import BS3TextAreaFieldWidget
-from app import db, appbuilder, con_val
+from app import app, db, appbuilder, con_val
 from app.models.knowledge import UtTag, UtTagKm, UtFile, UtResource, UtResourceAddedText, UtHtmlContent\
     , UtMdContent
 from app.models.common import get_user, get_date, get_uuid
@@ -15,7 +15,7 @@ from .common import FilterStartsWithFunction, FilterContainsFunction, TagType, T
     , ListAdvanced, ShowWithIds, get_group_str
 from app.sqls.monitor import select_row
 from app.auto_report.testSmtp import send_kdbMail
-
+from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
 
 @db.event.listens_for(UtFile, 'before_insert')
 def set_file_name(mapper, connection, target):
@@ -237,10 +237,22 @@ class UtFileModelView(ModelView):
     label_columns = {'ut_html_content':"지식정보","file_name": "File Name", "download": "Download"}
     add_columns   = ['ut_html_content','file']
     edit_columns  = ['ut_html_content','file']
-    list_columns  = ['ut_html_content','file_name','download','create_on']
+    list_columns  = ['ut_html_content','file_name','file','download','create_on']
     show_columns  = ['file', 'file_name','download', 'user_id','create_on']
 
     base_order = ('create_on', 'desc')
+
+    edit_form_extra_fields = add_form_extra_fields = {
+        "file": S3FileUploadField("S3 File",
+                                    description="",
+                                    filemanager=S3FileManager,
+                                )
+    }
+
+    def pre_delete(self, rel_obj):
+        filename = getattr(rel_obj, 'file')
+        file_obj = S3FileManager()
+        file_obj.delete_file(filename)
 
 class UtResourceModelView(ModelView):
 

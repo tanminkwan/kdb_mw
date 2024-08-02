@@ -1,15 +1,33 @@
 from app import appbuilder, app
-from flask import jsonify, request
-from flask_appbuilder import Model
+from flask import jsonify, request, send_file
+from flask_appbuilder import Model, has_access
 from collections.abc import Iterable
 from flask_appbuilder.api import BaseApi, expose, safe, rison, protect
 from app.sqls.monitor import getGridConfig, select_rows2, get_model_info, get_all_tables
+from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
 import enum
 import sys
 from datetime import datetime, time
 import json
 import re
+from io import BytesIO
+
 #import time
+
+class CommonView(BaseApi):
+
+    route_base = '/common'
+
+    @expose('/health', methods=['GET'])
+    def health(self):
+        return jsonify(status="healthy"), 200
+
+    @expose('/download/<filename>', methods=['GET'])
+    @has_access
+    def download_file(self, filename):
+        file_manager = S3FileManager()
+        file_data = file_manager.get_file(filename)
+        return send_file(BytesIO(file_data), download_name=filename, as_attachment=True)
 
 class ModelSpecView(BaseApi):
 
@@ -291,6 +309,6 @@ class GridView(BaseApi):
         #return jsonify({'list':grid_list, 'columns':columns, 'labels':header, 'widths':widths, 'title':title, 'file_name':file_name, 'rows_per_page':rows_per_page, 'page_dblclick':page_dblclick, 'conditions':cond_list}), 200
         return jsonify({'list':grid_list, 'columns':columns, 'labels':header, 'widths':widths, 'title':title, 'file_name':file_name, 'rows_per_page':rows_per_page, 'page_dblclick':page_dblclick}), 200
 
-
+appbuilder.add_api(CommonView)
 appbuilder.add_api(ModelSpecView)
 appbuilder.add_api(GridView)
