@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Diff</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/diff2html.min.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #diff {
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Text Diff</h1>
+    <div id="diff"></div>
+
+    <script src="{{ url_for('static', filename='js/diff.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/diff2html.min.js') }}"></script>
+    <script>
+        async function fetchTexts() {
+            const response = await fetch('/texts');
+            const data = await response.json();
+            return data;
+        }
+
+        async function displayDiff() {
+            const texts = await fetchTexts();
+            const diff = Diff.createPatch('text', texts.text1, texts.text2);
+            const diffHtml = Diff2Html.html(diff, { 
+                drawFileList: false, 
+                matching: 'lines', 
+                outputFormat: 'side-by-side',
+                showFiles: false,
+                diffStyle: 'word',
+                renderNothingWhenEmpty: false 
+            });
+            document.getElementById('diff').innerHTML = diffHtml;
+        }
+
+        displayDiff();
+    </script>
+</body>
+</html>
