@@ -17,10 +17,10 @@ from datetime import datetime, timedelta
 from app.sqls.monitor import select_row, getGridConfig, createWasStatusReport\
                     , getNotRunningWasList, get_column_type, get_target_table_name\
                     , select_rows2
-from app.sqls.agent import getAgentStat, getErrorResults, insertCommandMaster
+from app.sqls.agent import get_agent_stat, getErrorResults, insertCommandMaster
 from app.sqls.was import getChangedWAS, getChangedWEB
 from wtforms import FieldList, StringField
-from app.auto_report.runAutoReport import runAutoReport
+from app.auto_report.auto_report import runAutoReport
 import sys
 
 class SimpleListWidget(ListWidget):
@@ -353,17 +353,17 @@ class MonitorApi(BaseApi):
 
         return jsonify({'uncheckedWas':uncheckedWas_list,'notRunningWas':notRunningWas_list})
 
-    @expose('/agentStat', methods=['GET'])
+    @expose('/agent_stat', methods=['GET'])
     @has_access
-    def agentStat(self):
+    def agent_stat(self):
 
-        agentStat_recs, offline_recs = getAgentStat()
+        agent_stat_recs, offline_recs = get_agent_stat()
 
-        agentStat_list = []
-        if agentStat_recs:
-            [ agentStat_list.append({'landscape':'NON' if r.landscape==None\
+        agent_stat_list = []
+        if agent_stat_recs:
+            [ agent_stat_list.append({'landscape':'NON' if r.landscape==None\
                  else r.landscape.name,'total':r.total, 'offline':r.offline})\
-             for r in agentStat_recs ]
+             for r in agent_stat_recs ]
 
         offline_list = []
         if offline_recs:
@@ -374,7 +374,7 @@ class MonitorApi(BaseApi):
                 , 'last_checked_date':r.last_checked_date.strftime('%Y.%m.%d %H:%M')}
                 ) for r in offline_recs ]
 
-        return jsonify({'agentStat':agentStat_list, 'offlineAgents':offline_list})
+        return jsonify({'agent_stat':agent_stat_list, 'offline_agents':offline_list})
 
     @expose('/getErrorResults', methods=['GET'])
     @has_access

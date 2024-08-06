@@ -106,8 +106,6 @@ class JeusDomain(ABC):
         
         for insert_dict, update_dict in zip(insert_array, update_array):
 
-            #print('app i:',insert_dict)
-            #print('app u:',update_dict)
             stmt = insert(MwApplication).values(insert_dict)    
             do_update_stmt = stmt.on_conflict_do_update(
                 index_elements=['was_id', 'application_id'],
@@ -203,7 +201,6 @@ class JeusDomain(ABC):
         insert_dict = {}   
         db_property = ''
 
-        #print(' datasources : ', datasources)
         for ds in datasources:
 
             update_dict, datasource_id_str = self._getDataOfDatasource(ds)
@@ -370,7 +367,6 @@ class JeusDomain(ABC):
 
         for server, apps in map_dict.items():
 
-            #print('appss :',apps)
             wasInstance_rec = db.session.query(MwWasInstance)\
                     .filter(MwWasInstance.was_id==self.domain_id\
                         , MwWasInstance.was_instance_id==server).first()
@@ -512,10 +508,8 @@ class JeusDomain(ABC):
                .filter(MwDBMaster.db_dbms_id==d_rec.db_dbms_id\
                       ,MwDBMaster.landscape==self.landscape).first()
 
-            #print('HHH 1 : ', dm_rec)
-            #print('HHH 2 : ', rec.mw_db_master)
             if not dm_rec in rec.mw_db_master:
-                print('HHH 3')
+                
                 rec.mw_db_master.append(dm_rec)
 
         return 1
@@ -900,7 +894,6 @@ class OldJeusDomain(JeusDomain):
         datasources = [ d for d in self.datasources_dict ]
         was_instance_id = self.host_id + '_' + server['name']
 
-        print('HHH 3 : ', datasources, was_instance_id)
         return datasources, was_instance_id
 
     def _getDataOfApplicationsforWasInstance(self, applications):

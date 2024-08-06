@@ -1,4 +1,4 @@
-from app import appbuilder, db, log, KAFKA_BROKERS, KAFKA_CONSUMER_4_WAS_MONITORING\
+from app import appbuilder, db, KAFKA_BROKERS, KAFKA_CONSUMER_4_WAS_MONITORING\
         , kafka_producer, WAS_STATUS, consumer4WasMonitoring
 from app.models.was import MwWasWebtobConnector, MwWebServer, MwWas, MwWeb, MwWebVhost\
         , MwWebDomain, MwWebSsl
@@ -8,7 +8,7 @@ from .agent import finishCommands, getAgent
 from .monitor import update_rows, insert_row, select_rows, select_row, getWasStatusTemplate
 from sqlalchemy.dialects.postgresql import insert
 import re, json
-from app.auto_report.runAutoReport import runAutoReport
+from app.auto_report.auto_report import runAutoReport
 from datetime import datetime, timedelta
 from app.kafka_customer import Consumer4Kafka
 

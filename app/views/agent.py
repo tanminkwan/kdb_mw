@@ -1,3 +1,4 @@
+import logging
 from flask import g, render_template, Flask, request, jsonify\
      , send_file, redirect, url_for, render_template_string
 from flask_appbuilder.filemanager import FileManager, get_file_original_name
@@ -9,7 +10,7 @@ from flask_appbuilder.actions import action
 from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, protect
 from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
     , FilterEqualFunction, FilterNotEqual,FilterInFunction,FilterStartsWith, FilterEqual
-from app import appbuilder, db, scheduler, log, KAFKA_BROKERS
+from app import appbuilder, db, scheduler, KAFKA_BROKERS
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgAgentGroup, AgAgent, AgResult, AgFile, AgCommandHelper, AgAutorunResult
 from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
@@ -244,7 +245,7 @@ class ResultModelView(ModelView):
             elif file_name == 'webtob.monitor.sh':
                 rtn, msg = ar.updateWebtobMonitor()
             elif file_name == 'get_ssl_certifile':
-                rtn, msg = ar.updateFileSSLByAPI()
+                rtn, msg = ar.update_file_SSL_byAPI()
             elif file_name.startswith('fileSSL.out'):
                 rtn, msg = ar.updateFileSSL()
             elif file_name.startswith('connectSSL.out'):
@@ -520,13 +521,14 @@ class CommandApi(BaseApi):
                 rtn2, msg = ar.callAutorunFunc()
             except Exception as e:
                 excType, excValue, traceback = sys.exc_info()
-                log.error('callAutorunFunc Error : %s %s %s', excType, excValue, traceback)
+                logging.error(f'callAutorunFunc Error : 1{excType} 2{excValue} 3{traceback}')
                 rtn2 = -1
 
             if rtn2 > 0:
                 db.session.commit()
             else:
-                log.error('callAutorunFunc [command_id][msg] [%s][%s]',data.get('command_id'), msg)
+                command_id = data.get('command_id')
+                logging.error(f'callAutorunFunc [command_id:{command_id}][msg:{msg}]')
                 db.session.rollback()
 
         return jsonify({'return_code':1, 'message':'OK'}), 200

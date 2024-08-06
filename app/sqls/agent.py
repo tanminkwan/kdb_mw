@@ -1,4 +1,5 @@
-from app import appbuilder, db, log, kafka_producer
+import logging
+from app import appbuilder, db, kafka_producer
 from flask import g
 from sqlalchemy.sql import select, update, func
 from sqlalchemy import null, text, or_, not_, case
@@ -111,21 +112,10 @@ def getAgents():
     else:
         return None 
 
-def getAgentStat():
+def get_agent_stat():
 
     gap = datetime.now() - timedelta(minutes=3)
 
-    """
-    q = db.session.query(\
-                AgAgent.landscape, 
-                func.sum(1), 
-                func.sum(case([(AgAgent.last_checked_date<=gap,1)], else_=0))
-                )\
-                .filter(AgAgent.approved_yn=='YES')\
-                .group_by(AgAgent.landscape)
-
-    print('Hennry_12 : ',q)
-    """
     results = db.session.query(\
                 AgAgent.landscape, 
                 func.sum(1).label('total'), 
@@ -133,9 +123,7 @@ def getAgentStat():
                 )\
                 .filter(AgAgent.approved_yn=='YES')\
                 .group_by(AgAgent.landscape).all()
-
-    print('Hennry_12 result : ',results)
-
+    
     recs = db.session.query(AgAgent)\
             .filter(AgAgent.last_checked_date<=gap,AgAgent.approved_yn=='YES')\
             .all()
@@ -161,14 +149,12 @@ def finishCommands(command_ids):
 
     stmt = update(AgCommandMaster)\
             .where(AgCommandMaster.command_id.in_(command_ids)).values(publish_yn='YES')
-    #print('finishCommands : ',command_ids, stmt)
     db.session.execute(stmt)
 
 def cancelCommands(command_ids):
 
     stmt = update(AgCommandMaster)\
             .where(AgCommandMaster.command_id.in_(command_ids)).values(finished_yn='YES')
-    print('cancelCommands : ',command_ids, stmt)
     db.session.execute(stmt)
 
 def getCommandsToSendNow():
@@ -204,7 +190,7 @@ def finishCommands_bySch():
 
 def createCommandDetail(command_id):
 
-    log.debug('Hennry createCommandDetail [%s]', command_id)
+    logging.debug(f'Hennry createCommandDetail {command_id}')
 
     command_rec = db.session.query(AgCommandMaster)\
                 .filter(AgCommandMaster.command_id==command_id).first()
@@ -375,7 +361,7 @@ def insertCommandMaster(command_type_id, agent_ids, additional_param='', add_CID
 
     return 1, ''
 
-def getCloseToTokenExpiry_bySch(days):
+def get_closeto_token_expiry_bysch(days):
 
     subquery = db.session.query(AgCommandDetail.agent_id)\
                     .filter(AgCommandDetail.command_class=='GetRefreshToken',AgCommandDetail.command_status=='CREATE').subquery()
@@ -417,11 +403,12 @@ def getCloseToTokenExpiry_bySch(days):
     stmt = insert(AgCommandMaster).values(insert_dict)
     db.session.execute(stmt)
     
-    AgCommandMaster_rec = db.session.query(AgCommandMaster)\
+    ag_command_master_rec = db.session.query(AgCommandMaster)\
                     .filter(AgCommandMaster.command_id==command_id).first()
-    print('AgCommandMaster_rec :',AgCommandMaster_rec)
 
-    AgCommandMaster_rec.ag_agent = agent_recs
+    logging.debug(f'ag_command_master_rec :{ag_command_master_rec}')
+
+    ag_command_master_rec.ag_agent = agent_recs
 
     for ag in agent_recs:
 

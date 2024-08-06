@@ -1,4 +1,4 @@
-from app import appbuilder, db, log
+from app import appbuilder, db
 from flask import g, current_app
 from flask_appbuilder import Model
 from sqlalchemy.sql import update, func, sqltypes

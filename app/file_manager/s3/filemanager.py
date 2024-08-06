@@ -104,7 +104,7 @@ class S3FileManager(FileManager):
         client.delete_object(Bucket=self.bucket_name, Key=file_path)
 
     def save_file(self, data, filename):
-        print("S3FileManager save_file")
+        
         client = self.get_s3_client()
         file_path = os.path.join(self.relative_path, filename)
         client.put_object(Body=data, Bucket=self.bucket_name, Key=file_path)

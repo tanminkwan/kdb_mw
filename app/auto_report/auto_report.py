@@ -43,7 +43,7 @@ def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True)
     ###########################################################################
 
     ymd1 = now.strftime("%Y.%m.%d")
-    master_file_name1 = WORKING_DIR + '미들웨어일일점검_template.xlsx'
+    master_file_name1 = WORKING_DIR + 'was_status_template.xlsx'
     new_file_name1 = WORKING_DIR + '미들웨어일일점검_'+ymd1+'.xlsx'
 
     rtn, t_was_status = createDailyCheckXlsx(master_file_name1, new_file_name1, result, now)

@@ -256,11 +256,11 @@
     }
 
     $.ajax({
-        url: "/monitor/agentStat",
+        url: "/monitor/agent_stat",
             success: function(data){
                 //var obj = jQuery.parseJSON(data.list)
-                var obj1 = data.agentStat
-                var obj2 = data.offlineAgents
+                var obj1 = data.agent_stat
+                var obj2 = data.offline_agents
                 $(obj1).each(function(key, item){
                     //console.log(item.pk+" : "+item.value)
                     if (key==0){

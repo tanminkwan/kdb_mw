@@ -636,7 +636,6 @@ class MwWeb(Model):
         rtn_dist = list(dict.fromkeys(rtn))
         rtn_string = ', '.join(rtn_dist)  
 
-        print('HHH5 :',rtn_string)
         return rtn_string
 
     def t__ssl_domain(self):
@@ -650,7 +649,7 @@ class MwWeb(Model):
 
         for v in vhosts:
             if v.get('SSLFLAG') and v['SSLFLAG'] == 'Y':
-                print('HHH4')
+                
                 if v.get('HOSTNAME'):
                     rtn += v['HOSTNAME']
                 if v.get('HOSTALIAS'):
@@ -659,7 +658,6 @@ class MwWeb(Model):
         rtn_dist = list(dict.fromkeys(rtn))
         rtn_string = ', '.join(rtn_dist)  
 
-        print('HHH5 :',rtn_string)
         return rtn_string
 
     def t__ssl_certifile(self):

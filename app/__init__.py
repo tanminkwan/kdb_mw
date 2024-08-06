@@ -1,6 +1,6 @@
 import logging
-from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 import os
+import sys
 from flask import Flask, jsonify
 from flask_migrate import Migrate
 from flask_appbuilder import AppBuilder, SQLA, IndexView
@@ -12,25 +12,21 @@ from .kafka_admin import Admin4Kafka
 from kafka.errors import NoBrokersAvailable
 #from .ksql4Kafka import Ksql4Kafka
 
-"""
- Logging configuration
-"""
 class MyIndexView(IndexView):
     index_template = 'my_index.html'
 
-logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s")
-#log = logging.getLogger()
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
-
-#hdl = RotatingFileHandler('Hennry.log', mode='a', maxBytes=10*1024*1024, backupCount=50, encoding='utf-8', delay=0)
-#hdl = TimedRotatingFileHandler('Hennry.log', when='D', interval=1, backupCount=50, encoding='utf-8', delay=0)
-#hdl.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s:%(name)s:%(message)s"))
-#hdl.suffix = '%Y%m%d'
-#log.addHandler(hdl)
-
 app = Flask(__name__)
 app.config.from_object("config")
+
+"""
+ Logging configuration
+"""
+logging.basicConfig(
+    level=app.config['LOGGING_LEVEL'],
+    format=app.config['LOGGING_FORMAT'],
+    stream=sys.stdout
+)
+
 
 db = SQLA(app)
 migrate = Migrate(app, db)

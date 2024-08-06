@@ -1,7 +1,6 @@
-version: '3.8'
 services:
   mwm-redis:
-    image: "redis:alpine"
+    image: redis:alpine
 #    ports:
 #      - "6379:6379"
   mwm-db:
@@ -16,6 +15,18 @@ services:
     volumes:
       - /home/hennry/data1:/var/lib/postgresql/data
       - ./create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
+  mwm-minio:
+    container_name: minio
+    image: minio/minio
+#    ports:
+#      - '9000:9000'
+#      - '9001:9001'
+    environment:
+      - MINIO_CONFIG_ENV_FILE=/etc/config.env
+    volumes:
+      - /home/hennry/minio/data:/mnt/data
+      - ./minio_config.env:/etc/config.env
+    command: server --console-address ":9001"
   mwm-app:
     container_name: mwm-app
     image: mwm-app
@@ -23,11 +34,17 @@ services:
     depends_on:
       - mwm-db
       - mwm-redis
+      - mwm-minio
     ports:
       - 8000:8000
     environment:
       MWM_DATABASE_URI: mwm-db:5432
       REDIS_URL: redis://mwm-redis:6379/0
+      AWS_URL: http://localhost:9000
+      AWS_ACCESS_KEY_ID: x7QobM7I5WNI5zGWbkr4
+      AWS_SECRET_ACCESS_KEY: pdoWz2Zw0yaJw9fW32jqZigaqiyXRuYLKK9x7PzJ
+      BUCKET_NAME: test
     links:
       - mwm-db
       - mwm-redis
+      - mwm-minio

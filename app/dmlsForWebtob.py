@@ -72,8 +72,7 @@ class WebtobHttpm(ABC):
         rtn = db.session.execute(do_update_stmt)
 
         self.mw_web_id = next(rec[0] for rec in rtn)
-        print('HH self.mw_web_id :',self.mw_web_id)
-
+        
         # Upsert mw_web_server
         _, insert_array, update_array \
             = self.__getArrayDictOfWebServer()
@@ -166,7 +165,6 @@ class WebtobHttpm(ABC):
         self.port = int(self.node['PORT'].split(',')[0])
 
         if self.node.get('LOGGING'):
-            #print(self.logging)
             acc_dir = next((c['FILENAME'] for c in self.logging if self.node['LOGGING']==c['NAME']), null())
         else:
             acc_dir = null()
@@ -352,7 +350,6 @@ class WebtobHttpm(ABC):
         
         for vhost in self.vhosts:
 
-            #print(vhost)
             update_dict, vhost_id = self._getDataOfWebVhost(vhost)
 
             insert_dict = update_dict.copy()
@@ -449,7 +446,6 @@ class WebtobHttpm(ABC):
 
         svr_ids = [ s['NAME'] for s in self.servers if s['SVGNAME'] in svgs ]
 
-        #print('jsv ids :', svr_ids)
         vhost_id = vhost['NAME']
 
         return svr_ids, vhost_id
@@ -511,7 +507,6 @@ class WebtobHttpm(ABC):
 
     def __updateSslInfo(self):
 
-        print('HHH __updateSslInfo')
         webInfo = {'host_id':self.host_id, 'port':self.port}
 
         createSslInfo(webInfo)
@@ -654,7 +649,6 @@ def httpmToDict(content):
 
     for line in f:
         
-        print('line:',line)
         if line.strip() in ('', '\\n', '*DOMAIN', 'KDB'):
             continue
 
@@ -715,5 +709,4 @@ def httpmToDict(content):
     category_list.append(item_dict)
     all_dict.update({category:category_list})
 
-#    print(all_dict)
     return all_dict

@@ -130,7 +130,7 @@ class AutorunFuncEnum(enum.Enum):
     readCIDOutFile   = 'Shell실행 후 out.CID 파일 읽기'
     updateConnectSSL = '(out파일)connectSSL 정보 등록'
     updateConnectSSLByAPI = 'connectSSL 정보 등록'
-    updateFileSSLByAPI = 'fileSSL 정보 등록'
+    update_file_SSL_byAPI = 'fileSSL 정보 등록'
     updateFileSSL    = '(out파일)fileSSL 정보 등록'
     restartMWAgent   = 'MWAgent 재시작'
     updateJeusLicenseInfo = 'Jeus License 정보 등록'

@@ -1,4 +1,5 @@
 import os
+import sys
 import redis
 from flask_appbuilder.security.manager import (
     AUTH_OID,
@@ -8,6 +9,23 @@ from flask_appbuilder.security.manager import (
     AUTH_OAUTH,
 )
 from dotenv import load_dotenv
+import logging
+
+# 기본 로깅 설정
+LOGGING_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+# 환경변수에서 로깅 레벨 가져오기
+log_level = os.getenv('LOGGING_LEVEL', 'DEBUG').upper()
+
+# 로깅 레벨 문자열을 로깅 모듈의 레벨 상수로 변환
+log_levels = {
+    'DEBUG': logging.DEBUG,
+    'INFO': logging.INFO,
+    'WARNING': logging.WARNING,
+    'ERROR': logging.ERROR,
+    'CRITICAL': logging.CRITICAL
+}
+LOGGING_LEVEL = log_levels.get(log_level)  # 기본값은 INFO
 
 # .env 파일 로드
 load_dotenv()

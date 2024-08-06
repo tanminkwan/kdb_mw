@@ -1,4 +1,5 @@
-from app import db, log
+import logging
+from app import db
 from .dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
 from .dmlsForWebtob import WebtobHttpm, WebtobHttpmFactory, NewHttpm, httpmToDict
 from app.sqls.was import getDomainIdAsPK, getWasInstanceId
@@ -31,7 +32,6 @@ class AutorunResult:
 
         real_key_value1 = self._getRealKeyValue1(self.result.key_value1)
 
-        #print('HH real_key_value1 : ',self.result.key_value1, ':', real_key_value1)
         return getAutorunFunc(self.result.command_id, real_key_value1)
 
     def _getRealKeyValue1(self, key_value1):
@@ -69,8 +69,7 @@ class AutorunResult:
         except Exception as e:
             db.session.rollback()
             excType, excValue, traceback = sys.exc_info()
-            print("callAutorunFunc Error :", autorunFunc, autorunParam)
-            log.error('AutorunResult.callAutorunFunc Error : 1[%s] 2[%s] 3[%s]', excType, excValue, traceback)
+            logging.error(f'AutorunResult.callAutorunFunc Error : 1{excType} 2{excValue} 3{traceback}')
             self.updateResultStatus('ERROR', str(excValue))
 
         return 1, 'OK'
@@ -171,16 +170,16 @@ class AutorunResult:
 
         return 1, ''
 
-    def updateFileSSLByAPI(self):
+    def update_file_SSL_byAPI(self):
 
         result = self.result
 
         result_text   = result.result_text
         certi = json.loads(result_text)
 
-        print('certi :',certi)
+        logging.info(f'certi : {certi}')
+
         ssl_certi = certi['certifile']
-        print('ssl_certi :',ssl_certi)
 
         notbefore, notafter = self._getSslDatetime(certi)
 
@@ -435,7 +434,6 @@ class AutorunResult:
 
         fac = WebtobHttpmFactory()
         
-        print('Hennry TT :', domain_id)
         httpm = NewHttpm(host_id, dict2_type, sys_user=sys_user, domain_id=domain_id, agent_id=agent_id)
         
         rtn , _ = fac.webtobHttpm(httpm)
@@ -507,7 +505,7 @@ class AutorunResult:
 
         re_dict = self._parseJeusLicenseInfo(content)
 
-        print('Hennry 5 :', re_dict)
+        logging.info(f're_dict : {re_dict}')
 
         if not re_dict.get('domain'):
             return -1, 'No data found'
@@ -702,7 +700,7 @@ class AutorunResult:
         if not row:
             return 0, 'WEB not found'
 
-        dicts = self._getSi(result.result_text, result.create_on.strftime('%Y.%m.%d %H:%M'))
+        dicts = self.__get_si(result.result_text, result.create_on.strftime('%Y.%m.%d %H:%M'))
 
         for r in dicts:
             srow, _ = select_row('mw_web_server',{'svr_id':r['svr_id'],'mw_web_id':row.id})
@@ -721,7 +719,7 @@ class AutorunResult:
 
         return 1, ''
 
-    def _getSi(self, result, date):
+    def __get_si(self, result, date):
 
         array_ = []
         
@@ -729,9 +727,9 @@ class AutorunResult:
             if not line.strip():
                 continue
 
-            print('_getSi line :', line)
+            logging.info(f'line : {line}')
             ll = [ t for t in line.split(' ') if t and '(' not in t and ')' not in t]
-            print('_getSi ll :', ll)
+            
             array_.append(
                 dict(
                     svr_id = ll[1],

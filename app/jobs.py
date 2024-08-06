@@ -1,29 +1,24 @@
+import logging
 from . import db, scheduler
 from datetime import datetime, timedelta
 from sqlalchemy.sql import select, update
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgResult, AgAgentGroup, AgAgent
 from app.sqls.agent import finishCommands_bySch, createCommandDetail_bySch\
-    , get_commands, getCloseToTokenExpiry_bySch, getLastRundatetime
+    , get_commands, get_closeto_token_expiry_bysch, getLastRundatetime
 from app.sqls.batch import runBatch_bySch
 
 @scheduler.task('cron', id='job_ag_finish_commands', name='Remove Finished Commands', minute='*/1')
 def job_ag_finish_commands():
-    #print(datetime.now(),'test_job1 is invoked!!')
-    #stmt = select([AgCommandMaster]).where(AgCommandType.command_type_id=='READHTTPM')
-    #command_type_rec = db.session.execute(stmt).fetchone()
     finishCommands_bySch()
 
-    #print(command_type_rec)
-
-#@scheduler.task('cron', id='job_ag_closeToTokenExpiry', second='*/30')
 @scheduler.task('cron', id='job_ag_extend_token_expiry', name='Refrash Token Update to Agents', hour='*/12')
 def job_ag_extend_token_expiry():
-    getCloseToTokenExpiry_bySch(3)
+    get_closeto_token_expiry_bysch(3)
 
 #@scheduler.task('date', id='job_ag_start_jobs')
 def job_ag_start_jobs():
-    print(datetime.now(),'job_ag_start_jobs is invoked!!')
+    logging.debug('job_ag_start_jobs is called.')
 
     commands = get_commands()
     
@@ -32,7 +27,6 @@ def job_ag_start_jobs():
 
 def job_ag_create_job(target):
 
-    print('job_ag_create_job Started!')
     # The reason 5 secs are added : when job runs immediately, the transaction triggered the job may not be committed yet.
     start_date = target.time_to_exe if target.time_to_exe else datetime.now() + timedelta(seconds=10)
     end_date = target.time_to_stop if target.time_to_stop else None
