@@ -1062,6 +1062,114 @@ class MWConfiguration(BaseApi):
 
         return jsonify({'return_code':rtn, 'msg':msg}), 201
 
+class MwDiff(BaseApi):
+
+    route_base = '/diff'
+
+    @expose('/was/<domain_id>/<version_no>', methods=['GET'])
+    @has_access
+    def diff_was(self, domain_id, version_no):
+
+        title = f'{domain_id} v{version_no}'
+
+        text1 = """
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Diff</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/diff2html.min.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+    </style>
+</head>
+<body>
+    <h1>{{title}}</h1>
+    <div id="diff"></div>
+
+    <script src="{{ url_for('static', filename='js/diff.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/diff2html.min.js') }}"></script>
+    <script>
+        async function displayDiff() {
+            const diff = Diff.createPatch('text', text1, text2);
+            const diffHtml = Diff2Html.html(diff, { 
+                drawFileList: false, 
+                matching: 'lines', 
+                outputFormat: 'side-by-side',
+                showFiles: false,
+                diffStyle: 'word',
+                renderNothingWhenEmpty: false 
+            });
+            document.getElementById('diff').innerHTML = diffHtml;
+        }
+
+        displayDiff();
+    </script>
+</body>
+</html>
+
+{% endblock %}
+        """
+
+        text2 = """
+{% extends "appbuilder/base.html" %}
+{% block content %}
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Diff</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/diff2html.min.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #diff {
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{title}}</h1>
+    <div id="diff"></div>
+
+    <script src="{{ url_for('syyy', filename='js/diff.min.js') }}"></script>
+    <script src="{{ url_for('bhhh', filename='js/diff2html.min.js') }}"></script>
+    <script>
+        async function displayDiff() {
+            const diff = Diff.createPatch('text', text1, text2);
+            const diffHtml = Diff2Html.html(diff, { 
+                drawFileList: false, 
+                matching: 'lines', 
+ 
+            });
+            document.getElementById('diff').innerHTML = diffHtml;
+        }
+
+        displayDiff();
+    </script>
+</body>
+</html>
+
+{% endblock %}
+        """
+
+        return render_template('diff.html'\
+            , title=title
+            , text1=text1
+            , text2=text2
+            , base_template=appbuilder.base_template
+            , appbuilder=appbuilder
+            )
+
 class FootPrintApi(BaseApi):
 
     resource_name = 'footprint'
@@ -1365,3 +1473,4 @@ appbuilder.add_api(DailyReportApi)
 appbuilder.add_api(ServerModelApi)
 appbuilder.add_api(ShortQueries)
 appbuilder.add_api(JsonView)
+appbuilder.add_api(MwDiff)

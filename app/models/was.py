@@ -180,7 +180,8 @@ class MwWaschangeHistory(Model):
     old_was_object   = Column(JSONB, comment='변경전 WAS 정보') # domian.xml 또는 JEUSMain.xml 정보(auto:json)
     changed_object   = Column(JSONB, comment='변경 내역') # 변경내역 (auto:json)
     user_id          = Column(String(50), default=get_user, nullable=False)
-
+    old_was_text     = Column(Text, comment='변경전 WAS 정보') # domian.xml 또는 JEUSMain.xml 정보(auto:json)
+    
     UniqueConstraint(mw_was_id, create_on)
 
     __table_args__ = (
@@ -252,7 +253,8 @@ class MwWas(Model):
     user_id          = Column(String(50), default=get_user, nullable=False)
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     was_object       = Column(JSONB, comment='domain.xml 또는 JEUSMain.xml 전체 정보') # domian.xml 또는 JEUSMain.xml 정보(auto:json)
-        
+    was_text         = Column(Text, comment='변경전 WAS 정보') # domian.xml 또는 JEUSMain.xml 정보(auto:json)
+
     UniqueConstraint(was_id)
 
     __table_args__ = (

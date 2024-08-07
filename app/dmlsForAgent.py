@@ -129,17 +129,26 @@ class AutorunResult:
             insert_dict = dict(
                 mw_was_id      = rec.id,
                 old_was_object = rec.was_object,
-                changed_object = diff.to_json()
+                changed_object = diff.to_json(),
+                old_was_text   = rec.was_text,
             )
 
             insert_row('mw_was_change_history', insert_dict)
         
         fac = JeusDomainFactory()
         
+        param = dict(
+            domain_id = domain_id,
+            host_id   = host_id,
+            domain    = domain,
+            raw_data  = content,
+            sys_user  = sys_user,
+            agent_id  = agent_id,
+        )
         if dict2_type.get('domain'):
-            jeus = NewJeusDomain(domain_id, host_id, domain, sys_user=sys_user, agent_id=agent_id)
+            jeus = NewJeusDomain(**param)
         elif dict2_type.get('jeus-system'):
-            jeus = OldJeusDomain(domain_id, host_id, domain, sys_user=sys_user, agent_id=agent_id)
+            jeus = OldJeusDomain(**param)
 
         rtn , _ = fac.jeusDomain(jeus)
         

@@ -15,10 +15,11 @@ import re
 
 class JeusDomain(ABC):
 
-    def __init__(self, domain_id, host_id, domain, sys_user="", agent_id=""):
+    def __init__(self, domain_id, host_id, domain, raw_data, sys_user="", agent_id=""):
         self.domain_id     = domain_id
         self.host_id       = host_id
         self.domain        = domain
+        self.raw_data      = raw_data
         self.sys_user   = sys_user
         self.agent_id      = agent_id
         self.landscape     = ''
@@ -173,11 +174,14 @@ class JeusDomain(ABC):
     def __getDictOfWas(self, domain):
 
         update_dict = self._getDataOfWas(domain)
+        update_dict.update(
+            was_text = self.raw_data
+        )
 
         insert_dict = update_dict.copy()
         insert_dict.update(
-                was_id    = self.domain_id
-            )
+            was_id   = self.domain_id
+        )
 
         return 1, insert_dict, update_dict
 
