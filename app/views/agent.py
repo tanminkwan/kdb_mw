@@ -231,7 +231,7 @@ class ResultModelView(ModelView):
             if file_name in ['domain.xml','JEUSMain.xml']:
                 rtn, msg = ar.updateJeusDomain()
             elif file_name == 'http.m':
-                rtn, msg = ar.updateHttpm()
+                rtn, msg = ar.update_httpm()
             elif file_name == 'WEBMain.xml':
                 rtn, msg = ar.updateWebMain()
             elif file_name == 'urlrewrite_config':

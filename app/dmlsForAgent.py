@@ -379,7 +379,7 @@ class AutorunResult:
 
         return rtn_dict
 
-    def updateHttpm(self):
+    def update_httpm(self):
 
         result = self.result
 
@@ -407,27 +407,27 @@ class AutorunResult:
         else:
             sys_user = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
 
-        return self._updateHttpm(host_id, content, sys_user=sys_user\
+        return self._update_httpm(host_id, content, sys_user=sys_user\
                         , domain_id=domain_id, agent_id=agent_id)
 
-    def _updateHttpm(self, host_id, content, sys_user='', domain_id='', agent_id=''):
+    def _update_httpm(self, host_id, content, sys_user='', domain_id='', agent_id=''):
 
-        dict2_type = httpmToDict(content)
+        httpm = httpmToDict(content)
 
-        if not dict2_type['NODE'][0].get('JSVPORT'):
-            dict2_type['NODE'][0]['JSVPORT'] = 0
+        if not httpm['NODE'][0].get('JSVPORT'):
+            httpm['NODE'][0]['JSVPORT'] = 0
 
-        if dict2_type['NODE'][0].get('PORT'):
-            tmp = dict2_type['NODE'][0]['PORT']
+        if httpm['NODE'][0].get('PORT'):
+            tmp = httpm['NODE'][0]['PORT']
             port = int(tmp.split(',')[0])
         else:
             port = 0
-            dict2_type['NODE'][0]['PORT'] = "0"
+            httpm['NODE'][0]['PORT'] = "0"
 
         rec, _ = select_row('mw_web',{'host_id':host_id,'port':port})
 
         if rec:
-            diff = DeepDiff(rec.httpm_object, dict2_type, ignore_order=True)
+            diff = DeepDiff(rec.httpm_object, httpm, ignore_order=True)
 
             #Not changed
             if not diff:
@@ -436,14 +436,22 @@ class AutorunResult:
             insert_dict = dict(
                 mw_web_id         = rec.id,
                 old_httpm_object  = rec.httpm_object,
-                changed_object    = diff.to_json()
+                changed_object    = diff.to_json(),
+                old_web_text      = rec.web_text,
             )
 
             insert_row('mw_web_change_history', insert_dict)
 
         fac = WebtobHttpmFactory()
         
-        httpm = NewHttpm(host_id, dict2_type, sys_user=sys_user, domain_id=domain_id, agent_id=agent_id)
+        httpm = NewHttpm(
+            host_id, 
+            httpm,
+            raw_data  = content,
+            sys_user  = sys_user, 
+            domain_id = domain_id, 
+            agent_id  = agent_id
+        )
         
         rtn , _ = fac.webtobHttpm(httpm)
         return rtn, ''

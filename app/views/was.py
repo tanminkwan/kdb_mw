@@ -14,7 +14,7 @@ from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, Mw
     , MwWebServer, MwWebUri, MwWaschangeHistory, MwWebchangeHistory\
     , MwBizCategory, MwAppMaster, MwDBMaster, MwWebDomain, MwWebSsl
 from app.models.knowledge import UtTag
-from app.sqls.was import getWasInstanceId, getLandscape\
+from app.sqls.was import get_next_old_was_text, get_next_old_web_text, getWasInstanceId, getLandscape\
     , getWasRelationship, getWebRelationship
 from app.sqls.agent import createConnectSSL, createFileSSL, insertCommandMaster, getAgent
 from app.sqls.batch import createDomainNameInfo, createSslInfo
@@ -73,9 +73,12 @@ class WaschangeHistoryModelView(ModelView):
         ]}
 
     list_title   = "WAS Config 변경 이력"    
-    list_columns = ['mw_was.was_id', 'create_on']
-    label_columns = {'mw_was.was_id':'WAS'
-                    ,'create_on':'변경일시'}
+    list_columns = ['show_diff', 'mw_was.was_id', 'create_on']
+    label_columns = {
+        'show_diff':'Diff',
+        'mw_was.was_id':'WAS',
+        'create_on':'변경일시'
+        }
 
     search_columns = ['mw_was','create_on']
     base_order = ('create_on', 'desc')
@@ -716,10 +719,13 @@ class WebchangeHistoryModelView(ModelView):
         ]}
 
     list_title   = "WEBTOB Config 변경 이력"    
-    list_columns = ['mw_web.host_id', 'mw_web.port', 'create_on']
-    label_columns = {'mw_web.host_id':'Host ID'
-                    ,'mw_web.port':'Port'
-                    ,'create_on':'변경일시'}
+    list_columns = ['show_diff', 'mw_web.host_id', 'mw_web.port', 'create_on']
+    label_columns = {
+        'show_diff':'Diff',        
+        'mw_web.host_id':'Host ID',
+        'mw_web.port':'Port',
+        'create_on':'변경일시'
+        }
 
     search_columns = ['mw_web','create_on']
     base_order = ('create_on', 'desc')
@@ -996,7 +1002,7 @@ class MWConfiguration(BaseApi):
 
     @expose('/httpm', methods=['POST'])
     @protect()
-    def httpmConfig(self, **kwargs):
+    def httpm_config(self, **kwargs):
 
         data = json.loads(request.data)
 
@@ -1009,7 +1015,7 @@ class MWConfiguration(BaseApi):
         host_id   = data['host_id']
         sys_user = data['sys_user'] if data.get('sys_user') else ''
 
-        rtn, msg = AutorunResult()._updateHttpm(host_id, content, sys_user=sys_user)
+        rtn, msg = AutorunResult()._update_httpm(host_id, content, sys_user=sys_user)
         db.session.commit()
 
         return jsonify({'return_code':rtn, 'msg':msg}), 201
@@ -1066,106 +1072,36 @@ class MwDiff(BaseApi):
 
     route_base = '/diff'
 
-    @expose('/was/<domain_id>/<version_no>', methods=['GET'])
+    @expose('/was/<id>', methods=['GET'])
     @has_access
-    def diff_was(self, domain_id, version_no):
+    def diff_was(self, id):
 
-        title = f'{domain_id} v{version_no}'
+        row, _ = select_row('mw_was_change_history',{'id':id})
+        title = f'{row.mw_was} updated at {row.create_on.strftime("%Y-%m-%d %H:%M:%S")}'
 
-        text1 = """
-{% extends "appbuilder/base.html" %}
-{% block content %}
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text Diff</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/diff2html.min.css') }}">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-
-    </style>
-</head>
-<body>
-    <h1>{{title}}</h1>
-    <div id="diff"></div>
-
-    <script src="{{ url_for('static', filename='js/diff.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/diff2html.min.js') }}"></script>
-    <script>
-        async function displayDiff() {
-            const diff = Diff.createPatch('text', text1, text2);
-            const diffHtml = Diff2Html.html(diff, { 
-                drawFileList: false, 
-                matching: 'lines', 
-                outputFormat: 'side-by-side',
-                showFiles: false,
-                diffStyle: 'word',
-                renderNothingWhenEmpty: false 
-            });
-            document.getElementById('diff').innerHTML = diffHtml;
-        }
-
-        displayDiff();
-    </script>
-</body>
-</html>
-
-{% endblock %}
-        """
-
-        text2 = """
-{% extends "appbuilder/base.html" %}
-{% block content %}
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text Diff</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/diff2html.min.css') }}">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        #diff {
-            border: 1px solid #ccc;
-            padding: 10px;
-        }
-    </style>
-</head>
-<body>
-    <h1>{{title}}</h1>
-    <div id="diff"></div>
-
-    <script src="{{ url_for('syyy', filename='js/diff.min.js') }}"></script>
-    <script src="{{ url_for('bhhh', filename='js/diff2html.min.js') }}"></script>
-    <script>
-        async function displayDiff() {
-            const diff = Diff.createPatch('text', text1, text2);
-            const diffHtml = Diff2Html.html(diff, { 
-                drawFileList: false, 
-                matching: 'lines', 
- 
-            });
-            document.getElementById('diff').innerHTML = diffHtml;
-        }
-
-        displayDiff();
-    </script>
-</body>
-</html>
-
-{% endblock %}
-        """
+        old_domain, new_domain = get_next_old_was_text(id=id)
 
         return render_template('diff.html'\
             , title=title
-            , text1=text1
-            , text2=text2
+            , text1=old_domain
+            , text2=new_domain
+            , base_template=appbuilder.base_template
+            , appbuilder=appbuilder
+            )
+
+    @expose('/web/<id>', methods=['GET'])
+    @has_access
+    def diff_web(self, id):
+
+        row, _ = select_row('mw_web_change_history',{'id':id})
+        title = f'{row.mw_web} updated at {row.create_on.strftime("%Y-%m-%d %H:%M:%S")}'
+
+        old_httpm, new_httpm = get_next_old_web_text(id=id)
+
+        return render_template('diff.html'\
+            , title=title
+            , text1=old_httpm
+            , text2=new_httpm
             , base_template=appbuilder.base_template
             , appbuilder=appbuilder
             )

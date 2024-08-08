@@ -20,7 +20,7 @@ class JeusDomain(ABC):
         self.host_id       = host_id
         self.domain        = domain
         self.raw_data      = raw_data
-        self.sys_user   = sys_user
+        self.sys_user      = sys_user
         self.agent_id      = agent_id
         self.landscape     = ''
         self.databases     = []

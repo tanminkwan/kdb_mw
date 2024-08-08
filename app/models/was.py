@@ -190,6 +190,9 @@ class MwWaschangeHistory(Model):
 
     mw_was        = relationship('MwWas')
 
+    def show_diff(self):
+        return Markup('<a href="/diff/was/'+str(self.id)+'" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 보기"><i class="fa fa-search"></i></a>')
+
     def __repr__(self):
         return self.mw_was.was_id + '(' + self.create_on.strftime('%Y-%m-%d %H:%M') + ')'
 
@@ -253,7 +256,7 @@ class MwWas(Model):
     user_id          = Column(String(50), default=get_user, nullable=False)
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     was_object       = Column(JSONB, comment='domain.xml 또는 JEUSMain.xml 전체 정보') # domian.xml 또는 JEUSMain.xml 정보(auto:json)
-    was_text         = Column(Text, comment='변경전 WAS 정보') # domian.xml 또는 JEUSMain.xml 정보(auto:json)
+    was_text         = Column(Text, comment='WAS 정보') # domian.xml 또는 JEUSMain.xml 정보(auto:json)
 
     UniqueConstraint(was_id)
 
@@ -539,6 +542,8 @@ class MwWeb(Model):
     agent_id         = Column(String(30), comment='MW Agent ID') # MW Agent ID
     user_id          = Column(String(50), default=get_user, nullable=False)
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
+    web_text         = Column(Text, comment='WEB 정보') # http.m 정보
+
     #UniqueConstraint(host_id, jsv_port)
     UniqueConstraint(host_id, port)
 
@@ -714,28 +719,23 @@ class MwWebchangeHistory(Model):
     function_comments = {}
     
     id               = Column(Integer, primary_key=True, nullable=False, comment='Primary Key')
-    #host_id          = Column(String(30), nullable=False, comment='HOST ID')
-    #jsv_port         = Column(Integer, nullable=False, comment='JSV Port') # JSV port (auto)
     mw_web_id        = Column(Integer, ForeignKey('mw_web.id', ondelete='CASCADE'), nullable=False)
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     old_httpm_object = Column(JSONB, comment='변경전 http.m 정보') # http.m 정보(auto:json)
     changed_object   = Column(JSONB, comment='변경 내역') # 변경내역 (auto:json)
     user_id          = Column(String(50), default=get_user, nullable=False)
+    old_web_text     = Column(Text, comment='변경전 WEB 정보') # http.m 정보
 
-    #UniqueConstraint(host_id, jsv_port, create_on)
     UniqueConstraint(mw_web_id, create_on)
 
-    """
-    ForeignKeyConstraint(
-        [host_id, jsv_port],
-        ['mw_web.host_id', 'mw_web.jsv_port'],
-        )
-    """
     __table_args__ = (
         t__table_comment,
     )
 
     mw_web           = relationship('MwWeb')
+
+    def show_diff(self):
+        return Markup('<a href="/diff/web/'+str(self.id)+'" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 보기"><i class="fa fa-search"></i></a>')
 
 
 class MwWebServer(Model):

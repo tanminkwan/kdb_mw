@@ -2,6 +2,7 @@ from app import appbuilder, db
 from flask import g
 from sqlalchemy.sql import select, update, func
 from sqlalchemy import null, text, or_, not_
+from sqlalchemy.orm import aliased
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import insert, JSON
 from app.models.was import MwWasInstance, MwServer, MwWas, MwWeb, MwWaschangeHistory\
@@ -10,6 +11,74 @@ from app.models.was import MwWasInstance, MwServer, MwWas, MwWeb, MwWaschangeHis
             , MwWebDomain, MwWebReverseproxy
 from .monitor import select_row
 import re
+
+def get_next_old_was_text(id):
+    # Aliases for self-join
+    current_data = aliased(MwWaschangeHistory)
+    next_data = aliased(MwWaschangeHistory)
+
+    # Query to get the specific data
+    specific_data = db.session.query(current_data).filter(current_data.id == id).one()
+
+    # Subquery to find the next data
+    subquery = (db.session.query(next_data)
+                .filter(next_data.mw_was_id == specific_data.mw_was_id,
+                        next_data.create_on > specific_data.create_on)
+                .order_by(next_data.create_on)
+                .limit(1)
+                .subquery())
+
+    # Query to get the old_was_text of the next data
+    next_data_query = (db.session.query(next_data.old_was_text)
+                       .select_entity_from(subquery))
+
+    # Execute the query
+    next_data_result = db.session.execute(next_data_query).scalar()
+
+    if next_data_result:
+        next_old_was_text = next_data_result
+    else:
+        # Query to get MwWas.was_text if there is no next data
+        was_text_query = (db.session.query(MwWas.was_text)
+                          .filter(MwWas.id == specific_data.mw_was_id))
+        
+        next_old_was_text = db.session.execute(was_text_query).scalar()
+
+    return specific_data.old_was_text, next_old_was_text
+
+def get_next_old_web_text(id):
+    # Aliases for self-join
+    current_data = aliased(MwWebchangeHistory)
+    next_data = aliased(MwWebchangeHistory)
+
+    # Query to get the specific data
+    specific_data = db.session.query(current_data).filter(current_data.id == id).one()
+
+    # Subquery to find the next data
+    subquery = (db.session.query(next_data)
+                .filter(next_data.mw_web_id == specific_data.mw_web_id,
+                        next_data.create_on > specific_data.create_on)
+                .order_by(next_data.create_on)
+                .limit(1)
+                .subquery())
+
+    # Query to get the old_was_text of the next data
+    next_data_query = (db.session.query(next_data.old_web_text)
+                       .select_entity_from(subquery))
+
+    # Execute the query
+    next_data_result = db.session.execute(next_data_query).scalar()
+
+    if next_data_result:
+        next_old_web_text = next_data_result
+    else:
+        # Query to get MwWeb.web_text if there is no next data
+        web_text_query = (db.session.query(MwWeb.web_text)
+                          .filter(MwWeb.id == specific_data.mw_web_id))
+        
+        next_old_web_text = db.session.execute(web_text_query).scalar()
+
+    return specific_data.old_web_text, next_old_web_text
 
 def getChangedWAS(create_on=None):
 

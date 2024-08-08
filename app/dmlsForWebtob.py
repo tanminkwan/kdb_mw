@@ -13,13 +13,14 @@ from app.sqls.batch import createDomainNameInfo, createSslInfo
 
 class WebtobHttpm(ABC):
 
-    def __init__(self, host_id, httpm, sys_user="", domain_id="", agent_id=""):
+    def __init__(self, host_id, httpm, raw_data, sys_user="", domain_id="", agent_id=""):
         self.host_id   = host_id
         self.port      = 0
         self.httpm     = httpm
-        self.sys_user = sys_user
+        self.raw_data  = raw_data        
+        self.sys_user  = sys_user
         self.agent_id  = agent_id
-        self.landscape     = ''
+        self.landscape = ''
         self.dependent_was_id = domain_id
         self.node      = {}
         self.ssl       = []
@@ -150,6 +151,9 @@ class WebtobHttpm(ABC):
     def __getDictOfWeb(self):
 
         update_dict, port = self._getDataOfWeb()
+        update_dict.update(
+            web_text = self.raw_data
+        )
 
         insert_dict = update_dict.copy()
         insert_dict.update(
