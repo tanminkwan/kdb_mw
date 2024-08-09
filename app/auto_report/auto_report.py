@@ -1,17 +1,19 @@
 from datetime import datetime, timedelta
 from .testGetWasStatus import getAccessToken, getWasStatus, getNotRunningWasList
 from .testXlsx import createDailyCheckXlsx
-from .testSelenium import getTasks
+#from .testSelenium import getTasks
+from .schedule_scrapper import ScheduleScraper
 #from .testHwp2 import recreateHwp
 from .testSmtp import send_kdbMail
+import os
+import logging
 
-def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True):
+def run_auto_report(sender, sender_name, receivers, ccs, daygap=0, was_check=True):
 
     now = datetime.now() + timedelta(days=daygap)
 
-
-    WORKING_DIR = 'C:\\mw-manager\\venv\\mw_app\\app\\autoReport\\'
-    #WORKING_DIR = 'D:\\python3\\workspace\\mw-pjt\\venv\\Scripts\\first_app\\app\\autoReport\\'
+    working_dir = os.path.dirname(os.path.abspath(__file__))
+    logging.debug(f"run_auto_report working_dir : {working_dir}")
 
     t_was_status = ''
     t_task = ''
@@ -19,21 +21,37 @@ def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True)
     ###########################################################################
     #1. Get current was status from 리발소
     ###########################################################################
+    """
     id = 'agent'
     pw = '1q2w3e4r!!'
 
     url = 'http://10.0.20.116:5000'
     login_uri = '/api/v1/security/login'
+    
+    rtn, access_token = getAccessToken(url+login_uri, id, pw)
+    """
     api_uri = '/api/v1/grid/table/was_status?eql__landscape=PROD'
 
-    rtn, access_token = getAccessToken(url+login_uri, id, pw)
+    was_status_l = None
+
+    from flask import session
+    from flask_jwt_extended import create_access_token
+    from app import app
+    
+    with app.test_client() as client:
+        user_id = session.get('user_id')
+        access_token = create_access_token(identity=user_id)
+        headers = {'Authorization':'Bearer ' + access_token}
+        response = client.get(api_uri, headers=headers)
+        was_status_l = response.json()['list']
 
     result = []
+    """
     if rtn == 1:
 
         rtn, was_status_l = getWasStatus(url+api_uri, access_token)
-
-    if rtn == 1 and was_check:
+    """
+    if was_status_l and was_check:
 
         result, _ = getNotRunningWasList(was_status_l)
         print(result)
@@ -43,8 +61,8 @@ def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True)
     ###########################################################################
 
     ymd1 = now.strftime("%Y.%m.%d")
-    master_file_name1 = WORKING_DIR + 'was_status_template.xlsx'
-    new_file_name1 = WORKING_DIR + '미들웨어일일점검_'+ymd1+'.xlsx'
+    master_file_name1 = working_dir + '/' + 'was_status_template.xlsx'
+    new_file_name1 = working_dir + '/' + '미들웨어일일점검_'+ymd1+'.xlsx'
 
     rtn, t_was_status = createDailyCheckXlsx(master_file_name1, new_file_name1, result, now)
 
@@ -62,7 +80,12 @@ def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True)
     chks = [2, 5]
     persons = ['김형기','최용타','강인모','윤연상','허재영']
 
-    tasks, dayoffs = getTasks(url_openpms, login_id, login_pw, chks, persons, now)
+    scraper = ScheduleScraper()
+    tasks, dayoffs = scraper.get_tasks(
+        url_openpms, login_id, login_pw, chks, persons, now
+    )
+
+    #tasks, dayoffs = getTasks(url_openpms, login_id, login_pw, chks, persons, now)
 
     t_task = '\n\n'.join([ t['content'] for t in tasks ])
     t_raw_task = '<br>'.join([ t['raw_content'] for t in tasks ])
@@ -73,11 +96,12 @@ def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True)
     ###########################################################################
     #4. Create HWP reports
     ###########################################################################
+    """
     ymd2 = now.strftime("%Y%m%d")
 
     #일일 점검결과
-    master_file_name2 = WORKING_DIR + '일일 점검결과_template.hwp'
-    new_file_name2 = WORKING_DIR + '일일 점검결과'+'_'+ymd2+'.hwp'
+    master_file_name2 = working_dir + '/' + '일일 점검결과_template.hwp'
+    new_file_name2 = working_dir + '/' + '일일 점검결과'+'_'+ymd2+'.hwp'
 
     replace_text_list=[
         ('<<date>>',now.strftime("%Y.%m.%d")[2:]),
@@ -86,19 +110,19 @@ def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True)
         ('<<education>>',''),
     ]
 
-    #recreateHwp(master_file_name2, new_file_name2, replace_text_list)
+    recreateHwp(master_file_name2, new_file_name2, replace_text_list)
 
     #시스템 작업 보고
-    master_file_name3 = WORKING_DIR + '시스템 작업 보고_template.hwp'
-    new_file_name3 = WORKING_DIR + '시스템 작업 보고'+'_'+ymd2+'.hwp'
+    master_file_name3 = working_dir + '/' + '시스템 작업 보고_template.hwp'
+    new_file_name3 = working_dir + '/' + '시스템 작업 보고'+'_'+ymd2+'.hwp'
 
     replace_text_list=[
         ('<<date>>',now.strftime("%m/%d")),
         ('<<description>>', t_task if t_task else '- 없음')
     ]
 
-    #recreateHwp(master_file_name3, new_file_name3, replace_text_list)
-
+    recreateHwp(master_file_name3, new_file_name3, replace_text_list)
+    """
     ###########################################################################
     #5. Send Report e-mail
     ###########################################################################
@@ -129,7 +153,7 @@ def runAutoReport(sender, sender_name, receivers, ccs, daygap=0, was_check=True)
     """ % (t_was_status if t_was_status else '- 특이사항 없음' 
     , t_raw_task if t_raw_task else '- 없음'
     , t_dayoff if t_dayoff else '- 없음')
-    files = [new_file_name3, new_file_name2, new_file_name1]
+    #files = [new_file_name3, new_file_name2, new_file_name1]
+    files = [new_file_name1]
 
-    #send_kdbMail('gwe.kdb.co.kr', 50025, sender, sender_name, receivers, subject, content, files)
     send_kdbMail(smtp_host, smtp_port, sender, sender_name, receivers, subject, content, files, cc=cc)

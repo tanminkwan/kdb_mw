@@ -10,6 +10,7 @@ import sys
 from datetime import datetime, time
 import json
 import re
+import logging
 from io import BytesIO
 
 #import time
@@ -302,7 +303,7 @@ class GridView(BaseApi):
 
         except AttributeError as e:
             excType, excValue, traceback = sys.exc_info()
-            print('AttributeError Error : ', excType, excValue, traceback)
+            logging.error(f"AttributeError Error : {excType}, {excValue}, {traceback}")
                 
             return jsonify({'msg':rec.columns+' is not valid.'}), 500
 

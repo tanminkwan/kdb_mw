@@ -8,7 +8,7 @@ from .agent import finishCommands, getAgent
 from .monitor import update_rows, insert_row, select_rows, select_row, getWasStatusTemplate
 from sqlalchemy.dialects.postgresql import insert
 import re, json
-from app.auto_report.auto_report import runAutoReport
+from app.auto_report.auto_report import run_auto_report
 from datetime import datetime, timedelta
 from app.kafka_customer import Consumer4Kafka
 
@@ -161,7 +161,7 @@ def sendDailyReport(daygap):
     elif weekDay == 6:
         daygap+=1
 
-    runAutoReport(sender, sender_name, receivers, ccs, daygap)
+    run_auto_report(sender, sender_name, receivers, ccs, daygap)
 
 def createSslInfo(webInfo):
 

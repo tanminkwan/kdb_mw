@@ -40,7 +40,7 @@ services:
     environment:
       MWM_DATABASE_URI: mwm-db:5432
       REDIS_URL: redis://mwm-redis:6379/0
-      AWS_URL: http://localhost:9000
+      AWS_URL: http://mwm-minio:9000
       AWS_ACCESS_KEY_ID: x7QobM7I5WNI5zGWbkr4
       AWS_SECRET_ACCESS_KEY: pdoWz2Zw0yaJw9fW32jqZigaqiyXRuYLKK9x7PzJ
       BUCKET_NAME: test
