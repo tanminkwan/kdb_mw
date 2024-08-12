@@ -15,7 +15,8 @@ from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgAgentGroup, AgAgent, AgResult, AgFile, AgCommandHelper, AgAutorunResult
 from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
 from app.dmlsForAgent import AutorunResult
-from .common import FilterStartsWithFunction, get_mw_user, get_userid, ReadOnlyField, RequiredOnContidion
+from .common import FilterStartsWithFunction, get_mw_user, get_userid\
+    , ReadOnlyField, RequiredOnContidion, ValidateBatchFunctionName
 from app.sqls.was import getWasInstanceId, getLandscape, getDomainIdAsPK
 from app.sqls.agent import checkAgentUpdated, checkAgentAproved\
     , sendCommands, addAgent, addResult, cancelCommands, createCommandDetail_bySch\
@@ -163,6 +164,10 @@ class CommandTypeModelView(ModelView):
     add_columns = ['command_type_id', 'command_type_name', 'command_class', 'target_file_name', 'target_file_path']
 
     base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
+    validators_columns = {
+                    'target_file_name':[ValidateBatchFunctionName()]
+                }
 
 class ResultModelView(ModelView):
     

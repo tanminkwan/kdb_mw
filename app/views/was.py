@@ -17,7 +17,7 @@ from app.models.knowledge import UtTag
 from app.sqls.was import get_next_old_was_text, get_next_old_web_text, getWasInstanceId, getLandscape\
     , getWasRelationship, getWebRelationship
 from app.sqls.agent import createConnectSSL, createFileSSL, insertCommandMaster, getAgent
-from app.sqls.batch import createDomainNameInfo, createSslInfo
+from app.sqls.batch import create_domain_name_info, create_ssl_info
 from app.sqls.monitor import select_row, select_item, select_items
 from app.dmlsForAgent import AutorunResult
 from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
@@ -846,8 +846,8 @@ class WebModelView(ModelView):
             port    = item.port
             webInfo = {'host_id':host_id, 'port':port}
 
-            createSslInfo(webInfo)
-            createDomainNameInfo(webInfo)
+            create_ssl_info(webInfo)
+            create_domain_name_info(webInfo)
 
             db.session.commit()
 

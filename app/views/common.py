@@ -85,6 +85,26 @@ class RequiredOnContidion(object):
             #raise ValidationError(message % d)
             raise StopValidation(message)
 
+class ValidateBatchFunctionName:
+
+    def __call__(self, form, field):
+
+        try:
+            other = form['command_class']
+        except KeyError:
+            raise ValidationError(field.gettext(f"Invalid field name 'command_class'."))
+
+        if isinstance(other.data, enum.Enum):
+            real_data = other.data.name
+        else:
+            real_data = other.data
+
+        from app.sqls.batch import batch_function_registry
+        
+        if real_data == 'ServerFunc' and \
+            not batch_function_registry.get(field.data):
+            raise StopValidation(field.gettext(f"Invalid Function name : {field.data}."))
+
 class TagType(object):
 
     def __init__(self, tagtype):

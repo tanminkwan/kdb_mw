@@ -13,7 +13,7 @@ from flask_appbuilder.filemanager import get_file_original_name
 from flask_appbuilder.models.decorators import renders
 from .common import get_user, getColoredText, PeriodicTypeEnum, CommandClassEnum\
     , CommandStatusEnum, YnEnum, ResultStatusEnum, AgentTypeEnum, IntervalTypeEnum\
-    , TargetToSendEnum, AutorunFuncEnum, AutorunTypeEnum, LocationEnum, AgentSubTypeEnum, get_uuid
+    , TargetToSendEnum, AutorunTypeEnum, LocationEnum, AgentSubTypeEnum, get_uuid
 
 assoc_agent_agentgroup = Table('ag_agent_agentgroup', Model.metadata,
                                   Column('id', Integer, primary_key=True),
@@ -123,7 +123,7 @@ class AgAutorunResult(Model):
     autorun_type      = Column(Enum(AutorunTypeEnum), info={'enum_class':AutorunTypeEnum}, nullable=False) 
     target_file_name  = Column(String(100))
     command_id        = Column(String(30))
-    autorun_func      = Column(Enum(AutorunFuncEnum), info={'enum_class':AutorunFuncEnum}, nullable=False)
+    autorun_func      = Column(String(100), nullable=False)
     autorun_param     = Column(String(200))
     user_id           = Column(String(50), default=get_user, nullable=False)
     create_on         = Column(DateTime(), default=datetime.now, nullable=False)   

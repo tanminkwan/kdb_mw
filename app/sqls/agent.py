@@ -145,7 +145,7 @@ def getNextRepetitionSeq(command_id, agent_id):
     
     return rtn
 
-def finishCommands(command_ids):
+def finish_commands(command_ids):
 
     stmt = update(AgCommandMaster)\
             .where(AgCommandMaster.command_id.in_(command_ids)).values(publish_yn='YES')
@@ -174,7 +174,7 @@ def getCommandHelper(mapping_key, target_file_name, agent_id):
     else:
         return None
 
-def finishCommands_bySch():
+def finish_commands_by_scheduler():
 
     stmt = update(AgCommandMaster).where(\
                 (AgCommandMaster.finished_yn=='NO') \

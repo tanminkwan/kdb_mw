@@ -331,7 +331,7 @@ def getLastReportedTime():
     else:
         return 'novalue'
 
-def getWasStatusTemplate():
+def get_was_status_template():
 
     result = []
     groups = []

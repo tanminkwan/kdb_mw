@@ -120,6 +120,7 @@ class AutorunTypeEnum(enum.Enum):
     COMMAND     = 'Command ID'
     FILENAME    = 'File명 또는 기능명'
 
+"""
 class AutorunFuncEnum(enum.Enum):
     updateJeusDomain = 'WAS 정보 등록'
     updateHttpm      = 'WEB 정보 등록'
@@ -139,6 +140,7 @@ class AutorunFuncEnum(enum.Enum):
     updateWebtobVersion = 'webtob version 정보 등록'
     updateWebtobMonitor = 'webtob monitoring(si) 결과 등록'
     updateFilteredInfo = 'OS Find 명령 수행 결과 등록'
+"""
 
 class ResultStatusEnum(enum.Enum):
     FAILED     = 'Command수행실패'

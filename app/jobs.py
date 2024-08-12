@@ -4,13 +4,14 @@ from datetime import datetime, timedelta
 from sqlalchemy.sql import select, update
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgResult, AgAgentGroup, AgAgent
-from app.sqls.agent import finishCommands_bySch, createCommandDetail_bySch\
+from app.models.common import CommandClassEnum
+from app.sqls.agent import finish_commands_by_scheduler, createCommandDetail_bySch\
     , get_commands, get_closeto_token_expiry_bysch, getLastRundatetime
-from app.sqls.batch import runBatch_bySch
+from app.sqls.batch import run_batch_by_scheduler
 
 @scheduler.task('cron', id='job_ag_finish_commands', name='Remove Finished Commands', minute='*/1')
 def job_ag_finish_commands():
-    finishCommands_bySch()
+    finish_commands_by_scheduler()
 
 @scheduler.task('cron', id='job_ag_extend_token_expiry', name='Refrash Token Update to Agents', hour='*/12')
 def job_ag_extend_token_expiry():
@@ -48,18 +49,20 @@ def job_ag_create_job(target):
                 start_date = nextTime
 
         #target.interval_type.name : minutes, hours, days
-        dynamic_dict = {'trigger':'interval'
-                       ,'start_date':start_date
-                       ,'end_date':end_date
-                       ,target.interval_type.name:target.cycle_to_exe}
+        dynamic_dict = {
+            'trigger':'interval',
+            'start_date':start_date,
+            'end_date':end_date,
+            target.interval_type.name:target.cycle_to_exe,
+        }
 
-    if target.ag_command_type.command_class.name == 'ServerFunc':
+    if target.ag_command_type.command_class == CommandClassEnum.ServerFunc:
         
         scheduler.add_job(
                   id      ='RunBatch_'+target.command_id
                 , name    = target.command_type_id
-                , func    = runBatch_bySch
-                , args    = (target.command_id, target.ag_command_type.target_file_name, target.ag_command_type.target_file_path, target.additional_params,)
+                , func    = run_batch_by_scheduler
+                , args    = (target.command_id, target.ag_command_type.target_file_name, target.additional_params,)
                 , **dynamic_dict
             )
     else:

@@ -4,23 +4,28 @@ from app.models.was import MwWasWebtobConnector, MwWebServer, MwWas, MwWeb, MwWe
         , MwWebDomain, MwWebSsl
 from .was import getWebServers
 from .knowledge import insert_tag
-from .agent import finishCommands, getAgent
-from .monitor import update_rows, insert_row, select_rows, select_row, getWasStatusTemplate
+from .agent import finish_commands, getAgent
+from .monitor import update_rows, insert_row, select_rows, select_row, get_was_status_template
 from sqlalchemy.dialects.postgresql import insert
-import re, json
 from app.auto_report.auto_report import run_auto_report
 from datetime import datetime, timedelta
 from app.kafka_customer import Consumer4Kafka
+from datetime import datetime
+import re, json
+import functools
+import inspect
+import logging
 
-def runBatch_bySch(command_id, function_name, fix_param, additional_param=''):
+"""
+def run_batch_by_scheduler(command_id, function_name, additional_param=''):
 
     if function_name == 'createWebtobConn':
         createWebtobConn(additional_param)
     elif function_name == 'createDomainNameInfo':
-        print('HH additional_param:',fix_param ,':',additional_param)
         createDomainNameInfo(additional_param)
     elif function_name == 'sendDailyReport':
-        sendDailyReport(int(additional_param) if additional_param else 0)
+        sendDailyReport(additional_param)
+        
     elif function_name == 'updateUrlRewriteInfo':
         updateUrlRewriteInfo()
     elif function_name == 'updateAgentIdInfoInWeb':
@@ -41,14 +46,63 @@ def runBatch_bySch(command_id, function_name, fix_param, additional_param=''):
     elif function_name == 'updateResourceTag':
         updateResourceTag()
 
-    finishCommands([command_id])
+    finish_commands([command_id])
     db.session.commit()
     print("finished job : ", function_name)
 
     return 1, 'OK'
+"""
+# A global dictionary to store registered batch functions
+batch_function_registry = {}
 
+def batch_function(func):
+    @functools.wraps(func)
+    def batch_wrapper(command_id, *args, **kwargs):
+        logging.debug(f"시작: {func.__name__} - {datetime.now()}")
+        try:
+            # 원래 함수 실행
+            result = func(*args, **kwargs)
+            
+            # run_batch_by_scheduler 기능 수행
+            finish_commands([command_id])
+            db.session.commit()
+
+            logging.debug(f"작업 완료: {func.__name__}")
+            return 1, 'OK'
+        except Exception as e:
+            logging.error(f"오류 발생: {func.__name__} - {e}")
+            return 0, str(e)
+    
+    # Register the function in the global registry immediately
+    batch_function_registry[func.__name__] = func.__doc__ or func.__name__
+    
+    return batch_wrapper
+
+def run_batch_by_scheduler(command_id, function_name, additional_param=''):
+    try:
+        # 전역 네임스페이스에서 함수 찾기
+        func = globals()[function_name]
+        if callable(func):
+            # Check the number of parameters the function expects
+            func_signature = inspect.signature(func)
+            param_count = len(func_signature.parameters)
+
+            if param_count == 0:
+                return func(command_id)
+            elif param_count == 1:
+                return func(command_id, additional_param)
+            else:
+                return 0, f"'{function_name}'에 허용되지 않는 인수 수입니다."
+        else:
+            return 0, f"'{function_name}'은(는) 호출 가능한 함수가 아닙니다."
+    except KeyError:
+        return 0, f"함수 '{function_name}'을(를) 찾을 수 없습니다."
+    except Exception as e:
+        return 0, f"함수 실행 중 오류 발생: {str(e)}"
+
+@batch_function
 def updateResourceTag():
-
+    """mw_was_instance tag 일괄 update"""
     #_updateResourceTag('ag_agent')
     #_updateResourceTag('mw_was')
     #_updateResourceTag('mw_web')
@@ -75,32 +129,17 @@ def __upsertTag(tag):
     rtn = insert_tag(tag)
     return rtn
            
-"""
-def _getResourceTag(table_name, rec):
-
-    if table_name == 'ag_agent':
-        agent_id = rec.agent_id
-        user_id = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
-        resource_tag = 'MWAGENT-' + rec.agent_type.name + '-' + rec.host_id + '-' + user_id
-    elif table_name == 'mw_was':
-        resource_tag = 'WAS-' + rec.was_id + '-' + rec.located_host_id + '-' + (rec.sys_user if rec.sys_user else 'NOUSERID')
-    elif table_name == 'mw_web':
-        resource_tag = 'WEB-' + rec.host_id + '-' + str(rec.port) + '-' + (rec.sys_user if rec.sys_user else 'NOUSERID')
-    elif table_name == 'mw_was_instance':
-        resource_tag = 'MS-' + rec.was_id + '-' + rec.host_id + '-' + rec.was_instance_id.replace('_MS','_MS-')
-
-    return resource_tag
-
-"""
+@batch_function
 def stopUpdateWasStatus():
-
+    """Kafka  : Stop WAS Monistoring"""
     if consumer4WasMonitoring:
         consumer4WasMonitoring.close()
 
+@batch_function
 def updateWasStatus():
-
+    """Updating WAS_STATUS"""
     # 모니터링대상 WAS List 조회
-    recs, groups = getWasStatusTemplate()
+    recs, groups = get_was_status_template()
 
     for rec in recs:
         tmp_dict = dict(
@@ -136,17 +175,26 @@ def updateWasStatus():
     
     return 1, ''
 
+@batch_function
 def deleteKafkaTopic(topic):
-
+    """Delete Kafka Topic"""
     if kafka_producer:
         kafka_producer.deleteTopic(topic)
 
-def produceRepeatedMessage(topic, message, key):
-
+@batch_function
+def produceRepeatedMessage(additional_param):
+    dic_items = json.loads(additional_param)
+    topic     = dic_items['topic']
+    message   = dic_items['message']
+    key       = dic_items['key'] if dic_items.get('key') else None
+    
     if kafka_producer:
         kafka_producer.send_message(topic, message, key=key)
 
-def sendDailyReport(daygap):
+@batch_function
+def sendDailyReport(additional_param):
+
+    daygap = int(additional_param) if additional_param else 0
 
     sender      = 'o2000988@gwe.kdb.co.kr'
     sender_name = 'LBS Scheduler'
@@ -163,71 +211,7 @@ def sendDailyReport(daygap):
 
     run_auto_report(sender, sender_name, receivers, ccs, daygap)
 
-def createSslInfo(webInfo):
-
-    if not webInfo:
-        return 0, ''
-
-    if isinstance(webInfo, str):
-        wi = eval(webInfo)
-    else:
-        wi = webInfo
-
-    web_rec = db.session.query(MwWeb)\
-                .filter(MwWeb.host_id==wi['host_id'], MwWeb.port==wi['port'])\
-                .first()
-
-    if not web_rec:
-        return 0, ''
-
-    ssls  = web_rec.ssl_object
-
-    ssl_name      = ''
-    ssl_certi     = ''
-    ssl_certikey  = ''
-    ssl_cacerti   = ''
-    ssl_protocols = ''
-    ssl_ciphers   = ''
-
-    for ssl in ssls:
-
-        ssl_name     = ssl['NAME']\
-                        if ssl.get('NAME') else ''
-        ssl_certi    = ssl['CERTIFICATEFILE']\
-                        if ssl.get('CERTIFICATEFILE') else ''
-        ssl_certikey = ssl['CERTIFICATEKEYFILE']\
-                        if ssl.get('CERTIFICATEKEYFILE') else ''
-        ssl_cacerti  = ssl['CACERTIFICATEFILE']\
-                        if ssl.get('CACERTIFICATEFILE') else ''
-        ssl_protocols= ssl['PROTOCOLS']\
-                        if ssl.get('PROTOCOLS') else ''
-        ssl_ciphers  = ssl['REQUIREDCIPHERS']\
-                        if ssl.get('REQUIREDCIPHERS') else ''
-
-        update_dict = dict( ssl_certi     = ssl_certi
-                          , ssl_certikey  = ssl_certikey
-                          , ssl_cacerti   = ssl_cacerti
-                          , ssl_protocols = ssl_protocols
-                          , ssl_ciphers   = ssl_ciphers
-                          , user_id       = 'scheduler'
-                          , create_on     = datetime.now()
-            )
-
-        insert_dict = update_dict.copy()
-        insert_dict.update( host_id  = wi['host_id']
-                          , mw_web_id = web_rec.id
-                          , ssl_name  = ssl_name
-                )
-
-        stmt = insert(MwWebSsl).values(insert_dict)    
-        do_update_stmt = stmt.on_conflict_do_update(
-            index_elements=['mw_web_id', 'ssl_name'],
-            set_=update_dict
-        )
-        db.session.execute(do_update_stmt)
-
-    return 1, 'OK'
-
+@batch_function
 def updateAgentIdInfoInWeb():
 
     print('updateAgentIdInfoInWeb started')
@@ -247,6 +231,7 @@ def updateAgentIdInfoInWeb():
 
     return 1, 'OK'
 
+@batch_function
 def updateAgentIdInfoInWas():
 
     print('updateAgentIdInfoInWas started')
@@ -269,6 +254,7 @@ def __getAgent(sys_user, host_id):
     rec = getAgent(host_id + '_' + sys_user + '_J', isApproved=True)
     return rec.agent_id if rec else ''
 
+@batch_function
 def updateUrlRewriteInfo():
 
     print('updateUrlRewriteInfo started')
@@ -309,7 +295,11 @@ def updateUrlRewriteInfo():
 
             updateRows('mw_web_vhost',update_dict, filter_dict)
 
+@batch_function
 def createDomainNameInfo(webInfo):
+    return create_domain_name_info(webInfo)
+
+def create_domain_name_info(webInfo):
 
     if not webInfo:
         return 0, 'Parameters don\'t exist'
@@ -403,6 +393,7 @@ def createDomainNameInfo(webInfo):
 
     return 1, 'OK'
 
+@batch_function
 def createWebtobConn(domain_id=''):
 
     #print('HHH 14 :', createWebtobConn)    
@@ -423,3 +414,72 @@ def createWebtobConn(domain_id=''):
         else:
             r.mw_web_server = []
 
+
+@batch_function
+def createSslInfo(webInfo):
+    return create_ssl_info(webInfo)
+
+def create_ssl_info(webInfo):
+
+    if not webInfo:
+        return 0, ''
+
+    if isinstance(webInfo, str):
+        wi = eval(webInfo)
+    else:
+        wi = webInfo
+
+    web_rec = db.session.query(MwWeb)\
+                .filter(MwWeb.host_id==wi['host_id'], MwWeb.port==wi['port'])\
+                .first()
+
+    if not web_rec:
+        return 0, ''
+
+    ssls  = web_rec.ssl_object
+
+    ssl_name      = ''
+    ssl_certi     = ''
+    ssl_certikey  = ''
+    ssl_cacerti   = ''
+    ssl_protocols = ''
+    ssl_ciphers   = ''
+
+    for ssl in ssls:
+
+        ssl_name     = ssl['NAME']\
+                        if ssl.get('NAME') else ''
+        ssl_certi    = ssl['CERTIFICATEFILE']\
+                        if ssl.get('CERTIFICATEFILE') else ''
+        ssl_certikey = ssl['CERTIFICATEKEYFILE']\
+                        if ssl.get('CERTIFICATEKEYFILE') else ''
+        ssl_cacerti  = ssl['CACERTIFICATEFILE']\
+                        if ssl.get('CACERTIFICATEFILE') else ''
+        ssl_protocols= ssl['PROTOCOLS']\
+                        if ssl.get('PROTOCOLS') else ''
+        ssl_ciphers  = ssl['REQUIREDCIPHERS']\
+                        if ssl.get('REQUIREDCIPHERS') else ''
+
+        update_dict = dict( ssl_certi     = ssl_certi
+                          , ssl_certikey  = ssl_certikey
+                          , ssl_cacerti   = ssl_cacerti
+                          , ssl_protocols = ssl_protocols
+                          , ssl_ciphers   = ssl_ciphers
+                          , user_id       = 'scheduler'
+                          , create_on     = datetime.now()
+            )
+
+        insert_dict = update_dict.copy()
+        insert_dict.update( host_id  = wi['host_id']
+                          , mw_web_id = web_rec.id
+                          , ssl_name  = ssl_name
+                )
+
+        stmt = insert(MwWebSsl).values(insert_dict)    
+        do_update_stmt = stmt.on_conflict_do_update(
+            index_elements=['mw_web_id', 'ssl_name'],
+            set_=update_dict
+        )
+        db.session.execute(do_update_stmt)
+
+    return 1, 'OK'

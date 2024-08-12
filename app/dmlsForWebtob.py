@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import insert, JSON
 from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, MwWebUri, MwWebServer
 from app.sqls.was import getLandscape
-from app.sqls.batch import createDomainNameInfo, createSslInfo
+from app.sqls.batch import create_domain_name_info, create_ssl_info
 
 class WebtobHttpm(ABC):
 
@@ -513,7 +513,7 @@ class WebtobHttpm(ABC):
 
         webInfo = {'host_id':self.host_id, 'port':self.port}
 
-        createSslInfo(webInfo)
+        create_ssl_info(webInfo)
 
         return 1
 
@@ -522,7 +522,7 @@ class WebtobHttpm(ABC):
 
         webInfo = {'host_id':self.host_id, 'port':self.port}
 
-        createDomainNameInfo(webInfo)
+        create_domain_name_info(webInfo)
 
         return 1
 
