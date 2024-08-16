@@ -38,7 +38,8 @@ services:
     ports:
       - 8000:8000
     environment:
-      MWM_DATABASE_URI: mwm-db:5432
+      TZ: Asia/Seoul
+      MWM_DATABASE_URI: "postgresql://tiffanie:1q2w3e4r!!@mwm-db:5432/mw"
       REDIS_URL: redis://mwm-redis:6379/0
       AWS_URL: http://mwm-minio:9000
       AWS_ACCESS_KEY_ID: x7QobM7I5WNI5zGWbkr4

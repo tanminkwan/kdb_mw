@@ -39,8 +39,7 @@ SECRET_KEY = os.urandom(24)
 # SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
 # SQLALCHEMY_DATABASE_URI = 'mysql://myapp@localhost/myapp'
 # SQLALCHEMY_DATABASE_URI = 'postgresql://root:password@localhost/myapp'
-MWM_DATABASE_URI = os.getenv("MWM_DATABASE_URI", "localhost:25432")
-SQLALCHEMY_DATABASE_URI = f"postgresql://tiffanie:1q2w3e4r!!@{MWM_DATABASE_URI}/mw"
+SQLALCHEMY_DATABASE_URI = os.getenv("MWM_DATABASE_URI", "postgresql://tiffanie:1q2w3e4r!!@localhost:25432/mw")
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # Kafka brokers

@@ -1003,8 +1003,8 @@ class OldJeusDomain(JeusDomain):
         return insert_http_a, update_http_a, insert_webtob_a, update_webtob_a
 
 class JeusDomainFactory:
-    def jeusDomain(self, h):
+    def jeus_domain(self, h):
         return h.upsertJeusDomain()
 
-    def jeusWebConnection(self, h):
+    def jeus_web_connection(self, h):
         return h.upsertWebConnection()

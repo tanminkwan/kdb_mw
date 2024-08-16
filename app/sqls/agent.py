@@ -237,14 +237,14 @@ def createCommandDetail(command_id):
                     target_file_paths.append(target_file_path.replace(befor_text, after_text))
                 #print("Hennry 4 target_file_path : ", target_file_paths)
             else:
-                log.error("StringToReplace not exists : agent_id[%s] befor_text[%s] target_file_name[%s]"\
+                logging.error("StringToReplace not exists : agent_id[%s] befor_text[%s] target_file_name[%s]"\
                         ,ag.agent_id, befor_text, target_file_name)
                 continue
         else:
             target_file_paths.append(target_file_path)
 
         repetition_seq = getNextRepetitionSeq(command_rec.command_id, ag.agent_id)
-        log.info('AgCommandDetail KEY SET : [%s][%s][%d]',command_rec.command_id,ag.agent_id,repetition_seq)
+        logging.info('AgCommandDetail KEY SET : [%s][%s][%d]',command_rec.command_id,ag.agent_id,repetition_seq)
 
         for i, t in enumerate(target_file_paths):
 
@@ -298,7 +298,7 @@ def createCommandDetail(command_id):
 
 def createCommandDetail_bySch(command_id):
 
-    log.debug('Hennry createCommandDetail_bySch [%s]', command_id)
+    logging.debug('Hennry createCommandDetail_bySch [%s]', command_id)
 
     try:
 
@@ -308,7 +308,7 @@ def createCommandDetail_bySch(command_id):
 
     except Exception as e:
         excType, excValue, traceback = exc_info()
-        log.error('An Error Occured : %s %s %s', excType, excValue, traceback)
+        logging.error('An Error Occured : %s %s %s', excType, excValue, traceback)
         db.session.rollback()
 
     return 1, 'OK'
@@ -578,7 +578,7 @@ def addResult(data):
             result_status = 'COMPLITED'
         else:
             result_status = 'ERROR'
-            log.error("updateWasStatus error : [%s]",msg)
+            logging.error("updateWasStatus error : [%s]",msg)
     """
     if data['result_text'] == 'NO CHANGE':
         result_status = 'NOCHANGE'
@@ -642,8 +642,8 @@ def getLastRundatetime(command_id):
 
 def updateWasStatus(key_value2, result_text, host_id_of_agent):
 
-    log.info("Hennry1 r_rec.key_value2 : [%s]",key_value2)
-    log.info("Hennry1 r_rec.result_text : [%s]",result_text)
+    logging.info("Hennry1 r_rec.key_value2 : [%s]",key_value2)
+    logging.info("Hennry1 r_rec.result_text : [%s]",result_text)
 
     try:
         param_rec  = json.loads(key_value2)
@@ -672,7 +672,7 @@ def updateWasStatus(key_value2, result_text, host_id_of_agent):
         host_id = getHostId(ip_address)
 
         if host_id == ip_address:
-            log.error("IP Address dosen't exist in Servers : [%s]",host_id)
+            logging.error("IP Address dosen't exist in Servers : [%s]",host_id)
         
     domain_id = getDomainIdAsPK(host_id, real_domain_id)
 

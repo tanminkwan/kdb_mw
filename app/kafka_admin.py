@@ -1,6 +1,7 @@
 from kafka import KafkaAdminClient, KafkaConsumer
 from kafka.structs import TopicPartition
 import sys
+import logging
 
 class Admin4Kafka:
 
@@ -16,7 +17,7 @@ class Admin4Kafka:
         except Exception as e:
             excType, excValue, traceback = sys.exc_info()
             print(excType, excValue, traceback)
-            log.error('deleteTopic Error Occured : %s %s %s', excType, excValue, traceback)
+            logging.error('deleteTopic Error Occured : %s %s %s', excType, excValue, traceback)
             return -1
 
     def get_offsets(self, topic, partition):
@@ -50,5 +51,5 @@ class Admin4Kafka:
         except Exception as e:
             excType, excValue, traceback = sys.exc_info()
             print(excType, excValue, traceback)
-            log.error('sendMessage Error Occured : %s %s %s', excType, excValue, traceback)
+            logging.error('sendMessage Error Occured : %s %s %s', excType, excValue, traceback)
             return [], -1

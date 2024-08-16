@@ -1038,7 +1038,15 @@ class MWConfiguration(BaseApi):
         domain_id = data['domain_id']
         sys_user = data['sys_user'] if data.get('sys_user') else ''
         
-        rtn, msg = AutorunResult()._updateJeusDomain(host_id, domain_id, content, sys_user=sys_user)
+        domain_info = dict(
+            host_id = host_id,
+            domain_id = domain_id,
+            content = content,
+            sys_user = sys_user,
+            agent_id = '',
+        )
+
+        rtn, msg = AutorunResult.update_domain(domain_info)
         db.session.commit()
 
         return jsonify({'return_code':rtn, 'msg':msg}), 201

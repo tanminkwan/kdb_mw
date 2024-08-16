@@ -27,7 +27,6 @@ logging.basicConfig(
     stream=sys.stdout
 )
 
-
 db = SQLA(app)
 migrate = Migrate(app, db)
 

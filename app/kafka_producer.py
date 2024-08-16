@@ -21,5 +21,5 @@ class Producer4Kafka:
         except Exception as e:
             excType, excValue, traceback = sys.exc_info()
             print(excType, excValue, traceback)
-            #log.error('sendMessage Error Occured : %s %s %s', excType, excValue, traceback)
+            #logging.error('sendMessage Error Occured : %s %s %s', excType, excValue, traceback)
             return -1

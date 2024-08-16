@@ -74,7 +74,7 @@ class AutorunResult:
 
         return 1, 'OK'
 
-    def updateJeusDomain(self):
+    def __get_domain_info(self):
 
         result = self.result
 
@@ -103,11 +103,22 @@ class AutorunResult:
         if host_id == 'uok01a' and 'usropt01/jeus60/jeusok' in file_path:
             domain_id = 'jeusok2_dev'
 
-        return self._updateJeusDomain(host_id, domain_id, content, sys_user, agent_id)
+        return dict(
+            host_id = host_id,
+            domain_id = domain_id,
+            content = content,
+            sys_user = sys_user,
+            agent_id = agent_id,
+        )
 
-    def _updateJeusDomain(self, host_id, domain_id, content, sys_user='', agent_id=''):
+    def updateJeusDomain(self):
+        domain_info = self.__get_domain_info()
+        return AutorunResult.update_domain(domain_info)
 
-        doc        = xmltodict.parse(content)
+    @classmethod
+    def update_domain(cls, domain_info):
+
+        doc        = xmltodict.parse(domain_info.content)
         json_type  = json.dumps(doc)
         dict2_type = json.loads(json_type)
         
@@ -116,7 +127,7 @@ class AutorunResult:
         if not domain:
             return -1, 'domain item doesn\'t exist'
 
-        rec, _ = select_row('mw_was',{'was_id':domain_id})
+        rec, _ = select_row('mw_was',{'was_id':domain_info.domain_id})
         
         if rec and rec.was_object:
 
@@ -138,19 +149,20 @@ class AutorunResult:
         fac = JeusDomainFactory()
         
         param = dict(
-            domain_id = domain_id,
-            host_id   = host_id,
+            domain_id = domain_info.domain_id,
+            host_id   = domain_info.host_id,
             domain    = domain,
-            raw_data  = content,
-            sys_user  = sys_user,
-            agent_id  = agent_id,
+            raw_data  = domain_info.content,
+            sys_user  = domain_info.sys_user,
+            agent_id  = domain_info.agent_id,
         )
+
         if dict2_type.get('domain'):
             jeus = NewJeusDomain(**param)
         elif dict2_type.get('jeus-system'):
             jeus = OldJeusDomain(**param)
 
-        rtn , _ = fac.jeusDomain(jeus)
+        rtn , _ = fac.jeus_domain(jeus)
         
         return rtn, ''
 
@@ -502,7 +514,7 @@ class AutorunResult:
         
         fac = JeusDomainFactory()
         jeusDomain = OldJeusDomain(domain_id, host_id, domain)
-        rtn , _ = fac.jeusWebConnection(jeusDomain)
+        rtn , _ = fac.jeus_web_connection(jeusDomain)
         
         return rtn, ''
 
