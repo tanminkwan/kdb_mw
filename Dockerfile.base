@@ -15,6 +15,9 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Install supervisor
+RUN apt-get update && apt-get install -y supervisor
+
 # Install chrome
 RUN wget -q https://mirror.cs.uchicago.edu/google-chrome/pool/main/g/google-chrome-stable/google-chrome-stable_114.0.5735.90-1_amd64.deb \
     && apt-get update \

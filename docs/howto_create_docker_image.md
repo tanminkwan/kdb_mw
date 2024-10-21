@@ -8,29 +8,6 @@ Step-by-Step Dockerfile Creation
 
 The base image will include all necessary libraries and settings but exclude the source code.
 
-Dockerfile for Base Image
-
-```Dockerfile
-
-# Base Image
-FROM python:3.12.4-slim-bookworm
-
-# Set working directory
-WORKDIR /app
-
-# Install git and other dependencies
-RUN apt-get update && apt-get install -y git && apt-get clean
-
-# Copy necessary files
-COPY requirements.txt requirements.txt
-
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# The base image does not define a CMD or ENTRYPOINT
-# It will be defined in the final image Dockerfile
-```
-
 Build the base image using this Dockerfile.
 
 ```bash
@@ -39,31 +16,6 @@ docker build -t mwm-base -f Dockerfile.base .
 #### 3. Create the App Image
 
 The final image will use the base image, add the source code, and set up the web server to run.
-
-Dockerfile for App Image
-
-```Dockerfile
-
-# Use the base image
-FROM mwm-base
-
-# Set working directory (should match the base image's WORKDIR)
-WORKDIR /app
-
-# Copy the source code
-COPY app app
-COPY config.py config.py
-COPY run.py run.py
-
-# Copy Gunicorn configuration file
-COPY gunicorn_config.py gunicorn_config.py
-
-# Expose the port the application will run on
-EXPOSE 8000
-
-# Use Gunicorn to run the application
-CMD ["gunicorn", "-c", "gunicorn_config.py", "app:app"]
-```
 
 Build the final image using this Dockerfile.
 
@@ -84,6 +36,9 @@ myapp/
 │
 ├── Dockerfile.base
 ├── Dockerfile.app
+├── docker-compose.yml
+├── create_db.sql
+├── supervisord.conf
 ├── requirements.txt
 ├── config.py
 ├── run.py
