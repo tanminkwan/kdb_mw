@@ -16,3 +16,13 @@ Base Skeleton to start your application using Flask-AppBuilder
 
 
 That's it!!
+---
+```bash
+docker exec -it mwm-db psql -U postgres
+```
+```bash
+CREATE DATABASE prefect;
+GRANT ALL PRIVILEGES ON DATABASE prefect TO tiffanie;
+ALTER DATABASE prefect OWNER TO tiffanie;
+```
+
