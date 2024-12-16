@@ -74,6 +74,8 @@ con_val = dict(
    ,KDB_SMTP_IP    = '10.6.20.40'
    ,KDB_SMTP_PORT  = 50025
 )
+
+PLANTUML_URL = app.config.get('PLANTUML_URL')
 #MongoDB
 #mongoClient = MongoClient("mongodb://localhost:27017/")
 #dbMongo = mongoClient["WHEREAMI"]

@@ -7,7 +7,7 @@ from flask_appbuilder.api import BaseApi, expose, protect
 from flask_appbuilder.filemanager import get_file_original_name, FileManager
 from wtforms import TextAreaField
 from flask_appbuilder.fieldwidgets import BS3TextAreaFieldWidget
-from app import app, db, appbuilder, con_val
+from app import app, db, appbuilder, con_val, PLANTUML_URL
 from app.models.knowledge import UtTag, UtTagKm, UtFile, UtResource, UtResourceAddedText, UtHtmlContent\
     , UtMdContent
 from app.models.common import get_user, get_date, get_uuid
@@ -107,6 +107,7 @@ class UtHtmlContentModelView(ModelView):
     extra_args = {
         'summer_column':'content_html',
         'tags_column':'search_tags',
+        'plantuml_url':PLANTUML_URL+"/png/"
         'selectList':[
          {'text':'지식유형','id':'tag-selector','combind':'1','type':'parent','condition':{'operator':'and','column':'tag','value':'지식유형'}}
         ],
@@ -342,6 +343,7 @@ class UtApi(BaseApi):
                     ))
 
         return render_template('show_md2.html'\
+            , plantuml_url=PLANTUML_URL+"/png/"
             , title=title
             , md=md
             , update_on=update_on

@@ -62,6 +62,9 @@ GITLAB_CONFIG = dict()
 #GITLAB_CONFIG['api_connection'] = 'http://10.1.10.100:8080/api/v4/'
 #GITLAB_CONFIG['giblab_api_private_key'] = 'rHpBszAcBi-p9zSkuHgA'
 
+# PlantUML
+PLANTUML_URL = 'https://mwm-plantuml.kdb.co.kr:20443'
+
 # S3
 AWS_URL = os.getenv('AWS_URL', 'http://localhost:9000')
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', 'x7QobM7I5WNI5zGWbkr4')
