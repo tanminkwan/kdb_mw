@@ -107,7 +107,7 @@ class UtHtmlContentModelView(ModelView):
     extra_args = {
         'summer_column':'content_html',
         'tags_column':'search_tags',
-        'plantuml_url':PLANTUML_URL+"/png/"
+        'plantuml_url':PLANTUML_URL+"/png/",
         'selectList':[
          {'text':'지식유형','id':'tag-selector','combind':'1','type':'parent','condition':{'operator':'and','column':'tag','value':'지식유형'}}
         ],
