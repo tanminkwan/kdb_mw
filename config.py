@@ -63,13 +63,13 @@ GITLAB_CONFIG = dict()
 #GITLAB_CONFIG['giblab_api_private_key'] = 'rHpBszAcBi-p9zSkuHgA'
 
 # PlantUML
-PLANTUML_URL = 'https://mwm-plantuml.kdb.co.kr:20443'
+PLANTUML_URL = os.getenv('PLANTUML_URL', 'https://mwm-plantuml.kdb.co.kr:20443')
 
 # S3
 AWS_URL = os.getenv('AWS_URL', 'http://localhost:9000')
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', 'x7QobM7I5WNI5zGWbkr4')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', 'pdoWz2Zw0yaJw9fW32jqZigaqiyXRuYLKK9x7PzJ')
-BUCKET_NAME = os.getenv('BUCKET_NAME', 'test')
+BUCKET_NAME = os.getenv('BUCKET_NAME', 'mwm_contents')
 
 BUCKET_PREFIX = '/uploads/'
 
@@ -80,7 +80,7 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20240729.001)"
+APP_NAME = "리발소(VER:20241230.001)"
 
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"
