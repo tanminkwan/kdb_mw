@@ -20,9 +20,9 @@ services:
   mwm-minio:
     container_name: mwm-minio
     image: minio/minio
-#    ports:
-#      - '9000:9000'
-#      - '9001:9001'
+    ports:
+      - '9000:9000'
+      - '9001:9001'
     environment:
       - MINIO_CONFIG_ENV_FILE=/etc/config.env
     volumes:
