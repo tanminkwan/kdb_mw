@@ -56,7 +56,7 @@ class AgAgent(Model):
     approved_yn = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("NO"), nullable=False)
     last_checked_date      = Column(DateTime())    
     token_expiration_date  = Column(DateTime())
-    refresh_token = Column(String(300))
+    refresh_token = Column(String(500))
 
     user_id    = Column(String(50), default=get_user, nullable=False)
     create_on  = Column(DateTime(), default=datetime.now, nullable=False)    
