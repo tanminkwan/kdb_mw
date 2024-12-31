@@ -374,7 +374,7 @@ class CommandMasterAliveView(ModelView):
 
         for cid in items:
             try:
-                scheduler.delete_job('CreDetail_'+ cid.command_id)
+                scheduler.remove_job('CreDetail_'+ cid.command_id)
             except apscheduler.jobstores.base.JobLookupError as e:
                 print('cancel_commands : ',e)
 
