@@ -16,4 +16,10 @@ COPY gunicorn_config.py gunicorn_config.py
 EXPOSE 8000
 
 # Use Gunicorn to run the application
-CMD ["gunicorn", "-c", "gunicorn_config.py", "app:app"]
+#CMD ["gunicorn", "-c", "gunicorn_config.py", "app:app"]
+
+# Supervisor 설정 복사
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Supervisor를 ENTRYPOINT로 설정
+CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

@@ -1,12 +1,13 @@
-from . import db, log
+import logging
+from app import db
 from .dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
 from .dmlsForWebtob import WebtobHttpm, WebtobHttpmFactory, NewHttpm, httpmToDict
-from .sqls_mw import getDomainIdAsPK, getWasInstanceId
-from .sqls_agent import updateResultStatus, updateWasStatus, getResult, getAutorunFunc\
+from app.sqls.was import getDomainIdAsPK, getWasInstanceId
+from app.sqls.agent import updateResultStatus, updateWasStatus, getResult, getAutorunFunc\
     , sendCommandImmediately, getOrInsertCommandType, insertCommandMaster\
     , getCommandMaster
-from .sqls_monitor import updateRows, insertRow, selectRow, selectRows
-from .models_com import get_date
+from app.sqls.monitor import update_rows, insert_row, select_row, select_rows
+from app.models.common import get_date
 from datetime import datetime, timedelta
 from deepdiff import DeepDiff
 import json
@@ -31,7 +32,6 @@ class AutorunResult:
 
         real_key_value1 = self._getRealKeyValue1(self.result.key_value1)
 
-        #print('HH real_key_value1 : ',self.result.key_value1, ':', real_key_value1)
         return getAutorunFunc(self.result.command_id, real_key_value1)
 
     def _getRealKeyValue1(self, key_value1):
@@ -69,13 +69,12 @@ class AutorunResult:
         except Exception as e:
             db.session.rollback()
             excType, excValue, traceback = sys.exc_info()
-            print("callAutorunFunc Error :", autorunFunc, autorunParam)
-            log.error('AutorunResult.callAutorunFunc Error : 1[%s] 2[%s] 3[%s]', excType, excValue, traceback)
+            logging.error(f'AutorunResult.callAutorunFunc Error : 1{excType} 2{excValue} 3{traceback}')
             self.updateResultStatus('ERROR', str(excValue))
 
         return 1, 'OK'
 
-    def updateJeusDomain(self):
+    def __get_domain_info(self):
 
         result = self.result
 
@@ -87,9 +86,9 @@ class AutorunResult:
         agent_id  = result.agent_id
 
         if result.ag_command_detail.command_class.name == 'ExeAgentFunc':
-            system_user = ''
+            sys_user = ''
         else:
-            system_user = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
+            sys_user = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
 
         #Getting domain id from file_path ex) /sw/jeus/domains/PPRM_Domain/config
         if file_name == 'domain.xml':
@@ -104,11 +103,22 @@ class AutorunResult:
         if host_id == 'uok01a' and 'usropt01/jeus60/jeusok' in file_path:
             domain_id = 'jeusok2_dev'
 
-        return self._updateJeusDomain(host_id, domain_id, content, system_user, agent_id)
+        return dict(
+            host_id = host_id,
+            domain_id = domain_id,
+            content = content,
+            sys_user = sys_user,
+            agent_id = agent_id,
+        )
 
-    def _updateJeusDomain(self, host_id, domain_id, content, system_user='', agent_id=''):
+    def updateJeusDomain(self):
+        domain_info = self.__get_domain_info()
+        return AutorunResult.update_domain(domain_info)
 
-        doc        = xmltodict.parse(content)
+    @classmethod
+    def update_domain(cls, domain_info):
+
+        doc        = xmltodict.parse(domain_info.content)
         json_type  = json.dumps(doc)
         dict2_type = json.loads(json_type)
         
@@ -117,7 +127,7 @@ class AutorunResult:
         if not domain:
             return -1, 'domain item doesn\'t exist'
 
-        rec, _ = selectRow('mw_was',{'was_id':domain_id})
+        rec, _ = select_row('mw_was',{'was_id':domain_info.domain_id})
         
         if rec and rec.was_object:
 
@@ -130,19 +140,29 @@ class AutorunResult:
             insert_dict = dict(
                 mw_was_id      = rec.id,
                 old_was_object = rec.was_object,
-                changed_object = diff.to_json()
+                changed_object = diff.to_json(),
+                old_was_text   = rec.was_text,
             )
 
-            insertRow('mw_was_change_history', insert_dict)
+            insert_row('mw_was_change_history', insert_dict)
         
         fac = JeusDomainFactory()
         
-        if dict2_type.get('domain'):
-            jeus = NewJeusDomain(domain_id, host_id, domain, system_user=system_user, agent_id=agent_id)
-        elif dict2_type.get('jeus-system'):
-            jeus = OldJeusDomain(domain_id, host_id, domain, system_user=system_user, agent_id=agent_id)
+        param = dict(
+            domain_id = domain_info.domain_id,
+            host_id   = domain_info.host_id,
+            domain    = domain,
+            raw_data  = domain_info.content,
+            sys_user  = domain_info.sys_user,
+            agent_id  = domain_info.agent_id,
+        )
 
-        rtn , _ = fac.jeusDomain(jeus)
+        if dict2_type.get('domain'):
+            jeus = NewJeusDomain(**param)
+        elif dict2_type.get('jeus-system'):
+            jeus = OldJeusDomain(**param)
+
+        rtn , _ = fac.jeus_domain(jeus)
         
         return rtn, ''
 
@@ -151,7 +171,7 @@ class AutorunResult:
         result = self.result
         
         filter_dict = dict(command_id=result.command_id)
-        cmaster, _ = selectRow('ag_command_master', filter_dict)
+        cmaster, _ = select_row('ag_command_master', filter_dict)
 
         urlrewrite_config = cmaster.additional_params
 
@@ -167,20 +187,20 @@ class AutorunResult:
            ,urlrewrite_config = urlrewrite_config
         )
 
-        updateRows('mw_web_vhost', update_dict, filter_dict)
+        update_rows('mw_web_vhost', update_dict, filter_dict)
 
         return 1, ''
 
-    def updateFileSSLByAPI(self):
+    def update_file_SSL_byAPI(self):
 
         result = self.result
 
         result_text   = result.result_text
         certi = json.loads(result_text)
 
-        print('certi :',certi)
+        logging.info(f'certi : {certi}')
+
         ssl_certi = certi['certifile']
-        print('ssl_certi :',ssl_certi)
 
         notbefore, notafter = self._getSslDatetime(certi)
 
@@ -200,7 +220,7 @@ class AutorunResult:
            ,ssl_certi = ssl_certi
         )
 
-        return updateRows('mw_web_ssl', update_dict, filter_dict)
+        return update_rows('mw_web_ssl', update_dict, filter_dict)
 
     def _getSslDatetime(self, certi):
 
@@ -258,7 +278,7 @@ class AutorunResult:
            ,port        = port
         )
 
-        return updateRows('mw_web_domain', update_dict, filter_dict)
+        return update_rows('mw_web_domain', update_dict, filter_dict)
 
     def updateConnectSSL(self):
 
@@ -303,7 +323,7 @@ class AutorunResult:
            ,port        = port
         )
 
-        return updateRows('mw_web_domain', update_dict, filter_dict)
+        return update_rows('mw_web_domain', update_dict, filter_dict)
 
     def updateFileSSL(self):
 
@@ -339,7 +359,7 @@ class AutorunResult:
            ,ssl_certi   = ssl_certi
         )
 
-        return updateRows('mw_web_ssl', update_dict, filter_dict)
+        return update_rows('mw_web_ssl', update_dict, filter_dict)
 
     def _parseSSLInfo(self, content):
 
@@ -371,7 +391,7 @@ class AutorunResult:
 
         return rtn_dict
 
-    def updateHttpm(self):
+    def update_httpm(self):
 
         result = self.result
 
@@ -395,31 +415,31 @@ class AutorunResult:
         agent_id = result.agent_id
 
         if result.ag_command_detail.command_class.name == 'ExeAgentFunc':
-            system_user = ''
+            sys_user = ''
         else:
-            system_user = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
+            sys_user = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
 
-        return self._updateHttpm(host_id, content, system_user=system_user\
+        return self._update_httpm(host_id, content, sys_user=sys_user\
                         , domain_id=domain_id, agent_id=agent_id)
 
-    def _updateHttpm(self, host_id, content, system_user='', domain_id='', agent_id=''):
+    def _update_httpm(self, host_id, content, sys_user='', domain_id='', agent_id=''):
 
-        dict2_type = httpmToDict(content)
+        httpm = httpmToDict(content)
 
-        if not dict2_type['NODE'][0].get('JSVPORT'):
-            dict2_type['NODE'][0]['JSVPORT'] = 0
+        if not httpm['NODE'][0].get('JSVPORT'):
+            httpm['NODE'][0]['JSVPORT'] = 0
 
-        if dict2_type['NODE'][0].get('PORT'):
-            tmp = dict2_type['NODE'][0]['PORT']
+        if httpm['NODE'][0].get('PORT'):
+            tmp = httpm['NODE'][0]['PORT']
             port = int(tmp.split(',')[0])
         else:
             port = 0
-            dict2_type['NODE'][0]['PORT'] = "0"
+            httpm['NODE'][0]['PORT'] = "0"
 
-        rec, _ = selectRow('mw_web',{'host_id':host_id,'port':port})
+        rec, _ = select_row('mw_web',{'host_id':host_id,'port':port})
 
         if rec:
-            diff = DeepDiff(rec.httpm_object, dict2_type, ignore_order=True)
+            diff = DeepDiff(rec.httpm_object, httpm, ignore_order=True)
 
             #Not changed
             if not diff:
@@ -428,15 +448,22 @@ class AutorunResult:
             insert_dict = dict(
                 mw_web_id         = rec.id,
                 old_httpm_object  = rec.httpm_object,
-                changed_object    = diff.to_json()
+                changed_object    = diff.to_json(),
+                old_web_text      = rec.web_text,
             )
 
-            insertRow('mw_web_change_history', insert_dict)
+            insert_row('mw_web_change_history', insert_dict)
 
         fac = WebtobHttpmFactory()
         
-        print('Hennry TT :', domain_id)
-        httpm = NewHttpm(host_id, dict2_type, system_user=system_user, domain_id=domain_id, agent_id=agent_id)
+        httpm = NewHttpm(
+            host_id, 
+            httpm,
+            raw_data  = content,
+            sys_user  = sys_user, 
+            domain_id = domain_id, 
+            agent_id  = agent_id
+        )
         
         rtn , _ = fac.webtobHttpm(httpm)
         return rtn, ''
@@ -487,7 +514,7 @@ class AutorunResult:
         
         fac = JeusDomainFactory()
         jeusDomain = OldJeusDomain(domain_id, host_id, domain)
-        rtn , _ = fac.jeusWebConnection(jeusDomain)
+        rtn , _ = fac.jeus_web_connection(jeusDomain)
         
         return rtn, ''
 
@@ -507,7 +534,7 @@ class AutorunResult:
 
         re_dict = self._parseJeusLicenseInfo(content)
 
-        print('Hennry 5 :', re_dict)
+        logging.info(f're_dict : {re_dict}')
 
         if not re_dict.get('domain'):
             return -1, 'No data found'
@@ -527,7 +554,7 @@ class AutorunResult:
             was_id     = re_dict['domain']
         )
 
-        return updateRows('mw_was', update_dict, filter_list)
+        return update_rows('mw_was', update_dict, filter_list)
 
     def _parseJeusLicenseInfo(self, content):
 
@@ -584,7 +611,7 @@ class AutorunResult:
            ,application_home = re_dict['application_home']
         )
 
-        return updateRows('mw_application', update_dict, filter_list)
+        return update_rows('mw_application', update_dict, filter_list)
 
     def _parseFilteredInfo(self, content):
 
@@ -627,7 +654,7 @@ class AutorunResult:
            ,port     = re_dict['port']
         )
 
-        return updateRows('mw_web', update_dict, filter_list)
+        return update_rows('mw_web', update_dict, filter_list)
 
     def _parseWebtobLicenseInfo(self, content):
 
@@ -689,7 +716,7 @@ class AutorunResult:
                 was_id           = was_id
             )
 
-            updateRows('mw_was', update_dict, filter_dict)
+            update_rows('mw_was', update_dict, filter_dict)
 
         return 1, ''
 
@@ -697,15 +724,15 @@ class AutorunResult:
 
         result = self.result
 
-        row, _ = selectRow('mw_web',{'agent_id':result.agent_id})
+        row, _ = select_row('mw_web',{'agent_id':result.agent_id})
         
         if not row:
             return 0, 'WEB not found'
 
-        dicts = self._getSi(result.result_text, result.create_on.strftime('%Y.%m.%d %H:%M'))
+        dicts = self.__get_si(result.result_text, result.create_on.strftime('%Y.%m.%d %H:%M'))
 
         for r in dicts:
-            srow, _ = selectRow('mw_web_server',{'svr_id':r['svr_id'],'mw_web_id':row.id})
+            srow, _ = select_row('mw_web_server',{'svr_id':r['svr_id'],'mw_web_id':row.id})
 
             if srow:
                 srow.monitor_now = r
@@ -721,7 +748,7 @@ class AutorunResult:
 
         return 1, ''
 
-    def _getSi(self, result, date):
+    def __get_si(self, result, date):
 
         array_ = []
         
@@ -729,9 +756,9 @@ class AutorunResult:
             if not line.strip():
                 continue
 
-            print('_getSi line :', line)
+            logging.info(f'line : {line}')
             ll = [ t for t in line.split(' ') if t and '(' not in t and ')' not in t]
-            print('_getSi ll :', ll)
+            
             array_.append(
                 dict(
                     svr_id = ll[1],
@@ -754,7 +781,7 @@ class AutorunResult:
 
         result = self.result
 
-        row, _ = selectRow('mw_web',{'agent_id':result.agent_id})
+        row, _ = select_row('mw_web',{'agent_id':result.agent_id})
         
         if not row:
             return 0, 'WEB not found'
@@ -771,7 +798,7 @@ class AutorunResult:
            ,string_to_replace = jeusprop_location
         )
 
-        recs, _ = selectRows('ag_command_helper', filter_dict)
+        recs, _ = select_rows('ag_command_helper', filter_dict)
 
         if recs:
             return [ r.target_file_name for r in recs]
@@ -780,7 +807,7 @@ class AutorunResult:
             agent_id    = agent_id
         )
 
-        recs, _ = selectRows('mw_was', filter_dict)
+        recs, _ = select_rows('mw_was', filter_dict)
         
         if recs:
             return [ r.was_id for r in recs]
@@ -821,6 +848,6 @@ class AutorunResult:
 
         filter_dict = dict(id = self.result.id)
 
-        updateRows('ag_result', update_dict, filter_dict)
+        update_rows('ag_result', update_dict, filter_dict)
 
 

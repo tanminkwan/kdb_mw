@@ -4,22 +4,23 @@ from . import appbuilder, db
 from datetime import datetime
 from sqlalchemy import null, text
 from sqlalchemy.dialects.postgresql import insert, JSON
-from .models import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
+from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, DailyReport\
     , MwWebServer, MwAppMaster, MwDBMaster
-from .sqls_mw import getLandscape, getRealWebHostId
-from .sqls_monitor import selectRow 
-from .sqls_util import insertTag
+from app.sqls.was import getLandscape, getRealWebHostId
+from app.sqls.monitor import select_row 
+from app.sqls.knowledge import insert_tag
 
 import re
 
 class JeusDomain(ABC):
 
-    def __init__(self, domain_id, host_id, domain, system_user="", agent_id=""):
+    def __init__(self, domain_id, host_id, domain, raw_data, sys_user="", agent_id=""):
         self.domain_id     = domain_id
         self.host_id       = host_id
         self.domain        = domain
-        self.system_user   = system_user
+        self.raw_data      = raw_data
+        self.sys_user      = sys_user
         self.agent_id      = agent_id
         self.landscape     = ''
         self.databases     = []
@@ -106,8 +107,6 @@ class JeusDomain(ABC):
         
         for insert_dict, update_dict in zip(insert_array, update_array):
 
-            #print('app i:',insert_dict)
-            #print('app u:',update_dict)
             stmt = insert(MwApplication).values(insert_dict)    
             do_update_stmt = stmt.on_conflict_do_update(
                 index_elements=['was_id', 'application_id'],
@@ -175,11 +174,14 @@ class JeusDomain(ABC):
     def __getDictOfWas(self, domain):
 
         update_dict = self._getDataOfWas(domain)
+        update_dict.update(
+            was_text = self.raw_data
+        )
 
         insert_dict = update_dict.copy()
         insert_dict.update(
-                was_id    = self.domain_id
-            )
+            was_id   = self.domain_id
+        )
 
         return 1, insert_dict, update_dict
 
@@ -187,7 +189,7 @@ class JeusDomain(ABC):
     def __getTagWas(self):
 
         tag = 'WAS-' + self.domain_id + '-' + self.host_id + '-'\
-                    + ( self.system_user if self.system_user else 'NOUSERID')
+                    + ( self.sys_user if self.sys_user else 'NOUSERID')
         tag_id = insertResourceTag('mw_was', tag)
         return tag_id
     """
@@ -203,7 +205,6 @@ class JeusDomain(ABC):
         insert_dict = {}   
         db_property = ''
 
-        #print(' datasources : ', datasources)
         for ds in datasources:
 
             update_dict, datasource_id_str = self._getDataOfDatasource(ds)
@@ -330,8 +331,8 @@ class JeusDomain(ABC):
             tag1 = self.domain_id.replace('_Domain','')[1:]
             tag2 = was_instance_id.split('_M')[0]
             tag = 'MS-' + tag1 + '_Domain-' + tag2
-            tag_id = insertTag(tag)
-            row, _ = selectRow('ut_tag',{'id':tag_id})
+            tag_id = insert_tag(tag)
+            row, _ = select_row('ut_tag',{'id':tag_id})
             rtn.append(row)
         return rtn
 
@@ -370,7 +371,6 @@ class JeusDomain(ABC):
 
         for server, apps in map_dict.items():
 
-            #print('appss :',apps)
             wasInstance_rec = db.session.query(MwWasInstance)\
                     .filter(MwWasInstance.was_id==self.domain_id\
                         , MwWasInstance.was_instance_id==server).first()
@@ -512,10 +512,8 @@ class JeusDomain(ABC):
                .filter(MwDBMaster.db_dbms_id==d_rec.db_dbms_id\
                       ,MwDBMaster.landscape==self.landscape).first()
 
-            #print('HHH 1 : ', dm_rec)
-            #print('HHH 2 : ', rec.mw_db_master)
             if not dm_rec in rec.mw_db_master:
-                print('HHH 3')
+                
                 rec.mw_db_master.append(dm_rec)
 
         return 1
@@ -588,8 +586,8 @@ class NewJeusDomain(JeusDomain):
                 create_on        = datetime.now()
             )
 
-        if self.system_user:
-            dict_['system_user'] = self.system_user
+        if self.sys_user:
+            dict_['sys_user'] = self.sys_user
 
         return dict_
 
@@ -832,7 +830,7 @@ class OldJeusDomain(JeusDomain):
             located_host_id  = domain['node']['name'].lower(),
             newgeneration_yn = 'NO',
             production_mode  = null(),
-            system_user      = self.system_user,
+            sys_user      = self.sys_user,
             cluster_object   = null(),
             was_object       = self.domain,
             agent_id         = self.agent_id,
@@ -900,7 +898,6 @@ class OldJeusDomain(JeusDomain):
         datasources = [ d for d in self.datasources_dict ]
         was_instance_id = self.host_id + '_' + server['name']
 
-        print('HHH 3 : ', datasources, was_instance_id)
         return datasources, was_instance_id
 
     def _getDataOfApplicationsforWasInstance(self, applications):
@@ -1006,8 +1003,8 @@ class OldJeusDomain(JeusDomain):
         return insert_http_a, update_http_a, insert_webtob_a, update_webtob_a
 
 class JeusDomainFactory:
-    def jeusDomain(self, h):
+    def jeus_domain(self, h):
         return h.upsertJeusDomain()
 
-    def jeusWebConnection(self, h):
+    def jeus_web_connection(self, h):
         return h.upsertWebConnection()

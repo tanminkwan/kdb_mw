@@ -1,4 +1,6 @@
 import os
+import sys
+import redis
 from flask_appbuilder.security.manager import (
     AUTH_OID,
     AUTH_REMOTE_USER,
@@ -6,18 +8,39 @@ from flask_appbuilder.security.manager import (
     AUTH_LDAP,
     AUTH_OAUTH,
 )
+from dotenv import load_dotenv
+import logging
+
+# 기본 로깅 설정
+LOGGING_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+# 환경변수에서 로깅 레벨 가져오기
+log_level = os.getenv('LOGGING_LEVEL', 'DEBUG').upper()
+
+# 로깅 레벨 문자열을 로깅 모듈의 레벨 상수로 변환
+log_levels = {
+    'DEBUG': logging.DEBUG,
+    'INFO': logging.INFO,
+    'WARNING': logging.WARNING,
+    'ERROR': logging.ERROR,
+    'CRITICAL': logging.CRITICAL
+}
+LOGGING_LEVEL = log_levels.get(log_level)  # 기본값은 INFO
+
+# .env 파일 로드
+load_dotenv()
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # Your App secret key
-SECRET_KEY = "\2\1thisismyscretkey\1\2\e\y\y\h"
+SECRET_KEY = os.urandom(24)
 
 # The SQLAlchemy connection string.
 # SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
 # SQLALCHEMY_DATABASE_URI = 'mysql://myapp@localhost/myapp'
 # SQLALCHEMY_DATABASE_URI = 'postgresql://root:password@localhost/myapp'
-MWM_DATABASE_URI = os.getenv("MWM_DATABASE_URI", "localhost:5432")
-SQLALCHEMY_DATABASE_URI = f"postgresql://tiffanie:1q2w3e4r!!@{MWM_DATABASE_URI}/mw"
+SQLALCHEMY_DATABASE_URI = os.getenv("MWM_DATABASE_URI", "postgresql://tiffanie:1q2w3e4r!!@localhost:25432/mw")
+SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # Kafka brokers
 #KAFKA_BROKERS = ['10.0.20.117:9092']
@@ -25,10 +48,30 @@ SQLALCHEMY_DATABASE_URI = f"postgresql://tiffanie:1q2w3e4r!!@{MWM_DATABASE_URI}/
 KAFKA_BROKERS = []
 KAFKA_CONSUMER_4_WAS_MONITORING = 'g_w_mw_server'
 
+# Redis
+# 환경 변수에서 Redis URL 가져오기
+redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+
+SESSION_TYPE = 'redis'
+SESSION_PERMANENT = False
+SESSION_USE_SIGNER = True
+SESSION_REDIS = redis.from_url(redis_url)
+
 # GitLab
 GITLAB_CONFIG = dict()
 #GITLAB_CONFIG['api_connection'] = 'http://10.1.10.100:8080/api/v4/'
 #GITLAB_CONFIG['giblab_api_private_key'] = 'rHpBszAcBi-p9zSkuHgA'
+
+# PlantUML
+PLANTUML_URL = os.getenv('PLANTUML_URL', 'https://mwm-plantuml.kdb.co.kr:20443')
+
+# S3
+AWS_URL = os.getenv('AWS_URL', 'http://localhost:9000')
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', 'x7QobM7I5WNI5zGWbkr4')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', 'pdoWz2Zw0yaJw9fW32jqZigaqiyXRuYLKK9x7PzJ')
+BUCKET_NAME = os.getenv('BUCKET_NAME', 'mwm_contents')
+
+BUCKET_PREFIX = '/uploads/'
 
 # Flask-WTF flag for CSRF
 CSRF_ENABLED = True
@@ -37,7 +80,7 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20240729.001)"
+APP_NAME = "리발소(VER:20241230.001)"
 
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"

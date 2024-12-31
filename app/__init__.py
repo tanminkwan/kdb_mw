@@ -1,49 +1,40 @@
 import logging
-from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 import os
-from flask import Flask
+import sys
+from flask import Flask, jsonify
 from flask_migrate import Migrate
 from flask_appbuilder import AppBuilder, SQLA, IndexView
-from pymongo import MongoClient
+#from pymongo import MongoClient
 
 from flask_apscheduler import APScheduler
-from .producer4Kafka import Producer4Kafka
-from .admin4Kafka import Admin4Kafka
+from .kafka_producer import Producer4Kafka
+from .kafka_admin import Admin4Kafka
 from kafka.errors import NoBrokersAvailable
 #from .ksql4Kafka import Ksql4Kafka
 
-"""
- Logging configuration
-"""
 class MyIndexView(IndexView):
     index_template = 'my_index.html'
-
-logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s")
-#log = logging.getLogger()
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
-
-#hdl = RotatingFileHandler('Hennry.log', mode='a', maxBytes=10*1024*1024, backupCount=50, encoding='utf-8', delay=0)
-#hdl = TimedRotatingFileHandler('Hennry.log', when='D', interval=1, backupCount=50, encoding='utf-8', delay=0)
-#hdl.setFormatter(logging.Formatter("%(asctime)s:%(levelname)s:%(name)s:%(message)s"))
-#hdl.suffix = '%Y%m%d'
-#log.addHandler(hdl)
 
 app = Flask(__name__)
 app.config.from_object("config")
 
-@app.route('/health')
-def health():
-    return jsonify(status="healthy"), 200
-    
+"""
+ Logging configuration
+"""
+logging.basicConfig(
+    level=app.config['LOGGING_LEVEL'],
+    format=app.config['LOGGING_FORMAT'],
+    stream=sys.stdout
+)
+
 db = SQLA(app)
 migrate = Migrate(app, db)
 
 appbuilder = AppBuilder(app, db.session, indexview=MyIndexView)
 
 #Kafka
-producer4Kafka =None
-admin4Kafka=None
+kafka_producer =None
+kafka_admin=None
 KAFKA_BROKERS=[]
 KAFKA_CONSUMER_4_WAS_MONITORING=''
 
@@ -54,15 +45,13 @@ KAFKA_CONSUMER_4_WAS_MONITORING=''
 
 if app.config.get('KAFKA_BROKERS'):
 
-    print('JJJ : ', app.config['KAFKA_BROKERS'])
     try:
-        producer4Kafka = Producer4Kafka(app.config['KAFKA_BROKERS'])
-        admin4Kafka = Admin4Kafka(app.config['KAFKA_BROKERS'])
+        kafka_producer = Producer4Kafka(app.config['KAFKA_BROKERS'])
+        kafka_admin = Admin4Kafka(app.config['KAFKA_BROKERS'])
         KAFKA_BROKERS = app.config['KAFKA_BROKERS']
     except NoBrokersAvailable as e:
         print('Brokers are not connected.')
         pass
-
 
 #Current WAS Status
 WAS_STATUS = dict()
@@ -71,7 +60,6 @@ consumer4WasMonitoring = None
 #
 if app.config.get('KAFKA_CONSUMER_4_WAS_MONITORING'):
     KAFKA_CONSUMER_4_WAS_MONITORING = app.config['KAFKA_CONSUMER_4_WAS_MONITORING']
-
 
 #GitLab
 gitConfig = dict()
@@ -86,11 +74,13 @@ con_val = dict(
    ,KDB_SMTP_IP    = '10.6.20.40'
    ,KDB_SMTP_PORT  = 50025
 )
+
+PLANTUML_URL = app.config.get('PLANTUML_URL')
 #MongoDB
-mongoClient = MongoClient("mongodb://localhost:27017/")
-dbMongo = mongoClient["WHEREAMI"]
-footprint = dbMongo["Footprint"]
-vv_P_secs = dbMongo["VV_P_SECS"]
+#mongoClient = MongoClient("mongodb://localhost:27017/")
+#dbMongo = mongoClient["WHEREAMI"]
+#footprint = dbMongo["Footprint"]
+#vv_P_secs = dbMongo["VV_P_SECS"]
 
 #scheduler = BlockingScheduler(timezone='Asia/Seoul')
 #os.environ['TZ']='Asia/Seoul'
@@ -111,5 +101,6 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 """
-
-from . import views, views_util, views_agent, views_monitor, views_com, views_api, views_git, dmlsForJeus, dmlsForWebtob, sqls_agent, sqls_mw, sqls_monitor, scheduled_jobs
+from app.views import was, agent, monitor, knowledge, api, git
+from app.sqls import was, agent, monitor, knowledge, batch
+from . import dmlsForJeus, dmlsForWebtob, jobs

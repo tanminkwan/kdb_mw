@@ -6,20 +6,21 @@ from . import appbuilder, db
 from datetime import datetime
 from sqlalchemy import select, null, text
 from sqlalchemy.dialects.postgresql import insert, JSON
-from .models import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
+from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, MwWebUri, MwWebServer
-from .sqls_mw import getLandscape
-from .sqls_batch import createDomainNameInfo, createSslInfo
+from app.sqls.was import getLandscape
+from app.sqls.batch import create_domain_name_info, create_ssl_info
 
 class WebtobHttpm(ABC):
 
-    def __init__(self, host_id, httpm, system_user="", domain_id="", agent_id=""):
+    def __init__(self, host_id, httpm, raw_data, sys_user="", domain_id="", agent_id=""):
         self.host_id   = host_id
         self.port      = 0
         self.httpm     = httpm
-        self.system_user = system_user
+        self.raw_data  = raw_data        
+        self.sys_user  = sys_user
         self.agent_id  = agent_id
-        self.landscape     = ''
+        self.landscape = ''
         self.dependent_was_id = domain_id
         self.node      = {}
         self.ssl       = []
@@ -72,8 +73,7 @@ class WebtobHttpm(ABC):
         rtn = db.session.execute(do_update_stmt)
 
         self.mw_web_id = next(rec[0] for rec in rtn)
-        print('HH self.mw_web_id :',self.mw_web_id)
-
+        
         # Upsert mw_web_server
         _, insert_array, update_array \
             = self.__getArrayDictOfWebServer()
@@ -151,6 +151,9 @@ class WebtobHttpm(ABC):
     def __getDictOfWeb(self):
 
         update_dict, port = self._getDataOfWeb()
+        update_dict.update(
+            web_text = self.raw_data
+        )
 
         insert_dict = update_dict.copy()
         insert_dict.update(
@@ -166,7 +169,6 @@ class WebtobHttpm(ABC):
         self.port = int(self.node['PORT'].split(',')[0])
 
         if self.node.get('LOGGING'):
-            #print(self.logging)
             acc_dir = next((c['FILENAME'] for c in self.logging if self.node['LOGGING']==c['NAME']), null())
         else:
             acc_dir = null()
@@ -196,8 +198,8 @@ class WebtobHttpm(ABC):
             create_on            = datetime.now()
         )
 
-        if self.system_user:
-            update_dict['system_user'] = self.system_user
+        if self.sys_user:
+            update_dict['sys_user'] = self.sys_user
 
         if self.dependent_was_id:
             update_dict['dependent_was_id'] = self.dependent_was_id
@@ -209,7 +211,7 @@ class WebtobHttpm(ABC):
     def __getTag(self):
 
         tag = 'WEB-' + self.host_id + '-' + str(self.port) + '-'\
-             + (self.system_user if self.system_user else 'NOUSERID')
+             + (self.sys_user if self.sys_user else 'NOUSERID')
         tag_id = insertResourceTag('mw_web', tag)
         return tag_id
     """
@@ -352,7 +354,6 @@ class WebtobHttpm(ABC):
         
         for vhost in self.vhosts:
 
-            #print(vhost)
             update_dict, vhost_id = self._getDataOfWebVhost(vhost)
 
             insert_dict = update_dict.copy()
@@ -449,7 +450,6 @@ class WebtobHttpm(ABC):
 
         svr_ids = [ s['NAME'] for s in self.servers if s['SVGNAME'] in svgs ]
 
-        #print('jsv ids :', svr_ids)
         vhost_id = vhost['NAME']
 
         return svr_ids, vhost_id
@@ -511,10 +511,9 @@ class WebtobHttpm(ABC):
 
     def __updateSslInfo(self):
 
-        print('HHH __updateSslInfo')
         webInfo = {'host_id':self.host_id, 'port':self.port}
 
-        createSslInfo(webInfo)
+        create_ssl_info(webInfo)
 
         return 1
 
@@ -523,7 +522,7 @@ class WebtobHttpm(ABC):
 
         webInfo = {'host_id':self.host_id, 'port':self.port}
 
-        createDomainNameInfo(webInfo)
+        create_domain_name_info(webInfo)
 
         return 1
 
@@ -654,7 +653,6 @@ def httpmToDict(content):
 
     for line in f:
         
-        print('line:',line)
         if line.strip() in ('', '\\n', '*DOMAIN', 'KDB'):
             continue
 
@@ -715,5 +713,4 @@ def httpmToDict(content):
     category_list.append(item_dict)
     all_dict.update({category:category_list})
 
-#    print(all_dict)
     return all_dict
