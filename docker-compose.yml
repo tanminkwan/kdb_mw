@@ -29,24 +29,24 @@ services:
       - /home/hennry/minio/data:/mnt/data
       - ./minio_config.env:/etc/config.env
     command: server --console-address ":9001"
-  mwm-prefect-server:
-    container_name: mwm-prefect-server
-    image: prefecthq/prefect:3-latest
-    restart: always
+#  mwm-prefect-server:
+#    container_name: mwm-prefect-server
+#    image: prefecthq/prefect:3-latest
+#    restart: always
 #    volumes:
 #      - prefect:/root/.prefect
 #    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
-    environment:
-      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://tiffanie:1q2w3e4r!!@mwm-db:5432/prefect
-      - PREFECT_API_URL=http://127.0.0.1:4200/api
-      - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_LOGGING_LEVEL=INFO
+#    environment:
+#      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://tiffanie:1q2w3e4r!!@mwm-db:5432/prefect
+#      - PREFECT_API_URL=http://127.0.0.1:4200/api
+#      - PREFECT_SERVER_API_HOST=0.0.0.0
+#      - PREFECT_LOGGING_LEVEL=INFO
 #      - PREFECT_UI_URL=http://127.0.0.1:4200/api
-    ports:
-      - 4200:4200
-    depends_on:
-      - mwm-db
-    command: prefect server start
+#    ports:
+#      - 4200:4200
+#    depends_on:
+#      - mwm-db
+#    command: prefect server start
 #    profiles: ["server"]
   mwm-app:
     container_name: mwm-app
@@ -63,13 +63,13 @@ services:
       MWM_DATABASE_URI: "postgresql://tiffanie:1q2w3e4r!!@mwm-db:5432/mw"
       REDIS_URL: redis://mwm-redis:6379/0
       AWS_URL: http://mwm-minio:9000
-      AWS_ACCESS_KEY_ID: x7QobM7I5WNI5zGWbkr4
-      AWS_SECRET_ACCESS_KEY: pdoWz2Zw0yaJw9fW32jqZigaqiyXRuYLKK9x7PzJ
-      BUCKET_NAME: mwm_contents
-      PLANTUML_URL: https://mwm-plantuml.kdb.co.kr:20443
+      AWS_ACCESS_KEY_ID: ixbjcVrcQnQPNKuW01eO
+      AWS_SECRET_ACCESS_KEY: jzXQCcfUzBAPajLSSChOgIArbGhyEUoXcG9v4DrR
+      BUCKET_NAME: mwm-contents
+#      PLANTUML_URL: https://mwm-plantuml.kdb.co.kr:20443
     links:
       - mwm-db
       - mwm-redis
       - mwm-minio
-volumes:
-  prefect:
+#volumes:
+#  prefect:
