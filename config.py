@@ -33,7 +33,7 @@ load_dotenv()
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # Your App secret key
-SECRET_KEY = os.urandom(24)
+SECRET_KEY = '\2\i\thisismysecretkey\1\2\h\h'
 
 # The SQLAlchemy connection string.
 # SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
@@ -53,7 +53,8 @@ KAFKA_CONSUMER_4_WAS_MONITORING = 'g_w_mw_server'
 redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 
 SESSION_TYPE = 'redis'
-SESSION_PERMANENT = False
+#SESSION_PERMANENT = False
+SESSION_PERMANENT = True # 서버 재기동 후에도 token 유효하도록
 SESSION_USE_SIGNER = True
 SESSION_REDIS = redis.from_url(redis_url)
 
@@ -69,8 +70,9 @@ PLANTUML_URL = os.getenv('PLANTUML_URL', 'https://mwm-plantuml.kdb.co.kr:20443')
 AWS_URL = os.getenv('AWS_URL', 'http://localhost:9000')
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', 'x7QobM7I5WNI5zGWbkr4')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', 'pdoWz2Zw0yaJw9fW32jqZigaqiyXRuYLKK9x7PzJ')
-BUCKET_NAME = os.getenv('BUCKET_NAME', 'mwm_contents')
+BUCKET_NAME = os.getenv('BUCKET_NAME', 'mwm-contents')
 
+NOTIFICATION_URL = os.getenv('NOTIFICATION_URL', 'https://mwm-monitor.kdb.co.kr:20443/notification')
 BUCKET_PREFIX = '/uploads/'
 
 # Flask-WTF flag for CSRF
@@ -80,7 +82,7 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20241230.001)"
+APP_NAME = "리발소(VER:20260212.001)"
 
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"
