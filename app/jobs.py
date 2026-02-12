@@ -19,12 +19,12 @@ def job_ag_finish_commands():
 def job_ag_extend_token_expiry():
     get_closeto_token_expiry_bysch(3)
 
-@scheduler.task('cron', id='job_ag_finish_commands', name='Remove Finished Commands', minute='*/1')
+@scheduler.task('cron', id='notify_was_abnormal_status', name='Notify WAS Abnormal Status', minute='*/1')
 def notify_was_abnormal_status():
     _, recs, _ = get_not_running_was_list()
 
     logging.info(f"was_abnormal_status 건수 : {len(recs)}")
-    [ call_notification(f" WAS_STATUS: {rec["was_instance_id"]}-상태 비정상 ({rec["was_instance_stat"]}.{rec["host_id"]})") for rec in recs]
+    [ call_notification(f" WAS_STATUS: {rec['was_instance_id']}-상태 비정상 ({rec['was_instance_stat']}.{rec['host_id']})") for rec in recs]
 
 #@scheduler.task('cron', id='job_ag_start_jobs', name='Remove Finished Commands', minute='*/1')
 @scheduler.task('date', id='job_ag_start_jobs')

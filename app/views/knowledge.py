@@ -14,7 +14,7 @@ from app.models.common import get_user, get_date, get_uuid
 from .common import FilterStartsWithFunction, FilterContainsFunction, TagType, TagMustContains\
     , ListAdvanced, ShowWithIds, get_group_str
 from app.sqls.monitor import select_row
-from app.auto_report.testSmtp import send_kdbMail
+#from app.auto_report.testSmtp import send_kdbMail
 from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
 from datetime import datetime
 
@@ -175,10 +175,10 @@ class UtHtmlContentModelView(ModelView):
             if not emails:
                 continue
 
-            send_kdbMail(con_val['KDB_SMTP_IP'],con_val['KDB_SMTP_PORT']\
-                    , 'leebalso@kdb.co.kr', g.user.username\
-                    , emails, item.content_name, item.content_html\
-                    , files, file_names=file_names)
+            #send_kdbMail(con_val['KDB_SMTP_IP'],con_val['KDB_SMTP_PORT']\
+            #        , 'leebalso@kdb.co.kr', g.user.username\
+            #        , emails, item.content_name, item.content_html\
+            #        , files, file_names=file_names)
 
             #db.session.commit()
 
