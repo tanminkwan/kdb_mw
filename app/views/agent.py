@@ -1,7 +1,8 @@
 import logging
+from io import BytesIO
 from flask import g, render_template, Flask, request, jsonify\
      , send_file, redirect, url_for, render_template_string
-from flask_appbuilder.filemanager import FileManager, get_file_original_name
+from flask_appbuilder.filemanager import FileManager, get_file_original_name, uuid_namegen
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder import BaseView, ModelView, ModelRestApi, MultipleView, MasterDetailView\
     , expose, has_access
@@ -15,6 +16,7 @@ from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgAgentGroup, AgAgent, AgResult, AgFile, AgCommandHelper, AgAutorunResult
 from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
 from app.dmlsForAgent import AutorunResult
+from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
 from .common import FilterStartsWithFunction, get_mw_user, get_userid\
     , ReadOnlyField, RequiredOnContidion, ValidateBatchFunctionName
 from app.sqls.was import getWasInstanceId, getLandscape, getDomainIdAsPK
@@ -594,10 +596,10 @@ class AgentApi(BaseApi):
         if not realname:
             return jsonify({'return_code':-1, 'message':'File not found'}), 404
 
-        fm = FileManager()
-        fullname = fm.get_path(realname)
+        fm = S3FileManager()
+        file_body = fm.get_file(realname)
 
-        return send_file(fullname, attachment_filename=file_name, as_attachment=True)
+        return send_file(BytesIO(file_body), download_name=file_name, as_attachment=True)
         
     @expose('/getRefreshToken/<agent_id>', methods=['GET'])
     @protect()

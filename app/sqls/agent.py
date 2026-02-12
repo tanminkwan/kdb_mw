@@ -452,7 +452,7 @@ def checkAgentAproved(agent_id):
 def getLatestFile(agent_type, file_name):
 
     q1 = db.session.query(func.max(AgFile.file_version))\
-                .filter(AgFile.agent_type==agent_type, AgFile.file_name==file_name)
+                .filter(AgFile.agent_type==agent_type, AgFile.file_name==file_name).scalar_subquery()
     result = db.session.query(AgFile).filter(AgFile.agent_type==agent_type, AgFile.file_name==file_name, AgFile.file_version==q1).first()
 
     return result.file if result else '' 
