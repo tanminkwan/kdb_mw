@@ -20,7 +20,7 @@ from app.sqls.monitor import select_row, getGridConfig, createWasStatusReport\
 from app.sqls.agent import get_agent_stat, getErrorResults, insertCommandMaster
 from app.sqls.was import getChangedWAS, getChangedWEB
 from wtforms import FieldList, StringField
-from app.auto_report.auto_report import run_auto_report
+#from app.auto_report.auto_report import run_auto_report
 import sys
 
 class SimpleListWidget(ListWidget):
@@ -337,7 +337,7 @@ class MonitorApi(BaseApi):
             else:
                 is_was_check = True
 
-            run_auto_report(sender, sender_name, receivers, ccs, was_check=is_was_check)
+            #run_auto_report(sender, sender_name, receivers, ccs, was_check=is_was_check)
         except Exception as e:
             excType, excValue, traceback_ = sys.exc_info()
             print(e.with_traceback(traceback_))
