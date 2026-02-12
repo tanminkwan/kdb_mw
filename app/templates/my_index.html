@@ -162,7 +162,7 @@
 
 <body>
 <!--h2><center>{{_('Welcome')}}<center></h2-->
-<h2 id="main-title"><center>리발소 늬우스<center></h2>
+<h2 id="main-title"><center>리발소 2.0 늬우스<center></h2>
 <div id="upper">
     <div class="left">
         <h3 id="sub-title">[Agent 상태]</h3>
@@ -278,7 +278,7 @@
             }
         });
     $.ajax({
-        url: "/monitor/getNotRunningWasList",
+        url: "/monitor/get_not_running_was_list",
             success: function(data){
                 //var obj = jQuery.parseJSON(data.list)
                 var obj1 = data.uncheckedWas
@@ -330,14 +330,14 @@
                     if (key==0){
                         $('#changedWASList').append("<tr><th>Domain ID</th><th>Landscape</th><th>Host ID</th><th>WAS 명</th><th>변경일시</th></tr>");
                     }
-                    $('#changedWASList').append("<tr><td><a href=\"/waschangehistorymodelview/show/"+ item.id +"\" target=\"_blank\">"+item.was_id+"</a></td><td>"+item.landscape+"</td><td>"+item.host_id+"</td><td>"+item.was_name+"</td><td>"+item.create_on+"</td></tr>");
+                    $('#changedWASList').append("<tr><td><a href=\"/diff/was/"+ item.id +"\" target=\"_blank\">"+item.was_id+"</a></td><td>"+item.landscape+"</td><td>"+item.host_id+"</td><td>"+item.was_name+"</td><td>"+item.create_on+"</td></tr>");
                 });
                 $(obj2).each(function(key, item){
                     //console.log(item.pk+" : "+item.value)
                     if (key==0){
                         $('#changedWEBList').append("<tr><th>Host ID</th><th>Port</th><th>Landscape</th><th>WEB 서버 명</th><th>변경일시</th></tr>");
                     }
-                    $('#changedWEBList').append("<tr><td><a href=\"/webchangehistorymodelview/show/"+ item.id +"\" target=\"_blank\">"+item.host_id+"</a></td><td>"+item.port+"</td><td>"+item.landscape+"</td><td>"+item.web_name+"</td><td>"+item.create_on+"</td></tr>");
+                    $('#changedWEBList').append("<tr><td><a href=\"/diff/web/"+ item.id +"\" target=\"_blank\">"+item.host_id+"</a></td><td>"+item.port+"</td><td>"+item.landscape+"</td><td>"+item.web_name+"</td><td>"+item.create_on+"</td></tr>");
                 });
             }
         });
@@ -350,7 +350,7 @@
                     if (key==0){
                         $('#recent_knowledge_list').append("<tr><th>분류</th><th>Title</th><th>작성일시</th><th>최초작성일시</th><th>작성자ID</th></tr>");
                     }
-                    $('#recent_knowledge_list').append("<tr><td>"+item.category+"</td><td><a href=\"/ut/htmlcontent/"+ item.id +"\" target=\"_blank\">"+item.content_name+"</a></td><td>"+item.update_on+"</td><td>"+item.create_on+"</td><td>"+item.user_id+"</td></tr>");
+                    $('#recent_knowledge_list').append("<tr><td>"+item.category+"</td><td><a href=\"/ut/"+item.content_type+"content/"+ item.id +"\" target=\"_blank\">"+item.content_name+"</a></td><td>"+item.update_on+"</td><td>"+item.create_on+"</td><td>"+item.user_id+"</td></tr>");
                 });
             }
         });

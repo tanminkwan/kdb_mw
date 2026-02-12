@@ -19,7 +19,7 @@ from .common import FilterStartsWithFunction, get_mw_user, get_userid\
     , ReadOnlyField, RequiredOnContidion, ValidateBatchFunctionName
 from app.sqls.was import getWasInstanceId, getLandscape, getDomainIdAsPK
 from app.sqls.agent import checkAgentUpdated, checkAgentAproved\
-    , sendCommands, addAgent, addResult, cancelCommands, createCommandDetail_bySch\
+    , sendCommands, addAgent, addResult, cancelCommands, createCommandDetail\
     , getLatestFile, updateResultStatus, updateExpiration
 from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
 from sqlalchemy import event
@@ -57,11 +57,16 @@ def job_after_update_command(mapper, connection, target):
 @db.event.listens_for(AgCommandMaster, 'after_insert')
 def create_command_detail1(mapper, connection, target):
     
-    job_ag_create_job(target)
+    logging.debug(f"after_insert create_command_detail1 called : {target}")
+    if target.periodic_type.name in ('PERIODIC','ONETIME'):
+        job_ag_create_job(target)
+    else:
+        createCommandDetail(target)
 
 @db.event.listens_for(AgCommandMaster, 'before_insert')
 def set_interval_type(mapper, connection, target):
     
+    logging.debug(f"before_insert set_interval_type called : {target}")
     if target.periodic_type.name != 'PERIODIC':
         target.interval_type = None
 
@@ -422,7 +427,9 @@ class CommandApi(BaseApi):
     @expose('/<agent_id>/<agent_version>', methods=['GET'])
     @protect()
     def command(self, agent_id, agent_version):
-        
+
+        logging.debug(f"command is called. agent_id / agent_version : {agent_id} / {agent_version}")
+
         rtn , msg = checkAgentAproved(agent_id)
         if rtn < 0:
             return jsonify({'return_code':rtn, 'message':msg}), 201
@@ -458,7 +465,9 @@ class CommandApi(BaseApi):
     @expose('/<agent_id>/<agent_version>/<agent_type>/<agent_status>', methods=['GET'])
     @protect()
     def command_v4(self, agent_id, agent_version, agent_type, agent_status):
-        
+
+        logging.debug(f"command_v4 is called. agent_id : {agent_id}")
+
         rtn , msg = checkAgentAproved(agent_id)
         if rtn < 0:
             return jsonify({'return_code':rtn, 'message':msg}), 201
@@ -478,12 +487,16 @@ class CommandApi(BaseApi):
 
         db.session.commit()
 
+        logging.debug(f"command_v4 returned data : {data}")
+
         return jsonify({'return_code':rtn, 'message':'OK', 'data':data}), 200
 
     @expose('/<agent_id>', methods=['GET'])
     @protect()
     def command_v3(self, agent_id):
-        
+
+        logging.debug(f"command_v3 is called. agent_id : {agent_id}")
+
         rtn , msg = checkAgentAproved(agent_id)
         if rtn < 0:
             return jsonify({'return_code':rtn, 'message':msg}), 201
@@ -591,7 +604,6 @@ class AgentApi(BaseApi):
     def getRefreshToken(self, agent_id):
 
         refresh_token = create_refresh_token(g.user.id , expires_delta=timedelta(days=15))
-        print('Hennry refresh token : ', refresh_token)
         expiration_date = datetime.now() + timedelta(days=15)
         rtn , msg = updateExpiration(agent_id, expiration_date, refresh_token)
         if rtn < 0:

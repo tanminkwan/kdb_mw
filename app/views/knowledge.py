@@ -5,8 +5,8 @@ from flask_appbuilder import ModelView, expose, has_access
 from flask_appbuilder.actions import action
 from flask_appbuilder.api import BaseApi, expose, protect
 from flask_appbuilder.filemanager import get_file_original_name, FileManager
-from wtforms import TextAreaField
-from flask_appbuilder.fieldwidgets import BS3TextAreaFieldWidget
+from wtforms import TextAreaField, DateTimeField
+from flask_appbuilder.fieldwidgets import DateTimePickerWidget
 from app import app, db, appbuilder, con_val, PLANTUML_URL
 from app.models.knowledge import UtTag, UtTagKm, UtFile, UtResource, UtResourceAddedText, UtHtmlContent\
     , UtMdContent
@@ -16,10 +16,19 @@ from .common import FilterStartsWithFunction, FilterContainsFunction, TagType, T
 from app.sqls.monitor import select_row
 from app.auto_report.testSmtp import send_kdbMail
 from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
+from datetime import datetime
 
 @db.event.listens_for(UtFile, 'before_insert')
 def set_file_name(mapper, connection, target):
     target.file_name = get_file_original_name(str(target.file))    
+
+@db.event.listens_for(UtMdContent, 'before_update')
+def update_md_content_update(mapper, connection, target):
+    target.update_on = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+@db.event.listens_for(UtHtmlContent, 'before_update')
+def update_html_content_update(mapper, connection, target):
+    target.update_on = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 class UtTagModelView(ModelView):
 
@@ -95,7 +104,7 @@ class UtHtmlContentModelView(ModelView):
     list_columns = ['show_html','ut_tag','content_name','update_on','create_on','pop_html']
     label_columns = {'show_html':'조회','update_on':'최종수정일시','create_on':'최초생성일시'}
 
-    edit_exclude_columns = ['user_id','group_id', 'create_on']
+    edit_exclude_columns = ['user_id','group_id', 'create_on','update_on']
     add_exclude_columns = ['user_id','group_id', 'create_on','update_on']
 
     base_permissions = ['can_list', 'can_add', 'can_edit', 'can_delete']
@@ -186,8 +195,8 @@ class UtMdContentModelView(ModelView):
     list_widget   = ListAdvanced
 
     list_title   = "지식정보(Markdown 형식)"
-    list_columns = ['show_md','ut_tag','content_name','update_on','create_on','download']
-    label_columns = {'show_md':'조회','update_on':'최종수정일시','create_on':'최초생성일시'}
+    list_columns = ['show_md','ut_tag','content_name','update_on', 'user_id', 'create_on','download']
+    label_columns = {'show_md':'조회','update_on':'최종수정일시', 'user_id':'작성자 ID', 'create_on':'최초생성일시'}
 
     edit_exclude_columns = ['user_id', 'create_on']
     add_exclude_columns = ['user_id', 'create_on','update_on']
@@ -197,6 +206,10 @@ class UtMdContentModelView(ModelView):
     base_order = ('create_on', 'desc')
 
     base_filters = [['group_id', FilterContainsFunction, get_group_str]]
+
+    edit_form_extra_fields = {
+        'update_on': DateTimeField('수정 일시', widget=DateTimePickerWidget())
+    }
 
     extra_args = {
         'summer_column':'content_md',

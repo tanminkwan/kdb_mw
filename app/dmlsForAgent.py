@@ -54,8 +54,14 @@ class AutorunResult:
         if not autorunFunc:
             return 0, 'No Autorun'
 
+        func = None
+
         try:
             func = getattr(self, autorunFunc)
+        except AttributeError as e:
+            return -1, autorunFunc + ': Not Exists'
+
+        try:
 
             if autorunParam:
                 rtn, msg = func(autorunParam, self.result.command_id)
@@ -64,11 +70,11 @@ class AutorunResult:
 
             code = 'COMPLITED' if rtn > 0 else 'NOCHANGE' if rtn==0 else 'ERROR'
             self.updateResultStatus(code, msg)
-        except AttributeError as e:
-            return -1, autorunFunc + ': Not Exists'
+
         except Exception as e:
             db.session.rollback()
             excType, excValue, traceback = sys.exc_info()
+            logging.error(f'AutorunResult.callAutorunFunc Error : autorunFunc: {autorunFunc} autorunParam: {autorunParam} command_id: {self.result.command_id}')
             logging.error(f'AutorunResult.callAutorunFunc Error : 1{excType} 2{excValue} 3{traceback}')
             self.updateResultStatus('ERROR', str(excValue))
 
@@ -118,7 +124,7 @@ class AutorunResult:
     @classmethod
     def update_domain(cls, domain_info):
 
-        doc        = xmltodict.parse(domain_info.content)
+        doc        = xmltodict.parse(domain_info['content'])
         json_type  = json.dumps(doc)
         dict2_type = json.loads(json_type)
         
@@ -127,7 +133,7 @@ class AutorunResult:
         if not domain:
             return -1, 'domain item doesn\'t exist'
 
-        rec, _ = select_row('mw_was',{'was_id':domain_info.domain_id})
+        rec, _ = select_row('mw_was',{'was_id':domain_info['domain_id']})
         
         if rec and rec.was_object:
 
@@ -149,12 +155,12 @@ class AutorunResult:
         fac = JeusDomainFactory()
         
         param = dict(
-            domain_id = domain_info.domain_id,
-            host_id   = domain_info.host_id,
+            domain_id = domain_info['domain_id'],
+            host_id   = domain_info['host_id'],
             domain    = domain,
-            raw_data  = domain_info.content,
-            sys_user  = domain_info.sys_user,
-            agent_id  = domain_info.agent_id,
+            raw_data  = domain_info['content'],
+            sys_user  = domain_info['sys_user'],
+            agent_id  = domain_info['agent_id'],
         )
 
         if dict2_type.get('domain'):
@@ -239,35 +245,8 @@ class AutorunResult:
     def updateConnectSSLByAPI(self):
 
         result = self.result
-
         result_text   = result.result_text
         result_dict = json.loads(result_text)
-        certi = next( r for r in result_dict['certs'] if r['index']=="1")
-
-        notbefore, notafter = self._getSslDatetime(certi)
-
-        update_dict = dict(
-            notbefore = notbefore
-           ,notafter  = notafter
-           ,subject   = certi['subject']
-           ,serial    = certi['serial']
-           ,issuer    = certi['issuer']
-           ,update_dt = datetime.now()
-            )
-
-        certi_ca = next(( r for r in result_dict['certs'] if r['index']=="2"), None )
-
-        if certi_ca:
-            notbefore_ca, notafter_ca = self._getSslDatetime(certi_ca)
-            update_dict.update(
-                dict(
-                    notbefore_ca = notbefore_ca
-                   ,notafter_ca  = notafter_ca
-                   ,subject_ca   = certi_ca['subject']
-                   ,serial_ca    = certi_ca['serial']
-                   ,issuer_ca    = certi_ca['issuer']
-                )
-            )
 
         host_id   = result.host_id.lower()
         domain, port = result_dict['domain'].split(':', 1)
@@ -277,6 +256,55 @@ class AutorunResult:
            ,domain_name = domain
            ,port        = port
         )
+
+        update_dict = dict(
+            update_dt = datetime.now()
+            )
+
+        if result_dict['certs']:
+
+            certi = next( r for r in result_dict['certs'] if r['index']=="1")
+
+            notbefore, notafter = self._getSslDatetime(certi)
+
+            update_dict.update(
+                dict(
+                notbefore = notbefore
+            ,notafter  = notafter
+            ,subject   = certi['subject']
+            ,serial    = certi['serial']
+            ,issuer    = certi['issuer']
+                )
+            )
+
+            certi_ca = next(( r for r in result_dict['certs'] if r['index']=="2"), None )
+
+            if certi_ca:
+                notbefore_ca, notafter_ca = self._getSslDatetime(certi_ca)
+                update_dict.update(
+                    dict(
+                     notbefore_ca = notbefore_ca
+                    ,notafter_ca  = notafter_ca
+                    ,subject_ca   = certi_ca['subject']
+                    ,serial_ca    = certi_ca['serial']
+                    ,issuer_ca    = certi_ca['issuer']
+                    )
+                )
+        else:
+            update_dict.update(
+                dict(
+                    notbefore = None,
+                    notafter  = None,
+                    subject   = "No Valid Certificate.",
+                    serial    = None,
+                    issuer    = None,
+                    notbefore_ca = None,
+                    notafter_ca  = None,
+                    subject_ca   = None,
+                    serial_ca    = None,
+                    issuer_ca    = None
+                )
+            )
 
         return update_rows('mw_web_domain', update_dict, filter_dict)
 
@@ -513,7 +541,7 @@ class AutorunResult:
         domain.update(name=was_instance_id)
         
         fac = JeusDomainFactory()
-        jeusDomain = OldJeusDomain(domain_id, host_id, domain)
+        jeusDomain = OldJeusDomain(domain_id, host_id, domain, doc)
         rtn , _ = fac.jeus_web_connection(jeusDomain)
         
         return rtn, ''
