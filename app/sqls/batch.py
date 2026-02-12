@@ -9,7 +9,7 @@ from .agent import finish_commands, getAgent
 from .monitor import update_rows, insert_row, select_rows, select_row, get_was_status_template, \
     get_not_running_was_list
 from sqlalchemy.dialects.postgresql import insert
-from app.auto_report.auto_report import run_auto_report
+#from app.auto_report.auto_report import run_auto_report
 from datetime import datetime, timedelta
 #from app.kafka_customer import Consumer4Kafka
 from datetime import datetime
@@ -136,7 +136,7 @@ def notify_was_abnormal_status():
     _, recs, _ = get_not_running_was_list()
 
     logging.info(f"was_abnormal_status 건수 : {len(recs)}")
-    [ call_notification(f"WAS_STATUS:{rec["was_instance_id"]}-상태 비정상({rec["was_instance_stat"]}.{rec["host_id"]})") for rec in recs]
+    [ call_notification(f"WAS_STATUS:{rec['was_instance_id']}-상태 비정상({rec['was_instance_stat']}.{rec['host_id']})") for rec in recs]
 
 @batch_function
 def stopUpdateWasStatus():
@@ -219,7 +219,7 @@ def sendDailyReport(additional_param):
     elif weekDay == 6:
         daygap+=1
 
-    run_auto_report(sender, sender_name, receivers, ccs, daygap)
+    #run_auto_report(sender, sender_name, receivers, ccs, daygap)
 
 @batch_function
 def updateAgentIdInfoInWeb():
