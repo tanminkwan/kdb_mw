@@ -228,7 +228,11 @@ class JeusDomain(ABC):
                 db_property += prop['name'] + ':' + prop['value']+ ','
 
         #db property parsing
-        if db_property and ds.get('server-name')==None:
+        if db_property and any(x is None for x in 
+                               [ds.get('server-name'),
+                                ds.get('port-number'), 
+                                ds.get('database-name')]):
+
             db_server_name, db_server_port, db_dbms_id = self._getDBparams(db_property)
         else:
             db_server_name        = ds['server-name'] \
@@ -425,7 +429,7 @@ class JeusDomain(ABC):
         hosts = []   
         for i in range(1, len(tmp)):
 	        hosts.append(tmp[i][:tmp[i].find(')')])
-	
+
         db_server_name = ','.join(hosts)
 
         #Get PORT values
@@ -571,7 +575,8 @@ class NewJeusDomain(JeusDomain):
     def _getDataOfWas(self, domain):
 
         dict_ = dict(
-                adminserver_name = domain['admin-server-name'],
+                adminserver_name = domain['admin-server-name'] if domain.get('admin-server-name') \
+                                    else domain['master-server-name'],
                 log_home         = domain['domain-log-home'] \
                                     if domain.get('domain-log-home') else null(),
                 located_host_id  = self.host_id,
@@ -626,9 +631,11 @@ class NewJeusDomain(JeusDomain):
 
         was_instance_id = server['name']
 
+        node_name = server['node-name'].lower() if server.get('node-name') else self.host_id
+
         update_dict = dict(
                 was_instance_port = was_instance_port,
-                host_id           = server['node-name'].lower(),
+                host_id           = node_name ,
                 min_heap_size     = min_heap_size,
                 max_heap_size     = max_heap_size,
                 jvm_option        = jvm_option,

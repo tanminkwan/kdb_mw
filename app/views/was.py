@@ -20,16 +20,14 @@ from app.sqls.agent import createConnectSSL, createFileSSL, insertCommandMaster,
 from app.sqls.batch import create_domain_name_info, create_ssl_info
 from app.sqls.monitor import select_row, select_item, select_items
 from app.dmlsForAgent import AutorunResult
-from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
-from .common import FilterStartsWithFunction, get_mw_user, get_userid, ShowWithIds, ListAdvanced
+from .common import FilterStartsWithFunction, FilterNotNull, \
+    get_mw_user, get_userid, ShowWithIds, ListAdvanced
 
 import json
-import xmltodict
-from deepdiff import DeepDiff
 # Excel
 import pandas as pd
 from io import BytesIO
-import xlsxwriter
+from datetime import datetime, timedelta
 
 # Chart
 #import io
@@ -463,7 +461,7 @@ class WebLicenseView(ModelView):
                         ,'license_due_date': lambda x:x.strftime('%Y-%m-%d') if x else ''}
 
     base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
-    base_order = ('host_id', 'asc')    
+    base_order = ('host_id', 'asc')
     base_permissions = ['can_list','can_show']
 
     @action("call_file_webtob_license","Update Webtob License","","fa-rocket",single=False)
@@ -555,7 +553,7 @@ class WebSslModelView(ModelView):
                     ,'update_dt':'확인일시'
                     }
     search_columns = ['host_id', 'notafter', 'update_dt', 'ssl_certi']
-                    
+    formatters_columns={'update_dt': lambda x:x.strftime('%Y.%m.%d %H:%M')}         
     base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
 
     extra_args = {
@@ -585,6 +583,12 @@ class WebDomainModelView(ModelView):
 
     datamodel = SQLAInterface(MwWebDomain)
 
+    def almost_expired():
+        now = datetime.now()
+        plus_15 = now + timedelta(days=30)
+        filter_str = f'_flt_1_notafter={now.strftime("%m/%d/%Y")}&_flt_2_notafter={plus_15.strftime("%m/%d/%Y")}'
+        return filter_str
+    
     list_template = 'listWithJson.html'
     list_widget   = ListAdvanced
 
@@ -603,13 +607,23 @@ class WebDomainModelView(ModelView):
                     }
     search_columns = ['host_id', 'ssl_yn', 'domain_name','notafter'\
                     , 'update_dt', 'ssl_certi']
-                    
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
-
+    formatters_columns={'update_dt': lambda x:x.strftime('%Y.%m.%d %H:%M') if x is not None else ""}             
+    base_filters = [
+        ['user_id', FilterStartsWithFunction, get_mw_user] ,
+    ]
+    
+    search_form_query_rel_fields = {
+        'notafter':[['Not Null',FilterNotNull,'a']] ,
+    }
+    
     extra_args = {
         'inputList':[
          {'text':'HOSTNAME','id':'host-name','combind':'0','condition':'_flt_2_host_id=','size':20}
-        ]
+        ],
+        'buttonList':[
+         {'text':'SSL만 조회','id':'toggle_bt1','bt_group':'1','onclick':'_flt_0_ssl_yn=YES'},
+         {'text':'SSL만료 임박','id':'toggle_bt2','bt_group':'1','onclick':almost_expired()}
+        ],
         }
 
     @action("call_connect_ssl","Call Connect SSL","","fa-rocket",single=False)
@@ -951,15 +965,18 @@ class ServerModelView(ModelView):
                     ,'mw_was_instance':'WAS'
                     ,'web_yn':'WEB Y/N'
                     ,'was_yn':'WAS Y/N'
+                    ,'ut_tag':'업무 도메인'
+                    ,'ut_tag_itdep':'업무부서'
+                    ,'ut_tag_bizdep':'IT부서'
                      }
 
     edit_columns = ['host_id', 'server_name', 'landscape', 'os_type'\
                     , 'encoding', 'ip_address', 'vip_address', 'jdk_version'\
-                    ,'running_type', 'primary_host_id']
+                    ,'running_type', 'primary_host_id', 'ut_tag', 'ut_tag_itdep', 'ut_tag_bizdep']
 
     add_columns = ['host_id', 'server_name', 'landscape', 'os_type'\
                     , 'encoding', 'ip_address', 'vip_address', 'jdk_version'\
-                    ,'running_type', 'primary_host_id']
+                    ,'running_type', 'primary_host_id', 'ut_tag', 'ut_tag_itdep', 'ut_tag_bizdep']
 
     search_columns = ['host_id', 'ip_address', 'vip_address', 'landscape', 'running_type']
 
@@ -1157,7 +1174,7 @@ class JsonView(BaseView):
         html, _ = select_item(table_name, column_name, {'id':key})
         title, _ = select_item(table_name, tcolumn_name, {'id':key})
 
-        return jsonify({'html':html, 'title':title})
+        return jsonify({'html':html[0], 'title':title[0]})
 
     @expose('/jsonviewer/<category>/<key>', methods=['GET'])
     @has_access
@@ -1169,7 +1186,7 @@ class JsonView(BaseView):
             host_id, port = key.split('__')
             item, _ = select_item('mw_web', 'httpm_object', {'host_id':host_id,'port':port})
 
-        return jsonify({'json':item})
+        return jsonify({'json':item[0]})
 
     @expose('/relationship/<category>/<key>', methods=['GET'])
     @has_access

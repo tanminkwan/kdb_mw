@@ -4,6 +4,7 @@ from flask import g
 from sqlalchemy.sql import select, update, func
 from sqlalchemy import null, text, or_, not_, case
 from datetime import datetime, timedelta
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import insert, JSON
 from app.models.common import get_uuid
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
@@ -41,6 +42,8 @@ def getResult(id):
 
 def getAutorunFunc(command_id, target_file_name):
 
+    logging.debug(f"getAutorunFunc is called. command_id : {command_id} target_file_name : {target_file_name}")
+
     if command_id:
 
         result = db.session.query(AgAutorunResult)\
@@ -48,7 +51,7 @@ def getAutorunFunc(command_id, target_file_name):
                 ,AgAutorunResult.autorun_type=='COMMAND').first()
 
         if result:
-            return result.autorun_func.name, result.autorun_param
+            return result.autorun_func, result.autorun_param
 
     if target_file_name:
 
@@ -57,7 +60,7 @@ def getAutorunFunc(command_id, target_file_name):
                 ,AgAutorunResult.autorun_type=='FILENAME').first()
 
         if result:
-            return result.autorun_func.name, result.autorun_param
+            return result.autorun_func, result.autorun_param
 
     return None, None
 
@@ -188,13 +191,18 @@ def finish_commands_by_scheduler():
 
     db.session.commit()
 
-def createCommandDetail(command_id):
+def createCommandDetail(command):
 
-    logging.debug(f'Hennry createCommandDetail {command_id}')
+    logging.debug(f'Hennry createCommandDetail {command}')
 
-    command_rec = db.session.query(AgCommandMaster)\
-                .filter(AgCommandMaster.command_id==command_id).first()
+    if isinstance(command, str):
+
+        command_rec = db.session.query(AgCommandMaster)\
+                    .filter(AgCommandMaster.command_id==command).first()
+    else:
   
+        command_rec = command
+        
     command_type_rec = db.session.query(AgCommandType)\
                 .filter(AgCommandType.command_type_id==command_rec.command_type_id).first()
 
@@ -503,6 +511,8 @@ def getResultHash(agent_id, command_id, repetition_seq):
 
 def sendCommands(agent_id, agent_version='', agent_type=''):
 
+    logging.debug(f"sendCommands is called. agent_id : {agent_id} {agent_version} {agent_type}")
+
     data = []
     command_detail_recs = db.session.query(AgCommandDetail)\
                     .filter(AgCommandDetail.agent_id==agent_id, AgCommandDetail.command_status=='CREATE').all()
@@ -522,6 +532,8 @@ def sendCommands(agent_id, agent_version='', agent_type=''):
                     target_object     = r.ag_command_master.target_object,
                     result_hash       = result_hash
                 ))
+        
+    logging.debug(f"sendCommands -> data : {data}")
 
     db.session.query(AgCommandDetail)\
                     .filter(AgCommandDetail.agent_id==agent_id, AgCommandDetail.command_status=='CREATE')\
@@ -677,7 +689,7 @@ def updateWasStatus(key_value2, result_text, host_id_of_agent):
     domain_id = getDomainIdAsPK(host_id, real_domain_id)
 
     #print('host_id, real_domain_id, domain_id of getDomainIdAsPK: ',host_id, real_domain_id, domain_id)
-    was_rec, _ = ('mw_was', {'was_id':domain_id})
+    was_rec, _ = select_row('mw_was', {'was_id':domain_id})
 
     if was_rec and was_rec.landscape:
         landscape = was_rec.landscape.name

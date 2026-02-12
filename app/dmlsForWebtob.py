@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
-import io
+import logging
 import re
 from flask import g
 from . import appbuilder, db
 from datetime import datetime
-from sqlalchemy import select, null, text
-from sqlalchemy.dialects.postgresql import insert, JSON
+from sqlalchemy import select, delete, null, text, tuple_
+from sqlalchemy.dialects.postgresql import insert
 from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, MwWebUri, MwWebServer
 from app.sqls.was import getLandscape
@@ -117,14 +117,25 @@ class WebtobHttpm(ABC):
         _, insert_array, update_array \
             = self.__getArrayDictOfWebVhost()
 
+        vhost_id_list = []
+
         for insert_dict, update_dict in zip(insert_array, update_array):
 
-            stmt = insert(MwWebVhost).values(insert_dict)    
+            vhost_id_list.append(insert_dict['vhost_id'])
+
+            stmt = insert(MwWebVhost).values(insert_dict)
             do_update_stmt = stmt.on_conflict_do_update(
                 index_elements=['mw_web_id', 'vhost_id'],
                 set_=update_dict
-            )
+            )            
             db.session.execute(do_update_stmt)
+
+        delete_stmt = delete(MwWebVhost).where(
+                (MwWebVhost.mw_web_id==self.mw_web_id) ,
+                ~MwWebVhost.vhost_id.in_(vhost_id_list)
+        )
+        logging.info(f"Hennry MwWebVhost delete_stmt : {delete_stmt}")
+        db.session.execute(delete_stmt)
 
         # insert/delete assoc_webserver_vhost
         self.__updateWebserver_Vhost()
@@ -392,7 +403,14 @@ class WebtobHttpm(ABC):
             urlrewrite_config = null()
 
         if vhost.get('LOGGING'):
-            acc_dir = next( c['FILENAME'] for c in self.logging if vhost['LOGGING']==c['NAME'])
+            # Logging 이 두개 이상일 경우
+            if isinstance(vhost['LOGGING'], list):
+                tmp = []
+                for logging in vhost['LOGGING']:
+                    tmp.append(next( c['FILENAME'] for c in self.logging if logging==c['NAME']))
+                acc_dir = ','.join(tmp)
+            else:
+                acc_dir = next( c['FILENAME'] for c in self.logging if vhost['LOGGING']==c['NAME'])
         else:
             acc_dir = null()
 
@@ -463,6 +481,21 @@ class WebtobHttpm(ABC):
                 svr_ids = [s['NAME'] for s in self.servers if s.get('SVGNAME') and s['SVGNAME'] == uri['LBSVGNAME']]
             elif uri.get('SVRNAME'):
                 svr_ids = [uri['SVRNAME']]
+            elif uri.get('VHOSTNAME'):
+
+                vhosts = uri['VHOSTNAME']
+                logging.info(f"__updateWeburi_Webserver uri vhosts : {uri['NAME']} {vhosts}")
+
+                for v in vhosts:
+                    svgs = []
+                    [ svgs.append(g['NAME']) for g in self.server_groups\
+                        if g.get('VHOSTNAME') and v in g['VHOSTNAME']]
+                    
+                    if svgs:
+                        svr_ids += [ s['NAME'] for s in self.servers if s['SVGNAME'] in svgs ]
+                svr_ids = list(set(svr_ids))
+                logging.info(f"__updateWeburi_Webserver svr_ids : {svr_ids}")
+
             else:
                 continue
 
@@ -701,7 +734,7 @@ def httpmToDict(content):
             value_l = value.split(',')
             value_l = [ v.strip() for v in value_l]
             item_u = lld[0].upper().strip()
-            if item_u in ['VHOSTNAME','HOSTNAME','HOSTALIAS']:
+            if item_u in ['VHOSTNAME','HOSTNAME','HOSTALIAS','LOGGING']:
                 dic.update({item_u:value_l})
             else:
                 dic.update({item_u:value})

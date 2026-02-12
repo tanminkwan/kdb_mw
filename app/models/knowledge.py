@@ -253,8 +253,8 @@ class UtMdContent(Model):
     search_tags     = Column(String(500), comment='SEARCH TAGS')    
     user_id         = Column(String(50), default=get_user, nullable=False)
     group_id        = Column(String(50), default=get_group)
-    update_on       = Column(DateTime(), default=get_date, nullable=False)    
-    create_on       = Column(DateTime(), default=get_date, nullable=False)    
+    update_on       = Column(DateTime, default=get_date, nullable=False)    
+    create_on       = Column(DateTime, default=get_date, nullable=False)    
 
     UniqueConstraint(content_id)
 
