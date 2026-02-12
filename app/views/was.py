@@ -850,7 +850,7 @@ class WebModelView(ModelView):
         df.to_excel(writer, 'data', index=False)
         writer.save()
         output.seek(0)
-        return send_file(output, attachment_filename='mw_web.xlsx', as_attachment=True)
+        return send_file(output, download_name='mw_web.xlsx', as_attachment=True)
 
     @action("create_domain","Create Domain Info","","fa-rocket",single=False)
     def createDomainNameInfo(self, items):
@@ -996,7 +996,7 @@ class ServerModelView(ModelView):
         df.to_excel(writer, 'data', index=False)
         writer.save()
         output.seek(0)
-        return send_file(output, attachment_filename='mw_server.xlsx', as_attachment=True)
+        return send_file(output, download_name='mw_server.xlsx', as_attachment=True)
 
 class MasterDetailViews(MasterDetailView):
     datamodel = SQLAInterface(MwWas)
