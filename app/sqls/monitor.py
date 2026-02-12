@@ -1,10 +1,8 @@
-from app import appbuilder, db
+from app import db
 from flask import g, current_app
-from flask_appbuilder import Model
 from sqlalchemy.sql import update, func, sqltypes
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import null, text, or_, not_, select
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta
 from sqlalchemy.dialects.postgresql import insert, JSON
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import aliased
@@ -12,11 +10,11 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute, ScalarAttributeImpl
 from app.models.agent import AgResult
 from app.models.monitor import MoWasInstanceStatus, MoWasStatusTemplate, MoWasStatusReport\
     , MoGridConfig
-import json
-import enum
+import re
+from croniter import croniter
 import types
 from sys import exc_info
-from flask_jwt_extended import create_refresh_token
+import logging
 
 table_dict = {table.__tablename__: table for table in db.Model.__subclasses__()}
 table_args = {table.__tablename__: table.t__table_comment if hasattr(table, 't__table_comment') else {} for table in db.Model.__subclasses__()}
@@ -362,7 +360,42 @@ def get_was_status_template():
 
     return result, groups
 
-def getNotRunningWasList():
+def _is_now_in_any_cron_range(cron_range_exprs, now=None):
+    """
+    여러 크론+범위 표현식을 확인해서 하나라도 현재 시간과 일치하면 True 반환
+    """
+    if not cron_range_exprs:
+        return False
+    
+    def parse_cron_range_list(expr_list_str):
+        """
+		문자열을 개별 cron+range 표현식 리스트로 파싱
+		"""
+		# 쉼표나 줄바꿈을 기준으로 나눔
+        lines = re.split(r'[,\n]+', expr_list_str)
+        return [line.strip() for line in lines if line.strip()]
+	
+    now = now or datetime.now()
+    entries = parse_cron_range_list(cron_range_exprs)
+
+    for entry in entries:
+        logging.debug(f"cron expression entry : {entry}")
+        match = re.match(r'^(.+):\s*(\d+)$', entry)
+        if not match:
+            raise ValueError(f"잘못된 형식: {entry} (예: '0 9 * * 1-5:30')")
+        
+        cron_expr, duration_minutes = match.group(1), int(match.group(2))
+
+        iter = croniter(cron_expr, now)
+        start_time = iter.get_prev(datetime)
+        end_time = start_time + timedelta(minutes=duration_minutes)
+
+        if start_time <= now < end_time:
+            return True  # 현재 시간이 포함되는 범위 발견
+
+    return False
+
+def get_not_running_was_list():
 
     uncheckedDomains = set()
     results1 = []
@@ -376,6 +409,13 @@ def getNotRunningWasList():
     for wit_rec in wit_recs:
 
         dict_rec = wit_rec.__dict__
+
+        blackout_info, _ = select_item('mw_was', 'blackout_info', {'was_id':wit_rec.was_id})
+
+        is_blacked_out = _is_now_in_any_cron_range(blackout_info[0])
+
+        if is_blacked_out:
+            logging.debug(f"## was_id : {wit_rec.was_id}  blackout_info : {blackout_info} is_blacked_out : {is_blacked_out}")
 
         for i in range(1, 16):
 
@@ -393,12 +433,16 @@ def getNotRunningWasList():
                 if  wis_rec.was_instance_status.name == 'RUNNING':
                     continue
                 else:
-                    results2.append(dict(
-                        domain_id=wit_rec.was_id
-                        ,was_instance_group=wit_rec.was_instance_group
-                        ,was_instance_id=was_instance_id
-                        ,was_instance_stat=wis_rec.was_instance_status.name
-                    ))
+
+                    if not is_blacked_out:
+                        results2.append(dict(
+                            domain_id=wit_rec.was_id,
+                            was_instance_group=wit_rec.was_instance_group,
+                            was_instance_id=was_instance_id,
+                            was_instance_stat=wis_rec.was_instance_status.name,
+                            host_id=wis_rec.host_id,
+                        ))
+
                     results3.add((wit_rec.was_id,wit_rec.mw_was.agent_id))
             else:
                 uncheckedDomains.add(wit_rec.was_id)

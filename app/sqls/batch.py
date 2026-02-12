@@ -2,14 +2,16 @@ from app import appbuilder, db, KAFKA_BROKERS, KAFKA_CONSUMER_4_WAS_MONITORING\
         , kafka_producer, WAS_STATUS, consumer4WasMonitoring
 from app.models.was import MwWasWebtobConnector, MwWebServer, MwWas, MwWeb, MwWebVhost\
         , MwWebDomain, MwWebSsl
+from app.views.common import call_notification
 from .was import getWebServers
 from .knowledge import insert_tag
 from .agent import finish_commands, getAgent
-from .monitor import update_rows, insert_row, select_rows, select_row, get_was_status_template
+from .monitor import update_rows, insert_row, select_rows, select_row, get_was_status_template, \
+    get_not_running_was_list
 from sqlalchemy.dialects.postgresql import insert
 from app.auto_report.auto_report import run_auto_report
 from datetime import datetime, timedelta
-from app.kafka_customer import Consumer4Kafka
+#from app.kafka_customer import Consumer4Kafka
 from datetime import datetime
 import re, json
 import functools
@@ -128,7 +130,14 @@ def __upsertTag(tag):
 
     rtn = insert_tag(tag)
     return rtn
-           
+
+@batch_function
+def notify_was_abnormal_status():
+    _, recs, _ = get_not_running_was_list()
+
+    logging.info(f"was_abnormal_status 건수 : {len(recs)}")
+    [ call_notification(f"WAS_STATUS:{rec["was_instance_id"]}-상태 비정상({rec["was_instance_stat"]}.{rec["host_id"]})") for rec in recs]
+
 @batch_function
 def stopUpdateWasStatus():
     """Kafka  : Stop WAS Monistoring"""
@@ -157,6 +166,7 @@ def updateWasStatus():
             )
 
     # 모니터링 정보 update (on going)
+    '''
     global consumer4WasMonitoring
     #consumer4WasMonitoring = Consumer4Kafka(['10.6.16.102:9092'], 'S_PROD_JMX_RESULT_BY_SERVER', KAFKA_CONSUMER_4_WAS_MONITORING)
     consumer4WasMonitoring = Consumer4Kafka(KAFKA_BROKERS, 'S_PROD_JMX_RESULT_BY_SERVER', KAFKA_CONSUMER_4_WAS_MONITORING)
@@ -172,7 +182,7 @@ def updateWasStatus():
                 WAS_INSTANCE_GROUP = WAS_STATUS[key]['WAS_INSTANCE_GROUP']
                 ))
             WAS_STATUS[key] = val
-    
+    '''
     return 1, ''
 
 @batch_function
@@ -227,7 +237,7 @@ def updateAgentIdInfoInWeb():
             host_id = rec.host_id
            ,port    = rec.port
         )
-        updateRows('mw_web', update_dict, filter_dict)
+        update_rows('mw_web', update_dict, filter_dict)
 
     return 1, 'OK'
 
@@ -246,7 +256,7 @@ def updateAgentIdInfoInWas():
         filter_dict = dict(
             was_id     = rec.was_id
         )
-        updateRows('mw_was', update_dict, filter_dict)
+        update_rows('mw_was', update_dict, filter_dict)
 
     return 1, 'OK'
 
@@ -293,7 +303,7 @@ def updateUrlRewriteInfo():
                ,vhost_id = vh['NAME']
             )
 
-            updateRows('mw_web_vhost',update_dict, filter_dict)
+            update_rows('mw_web_vhost',update_dict, filter_dict)
 
 @batch_function
 def createDomainNameInfo(webInfo):

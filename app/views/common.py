@@ -6,6 +6,10 @@ from wtforms.validators import ValidationError, StopValidation
 import enum
 from app.sqls.monitor import getLastReportedTime, select_row
 from app.models.common import get_group
+import requests
+import json
+from app import app
+import logging
 
 def get_mw_user():
     roles = [ r.name for r in g.user.roles]
@@ -57,6 +61,34 @@ class FilterContainsFunction(BaseFilter):
     def apply(self, query, func):
         query, field = get_field_setup_query(query, self.model, self.column_name)
         return query.filter(field.contains(func()))
+
+class FilterNotNull(BaseFilter):
+    name = "Is not null and not empty"
+    arg_name = "nn"
+
+    def apply(self, query, value):
+        query, field = get_field_setup_query(query, self.model, self.column_name)
+        return query.filter(field != None)
+
+def call_notification(text):
+
+        logging.info(f"call_notification is called. msg : {text}")
+
+        headers = {'Content-Type':'application/json;charset=utf-8'}
+        data = {"msg": text}
+        url = app.config['NOTIFICATION_URL']
+
+        resp = requests.post(url, data=json.dumps(data), headers=headers, verify=False)
+
+        if resp.status_code != 200:
+            logging.error(f'notification 연계시 Error발생 : {str(resp.status_code)}')
+            return
+
+        results = resp.json()
+
+        logging.info(f'Return : {results}')
+
+        return
 
 class RequiredOnContidion(object):
 

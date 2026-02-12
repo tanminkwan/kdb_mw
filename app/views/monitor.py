@@ -15,7 +15,7 @@ from app.models.monitor import MoWasStatusTemplate, MoWasStatusReport, MoGridCon
 from .common import FilterStartsWithFunction, get_mw_user, get_userid, get_reporttime
 from datetime import datetime, timedelta
 from app.sqls.monitor import select_row, getGridConfig, createWasStatusReport\
-                    , getNotRunningWasList, get_column_type, get_target_table_name\
+                    , get_not_running_was_list, get_column_type, get_target_table_name\
                     , select_rows2
 from app.sqls.agent import get_agent_stat, getErrorResults, insertCommandMaster
 from app.sqls.was import getChangedWAS, getChangedWEB
@@ -276,7 +276,7 @@ class MonitorApi(BaseApi):
         message = '비정상인 WAS가 존재하지 않습니다.'
         trace = ''
 
-        _, _, was_l = getNotRunningWasList()
+        _, _, was_l = get_not_running_was_list()
 
         command_type_id = ''
         agent_id = ''
@@ -287,16 +287,18 @@ class MonitorApi(BaseApi):
             try:
                 # w is a tuple (was_id, agent_id)
                 for w in was_l:
+                    '''
                     if w[0] in ['PKIF_Domain','PWMM_Domain']:
                         command_type_id = 'NOAGENT.JMX.MONITOR'
                         agent_id = 'ESX05_syper_J'
                     else:
-                        rec, _ = select_row('ag_command_helper', dict(mapping_key='ASIS_JMX_PARAMS',agent_id=w[1]))
-                        if rec:
-                            command_type_id = 'ASIS.P.JMX.MONITOR'
-                        else:
-                            command_type_id = 'NEWGEN.jmx.monitor'
-                        agent_id = w[1]
+                    '''
+                    rec, _ = select_row('ag_command_helper', dict(mapping_key='ASIS_JMX_PARAMS',agent_id=w[1]))
+                    if rec:
+                        command_type_id = 'ASIS.P.JMX.MONITOR'
+                    else:
+                        command_type_id = 'NEWGEN.jmx.monitor'
+                    agent_id = w[1]
 
                     insertCommandMaster(command_type_id, [agent_id])
 
@@ -344,11 +346,11 @@ class MonitorApi(BaseApi):
 
         return jsonify({'message':message, 'trace':trace})
 
-    @expose('/getNotRunningWasList', methods=['GET'])
+    @expose('/get_not_running_was_list', methods=['GET'])
     @has_access
-    def getNotRunningWasList(self):
+    def get_not_running_was_list(self):
 
-        uncheckedWas_list, notRunningWas_list, _ = getNotRunningWasList()
+        uncheckedWas_list, notRunningWas_list, _ = get_not_running_was_list()
 
         return jsonify({'uncheckedWas':uncheckedWas_list,'notRunningWas':notRunningWas_list})
 
@@ -426,22 +428,27 @@ class MonitorApi(BaseApi):
 
         recent_knowledge_list = []
         condition = [dict(column='update_on', operator='gt', value=d3daysAgo)]
-        sort_condition = [dict(column='update_on', option='desc')]
+        #sort_condition = [dict(column='update_on', option='desc')]
         
-        recs, _ = select_rows2('ut_html_content', condition=condition, sort_condition=sort_condition)
-        
+        #recs1, _ = select_rows2('ut_html_content', condition=condition, sort_condition=sort_condition)
+        #recs2, _ = select_rows2('ut_md_content', condition=condition, sort_condition=sort_condition)
+        recs1, _ = select_rows2('ut_html_content', condition=condition)
+        recs2, _ = select_rows2('ut_md_content', condition=condition)
+        recs = (recs1 if recs1 else []) + (recs2 if recs2 else [])
+
         if recs:
             [ recent_knowledge_list.append(
                 {'id':r.id
                 ,'content_name':r.content_name
+                ,'content_type': "md" if hasattr(r, "content_md") else "html"
                 ,'user_id':r.user_id
                 ,'category':next(( t.label for t in r.ut_tag if t.tag.startswith('지식유형-')),'')
                 ,'update_on':r.update_on.strftime('%Y.%m.%d %H:%M')
                 ,'create_on':r.create_on.strftime('%Y.%m.%d %H:%M')}
                 ) for r in recs ]
 
+            recent_knowledge_list.sort(key=lambda x: x["update_on"], reverse=True)
         return jsonify({'recent_knowledge_list':recent_knowledge_list})
-
 
     @expose('/get_changed_configs', methods=['GET'])
     @has_access

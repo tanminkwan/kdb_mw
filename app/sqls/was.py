@@ -329,6 +329,8 @@ def _getWebRelationship(web_rec):
                 operators['URI_'+uri['SVRTYPE']]["properties"]["outputs"]\
                     .update({uri['NAME']+'_':{"label":'>'}})
 
+            elif uri['SVRTYPE']=='JSV':
+                ...
             if uri.get('VHOSTNAME'):
                 for vname in uri['VHOSTNAME']:
                     link_key = 'URI_'+uri['NAME']+'__'+vname

@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from flask_appbuilder.api import BaseApi, expose, safe, rison, protect
 from app.sqls.monitor import getGridConfig, select_rows2, get_model_info, get_all_tables
 from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
+from app.file_manager.s3.s3 import S3Client
 import enum
 import sys
 from datetime import datetime, time
@@ -28,7 +29,16 @@ class CommonView(BaseApi):
     def download_file(self, filename):
         file_manager = S3FileManager()
         file_data = file_manager.get_file(filename)
-        return send_file(BytesIO(file_data), download_name=filename, as_attachment=True)
+
+        real_filename = filename if "_sep_" not in filename else filename.split("_sep_", 1)[1]
+        return send_file(BytesIO(file_data), download_name=real_filename, as_attachment=True)
+
+    @expose('/get_url_to_download/<filename>', methods=['GET'])
+    @has_access
+    def get_url_to_download(self, filename):
+        file_manager = S3Client()
+        download_url = file_manager.generate_presigned_url(filename, expiration=300)
+        return {"download_url":download_url}
 
 class ModelSpecView(BaseApi):
 

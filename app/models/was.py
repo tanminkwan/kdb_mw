@@ -214,6 +214,24 @@ assoc_tag_web = Table('ut_tag_web', Model.metadata,
                                   Column('id_of_web', Integer, ForeignKey('mw_web.id', ondelete='CASCADE'))
 )    
 
+assoc_tag_server = Table('ut_tag_server', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_tag', Integer, ForeignKey('ut_tag.id', ondelete='CASCADE')),
+                                  Column('id_of_server', Integer, ForeignKey('mw_server.id', ondelete='CASCADE'))
+)    
+
+assoc_tag_server_itdep = Table('ut_tag_server_itdep', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_tag', Integer, ForeignKey('ut_tag.id', ondelete='CASCADE')),
+                                  Column('id_of_server', Integer, ForeignKey('mw_server.id', ondelete='CASCADE'))
+)    
+
+assoc_tag_server_bizdep = Table('ut_tag_server_bizdep', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_tag', Integer, ForeignKey('ut_tag.id', ondelete='CASCADE')),
+                                  Column('id_of_server', Integer, ForeignKey('mw_server.id', ondelete='CASCADE'))
+)    
+
 class MwWas(Model):
     __tablename__ = "mw_was"
     t__table_comment = {"comment":"WAS domain"}
@@ -247,6 +265,7 @@ class MwWas(Model):
     license_update_date = Column(DateTime(), comment='License 정보 갱신일시')
 
     version_info     = Column(Text, comment='Version 정보') # Version 정보
+    blackout_info     = Column(Text, comment='Blackout 정보')
 
     jeus_properties_text = Column(Text, comment='jeus properties 정보') # jeus properties 정보
     jeus_properties_update_date = Column(DateTime(), comment='jeus properties 정보 갱신일시')
@@ -324,7 +343,7 @@ class MwWas(Model):
         return rtn
 
     def link_ip_address(self):
-        ip = self.mw_server.ip_address
+        ip = self.mw_server.ip_address if self.mw_server.ip_address is not None else "Null"
         return Markup('<a href="http://'+ ip +':19736/webadmin/login" target="_blank" style="color:blue;">' + ip + '</a>')
 
     def view_domaininfo(self):
@@ -544,6 +563,15 @@ class MwWeb(Model):
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     web_text         = Column(Text, comment='WEB 정보') # http.m 정보
 
+    tmp_text1 = Column(String(500))
+    tmp_text2 = Column(String(500))
+    tmp_text3 = Column(String(500))
+    tmp_text4 = Column(String(500))
+    tmp_text5 = Column(String(500))
+    tmp_text6 = Column(String(500))
+    tmp_text7 = Column(String(500))
+    tmp_text8 = Column(String(500))
+
     #UniqueConstraint(host_id, jsv_port)
     UniqueConstraint(host_id, port)
 
@@ -582,7 +610,7 @@ class MwWeb(Model):
 
     def c_ip_address(self):
         ip = self.mw_server.ip_address
-        return Markup('<p style="color:blue;">' + ip + '</p>')
+        return Markup('<p style="color:blue;">' + ip if ip is not None else "" + '</p>')
 
     def t__domainInfo_yn(self):
 
@@ -1079,7 +1107,7 @@ class MwWebDomain(Model):
         start = subject.find('CN=')
 
         if start < 0:
-            result = ''
+            result = subject
         else:
             subject = subject.replace('/',',')
             end = subject[start:].find(',')
@@ -1152,7 +1180,7 @@ class MwServer(Model):
     jdk_version      = Column(String(20)) #JDK version (Manual)
     ip_address       = Column(String(20), comment='IP address') #IP address (Manual)
     vip_address      = Column(String(100), comment='접근 가능한 모든 IP address들') #VIP address (Manual)
-    running_type     = Column(Enum(RunEnum), info={'enum_class':RunEnum}, nullable=False) #Active/StandBy 구분 (Manual)
+    running_type     = Column(Enum(RunEnum), info={'enum_class':RunEnum}) #Active/StandBy 구분 (Manual)
     primary_host_id  = Column(String(30)) #StandBy의 경우 Primary 서버 HOST 이름 (Manual)
     dr_host_id       = Column(String(30), comment='DR HOST ID') #HOST 이름 (Manual)
     use_yn           = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("YES"), nullable=False) #사용여부 (Manual)
@@ -1166,6 +1194,10 @@ class MwServer(Model):
     
     mw_was_instance  = relationship('MwWasInstance')
     mw_web           = relationship('MwWeb')
+
+    ut_tag = relationship('UtTag', secondary=assoc_tag_server, backref='mw_server')
+    ut_tag_itdep = relationship('UtTag', secondary=assoc_tag_server_itdep, backref='mw_server_itdep')
+    ut_tag_bizdep = relationship('UtTag', secondary=assoc_tag_server_bizdep, backref='mw_server_bizdep')
 
     def __repr__(self):
         return self.host_id

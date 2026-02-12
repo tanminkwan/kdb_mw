@@ -8,6 +8,8 @@ from app.models.common import CommandClassEnum
 from app.sqls.agent import finish_commands_by_scheduler, createCommandDetail_bySch\
     , get_commands, get_closeto_token_expiry_bysch, getLastRundatetime
 from app.sqls.batch import run_batch_by_scheduler
+from app.sqls.monitor import get_not_running_was_list
+from app.views.common import call_notification
 
 @scheduler.task('cron', id='job_ag_finish_commands', name='Remove Finished Commands', minute='*/1')
 def job_ag_finish_commands():
@@ -17,6 +19,14 @@ def job_ag_finish_commands():
 def job_ag_extend_token_expiry():
     get_closeto_token_expiry_bysch(3)
 
+@scheduler.task('cron', id='job_ag_finish_commands', name='Remove Finished Commands', minute='*/1')
+def notify_was_abnormal_status():
+    _, recs, _ = get_not_running_was_list()
+
+    logging.info(f"was_abnormal_status 건수 : {len(recs)}")
+    [ call_notification(f" WAS_STATUS: {rec["was_instance_id"]}-상태 비정상 ({rec["was_instance_stat"]}.{rec["host_id"]})") for rec in recs]
+
+#@scheduler.task('cron', id='job_ag_start_jobs', name='Remove Finished Commands', minute='*/1')
 @scheduler.task('date', id='job_ag_start_jobs')
 def job_ag_start_jobs():
     logging.debug('job_ag_start_jobs is called.')
@@ -27,6 +37,8 @@ def job_ag_start_jobs():
         job_ag_create_job(cmd)
 
 def job_ag_create_job(target):
+
+    logging.debug(f"job_ag_create_job called : {target}")
 
     # The reason 5 secs are added : when job runs immediately, the transaction triggered the job may not be committed yet.
     start_date = target.time_to_exe if target.time_to_exe else datetime.now() + timedelta(seconds=10)
@@ -58,6 +70,8 @@ def job_ag_create_job(target):
 
     if target.ag_command_type.command_class == CommandClassEnum.ServerFunc:
         
+        logging.debug(f"ServerFunc called : {target.ag_command_type.command_class}")
+
         scheduler.add_job(
                   id      ='RunBatch_'+target.command_id
                 , name    = target.command_type_id
@@ -66,6 +80,9 @@ def job_ag_create_job(target):
                 , **dynamic_dict
             )
     else:
+
+        logging.debug(f"job_ag_create_job called : {target.ag_command_type.command_class}")
+
         scheduler.add_job(
                   id      ='CreDetail_'+target.command_id
                 , name    = target.command_type_id
