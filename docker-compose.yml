@@ -2,18 +2,21 @@ services:
   mwm-redis:
     container_name: mwm-redis
     image: redis:alpine
-#    ports:
-#      - "6379:6379"
+    command: redis-server --appendonly yes --appendfsync everysec
+    volumes:
+      - redis_data:/data
+  #    ports:
+  #      - "6379:6379"
   mwm-db:
     container_name: mwm-db
     image: postgres:15.2-alpine
-#    restart: no
+    #    restart: no
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD='1q2w3e4r!!'
       - PGDATA=/var/lib/postgresql/data/pgdata
-#    ports:
-#      - '5432:5432'
+    #    ports:
+    #      - '5432:5432'
     volumes:
       - /home/hennry/data1:/var/lib/postgresql/data
       - ./create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
@@ -29,29 +32,29 @@ services:
       - /home/hennry/minio/data:/mnt/data
       - ./minio_config.env:/etc/config.env
     command: server --console-address ":9001"
-#  mwm-prefect-server:
-#    container_name: mwm-prefect-server
-#    image: prefecthq/prefect:3-latest
-#    restart: always
-#    volumes:
-#      - prefect:/root/.prefect
-#    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
-#    environment:
-#      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://tiffanie:1q2w3e4r!!@mwm-db:5432/prefect
-#      - PREFECT_API_URL=http://127.0.0.1:4200/api
-#      - PREFECT_SERVER_API_HOST=0.0.0.0
-#      - PREFECT_LOGGING_LEVEL=INFO
-#      - PREFECT_UI_URL=http://127.0.0.1:4200/api
-#    ports:
-#      - 4200:4200
-#    depends_on:
-#      - mwm-db
-#    command: prefect server start
-#    profiles: ["server"]
+  #  mwm-prefect-server:
+  #    container_name: mwm-prefect-server
+  #    image: prefecthq/prefect:3-latest
+  #    restart: always
+  #    volumes:
+  #      - prefect:/root/.prefect
+  #    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
+  #    environment:
+  #      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://tiffanie:1q2w3e4r!!@mwm-db:5432/prefect
+  #      - PREFECT_API_URL=http://127.0.0.1:4200/api
+  #      - PREFECT_SERVER_API_HOST=0.0.0.0
+  #      - PREFECT_LOGGING_LEVEL=INFO
+  #      - PREFECT_UI_URL=http://127.0.0.1:4200/api
+  #    ports:
+  #      - 4200:4200
+  #    depends_on:
+  #      - mwm-db
+  #    command: prefect server start
+  #    profiles: ["server"]
   mwm-app:
     container_name: mwm-app
     image: mwm-app
-#    restart: no
+    #    restart: no
     depends_on:
       - mwm-db
       - mwm-redis
@@ -66,10 +69,11 @@ services:
       AWS_ACCESS_KEY_ID: ixbjcVrcQnQPNKuW01eO
       AWS_SECRET_ACCESS_KEY: jzXQCcfUzBAPajLSSChOgIArbGhyEUoXcG9v4DrR
       BUCKET_NAME: mwm-contents
-#      PLANTUML_URL: https://mwm-plantuml.kdb.co.kr:20443
+    #      PLANTUML_URL: https://mwm-plantuml.kdb.co.kr:20443
     links:
       - mwm-db
       - mwm-redis
       - mwm-minio
-#volumes:
-#  prefect:
+
+volumes:
+  redis_data: #  prefect:
