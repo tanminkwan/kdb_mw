@@ -729,14 +729,18 @@ class NewJeusDomain(JeusDomain):
             listener_list = tmp if isinstance(tmp, list) else [tmp]
 
             for webconn in webconn_list:
+                li = next((li for li in listener_list\
+                                     if li['name']==webconn['server-listener-ref']), None)
+                ssl_yn = 'YES' if li and li.get('ssl') else 'NO'
+
                 update_dict = dict(
-                    listen_port           = next((li['listen-port']\
-                                    for li in listener_list\
-                                     if li['name']==webconn['server-listener-ref']), -1),
+                    listen_port           = li['listen-port'] if li else -1,
                     min_thread_pool_count = webconn['thread-pool']['min']\
                                         if webconn['thread-pool'].get('min') else null(),
                     max_thread_pool_count = webconn['thread-pool']['max']\
                                         if webconn['thread-pool'].get('max') else null(),
+                    ssl_yn                = ssl_yn,
+                    domain_name           = null(),
                     httplistener_object   = webconn,
                     user_id          = g.user.username,
                     create_on        = datetime.now()
@@ -955,6 +959,7 @@ class OldJeusDomain(JeusDomain):
             listener_list = tmp if isinstance(tmp, list) else [tmp]
                     
             for webconn in listener_list:
+                ssl_yn = 'YES' if webconn.get('ssl') else 'NO'
 
                 update_dict = dict(
                     listen_port           = webconn['port'],
@@ -962,6 +967,8 @@ class OldJeusDomain(JeusDomain):
                                         if webconn['thread-pool'].get('min') else null(),
                     max_thread_pool_count = webconn['thread-pool']['max']\
                                         if webconn['thread-pool'].get('max') else null(),
+                    ssl_yn                = ssl_yn,
+                    domain_name           = null(),
                     httplistener_object   = webconn,
                     user_id          = g.user.username,
                     create_on        = datetime.now()
