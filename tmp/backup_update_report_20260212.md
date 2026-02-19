@@ -49,5 +49,48 @@
     *   **현상:** 암시적 서브쿼리 사용으로 인한 `SAWarning` 발생.
     *   **조치:** `.scalar_subquery()`를 명시적으로 사용하여 최신 SQLAlchemy 버전과의 호환성 확보.
 
+## 6. MwWasHttpListener 모델 및 로직 업데이트 (2026-02-19)
+*   **모델 및 뷰 필드 추가:**
+    *   `MwWasHttpListener` 모델에 `ssl_yn` (Enum), `domain_name` (String) 컬럼을 추가하였습니다.
+    *   `WasHttpListenerModelView`의 목록 및 상세 화면에 해당 필드를 노출하고 레이블을 지정하였습니다.
+*   **데이터 자동 수집 및 설정 로직:**
+    *   `app/dmlsForJeus.py`를 수정하여 JEUS 구성 정보 업서트 시 리스너의 `ssl` 설정 유무를 확인합니다.
+    *   지정된 리스너에 `ssl` 설정이 존재하면 `ssl_yn` 값을 `'YES'`로, 그렇지 않으면 `'NO'`로 자동 저장하도록 로직을 구현하였습니다.
+*   **필수 DB 스키마 변경 (Migration SQL):**
+    ```sql
+    -- mw_was 테이블 누락 컬럼 추가
+    ALTER TABLE mw_was ADD COLUMN blackout_info TEXT;
+
+    -- mw_was_httplistener 테이블 신규 컬럼 추가
+    ALTER TABLE mw_was_httplistener ADD COLUMN ssl_yn VARCHAR(10);
+    ALTER TABLE mw_was_httplistener ADD COLUMN domain_name VARCHAR(200);
+
+    -- mw_web 테이블 tmp_text1~8 컬럼 추가
+    ALTER TABLE mw_web ADD COLUMN tmp_text1 VARCHAR(500);
+    ALTER TABLE mw_web ADD COLUMN tmp_text2 VARCHAR(500);
+    ALTER TABLE mw_web ADD COLUMN tmp_text3 VARCHAR(500);
+    ALTER TABLE mw_web ADD COLUMN tmp_text4 VARCHAR(500);
+    ALTER TABLE mw_web ADD COLUMN tmp_text5 VARCHAR(500);
+    ALTER TABLE mw_web ADD COLUMN tmp_text6 VARCHAR(500);
+    ALTER TABLE mw_web ADD COLUMN tmp_text7 VARCHAR(500);
+    ALTER TABLE mw_web ADD COLUMN tmp_text8 VARCHAR(500);
+    ```
+*   **외래 키 제약 조건 위반 조치:**
+    *   `mw_was` 또는 `mw_web` 테이블에 데이터를 인설트할 때 `located_host_id` 또는 `host_id`가 `mw_server` 테이블에 존재해야 합니다.
+    *   `prdwaa11` 서버 정보가 없는 경우 아래와 같이 `mw_server`에 기본 정보를 먼저 등록해야 합니다.
+    ```sql
+    INSERT INTO mw_server (host_id, ip_address, os_type, landscape, use_yn, user_id, create_on)
+    VALUES ('prdwaa11', '127.0.0.1', 'LINUX', 'PRD', 'YES', 'tiffanie', NOW());
+    ```
+
+## 7. DB 데이터 확인 방법 (Docker)
+에이전트로부터 수집된 데이터가 올바르게 DB에 반영되었는지 확인하려면 아래 Docker 명령어를 사용합니다.
+
+*   **HTTP 리스너 수집 결과 확인:**
+    ```bash
+    docker exec mwm-db psql -U postgres -d mw -c "SELECT was_id, was_instance_id, webconnection_id, listen_port, ssl_yn, domain_name FROM mw_was_httplistener WHERE was_id = 'PRDW_Domain';"
+    ```
+
 ---
 **비고:** 모든 파이썬 파일에 대해 `py_compile` 검사를 완료하였으며, 현재 문법 및 주요 런타임 라이브러리 호환성 문제는 해결된 상태입니다.
+

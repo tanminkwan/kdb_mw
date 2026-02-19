@@ -106,13 +106,15 @@ class WasHttpListenerModelView(ModelView):
     datamodel = SQLAInterface(MwWasHttpListener)
 
     list_title   = "WAS Http Listener 목록"    
-    list_columns = ['was_id', 'was_instance_id', 'host_id', 'webconnection_id', 'listen_port'\
+    list_columns = ['was_id', 'was_instance_id', 'host_id', 'webconnection_id', 'listen_port', 'ssl_yn', 'domain_name'\
                     ,'min_thread_pool_count', 'max_thread_pool_count']
     label_columns = {'was_id':'WAS Domain'
                     ,'was_instance_id':'MS intance id'
                     ,'host_id':'HOST ID'
                     ,'webconnection_id':'Web Connection ID'
                     ,'listen_port':'서비스Port'
+                    ,'ssl_yn':'SSL 여부'
+                    ,'domain_name':'도메인명'
                     ,'min_thread_pool_count':'Min Thread pool 개수'
                     ,'max_thread_pool_count':'Max Thread pool 개수'}
 

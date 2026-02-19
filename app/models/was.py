@@ -362,6 +362,8 @@ class MwWasHttpListener(Model):
     was_instance_id  = Column(String(30), nullable=False, comment='WAS instance id') #MS ID
     webconnection_id = Column(String(30), nullable=False, comment='Web Connector ID') #Web Connection ID (auto)
     listen_port      = Column(Integer, nullable=False, comment='listener port') # listener port (auto)
+    ssl_yn           = Column(Enum(YnEnum), info={'enum_class':YnEnum}, comment='SSL 사용여부')
+    domain_name      = Column(String(200), comment='도메인명')
     min_thread_pool_count = Column(Integer, comment='Http Thread min 개수') #Http Thread min 개수 (auto)
     max_thread_pool_count = Column(Integer, comment='Http Thread max 개수') #Http Thread max 개수 (auto)
     httplistener_object   = Column(JSONB, comment='httplistener 정보') # httplistener 정보(auto:json)
