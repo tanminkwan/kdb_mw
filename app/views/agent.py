@@ -1,29 +1,22 @@
-import logging
-from io import BytesIO
-from flask import g, render_template, Flask, request, jsonify\
-     , send_file, redirect, url_for, render_template_string
-from flask_appbuilder.filemanager import FileManager, get_file_original_name, uuid_namegen
+from flask import g, render_template, request, jsonify\
+     , redirect, url_for
+from flask_appbuilder.filemanager import get_file_original_name
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder import BaseView, ModelView, ModelRestApi, MultipleView, MasterDetailView\
+from flask_appbuilder import BaseView, ModelView\
     , expose, has_access
 from flask_appbuilder.widgets import ListBlock
 from flask_appbuilder.actions import action
-from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, protect
-from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
-    , FilterEqualFunction, FilterNotEqual,FilterInFunction,FilterStartsWith, FilterEqual
-from app import appbuilder, db, scheduler, KAFKA_BROKERS
+from flask_appbuilder.models.sqla.filters import FilterEqual
+from app import appbuilder, db, scheduler
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgAgentGroup, AgAgent, AgResult, AgFile, AgCommandHelper, AgAutorunResult
-from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
+import logging
 from app.dmlsForAgent import AutorunResult
 from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
-from .common import FilterStartsWithFunction, get_mw_user, get_userid\
+from .common import FilterStartsWithFunction, get_mw_user\
     , ReadOnlyField, RequiredOnContidion, ValidateBatchFunctionName
-from app.sqls.was import getWasInstanceId, getLandscape, getDomainIdAsPK
-from app.sqls.agent import checkAgentUpdated, checkAgentAproved\
-    , sendCommands, addAgent, addResult, cancelCommands, createCommandDetail\
-    , getLatestFile, updateResultStatus, updateExpiration
-from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
+from app.sqls.agent import cancel_commands, create_command_detail\
+    , update_result_status
 from sqlalchemy import event
 
 from wtforms import Form, StringField
@@ -33,12 +26,8 @@ from wtforms.validators import Regexp, EqualTo
 from datetime import datetime, timedelta
 from app.jobs  import job_ag_create_job
 from flask_appbuilder.filemanager import get_file_original_name
-import apscheduler
-from flask_jwt_extended import create_refresh_token
-import sys
-from deepdiff import DeepDiff
 import json
-import xmltodict
+import apscheduler
 """
 @event.listens_for(db.session, 'after_attach')
 def test(session, instance):
@@ -49,7 +38,7 @@ def create_command_detail2(target, value, old_value, initiator):
     print("value :",value)
     print("old_value :",old_value)
     if value.name == 'IMMEDIATE' and old_value != 'IMMEDIATE':
-        createCommandDetail(connection, target)
+        create_command_detail(connection, target)
 @db.event.listens_for(AgCommandMaster, 'after_update')
 def job_after_update_command(mapper, connection, target):
     
@@ -63,7 +52,7 @@ def create_command_detail1(mapper, connection, target):
     if target.periodic_type.name in ('PERIODIC','ONETIME'):
         job_ag_create_job(target)
     else:
-        createCommandDetail(target)
+        create_command_detail(target)
 
 @db.event.listens_for(AgCommandMaster, 'before_insert')
 def set_interval_type(mapper, connection, target):
@@ -241,42 +230,42 @@ class ResultModelView(ModelView):
 
             msg = ''
             if file_name in ['domain.xml','JEUSMain.xml']:
-                rtn, msg = ar.updateJeusDomain()
+                rtn, msg = ar.update_jeus_domain()
             elif file_name == 'http.m':
                 rtn, msg = ar.update_httpm()
             elif file_name == 'WEBMain.xml':
-                rtn, msg = ar.updateWebMain()
+                rtn, msg = ar.update_web_main()
             elif file_name == 'urlrewrite_config':
-                rtn, msg = ar.updateUrlRewrite()
+                rtn, msg = ar.update_url_rewrite()
             elif file_name == 'get_server_stat':
-                rtn, msg = ar.updateWasStatus()
+                rtn, msg = ar.update_was_status()
             elif file_name == 'get_ssl_certi':
-                rtn, msg = ar.updateConnectSSLByAPI()
+                rtn, msg = ar.update_connect_ssl_by_api()
             elif file_name == 'webtob.version.sh':
-                rtn, msg = ar.updateWebtobVersion()
+                rtn, msg = ar.update_webtob_version()
             elif file_name == 'webtob.monitor.sh':
-                rtn, msg = ar.updateWebtobMonitor()
+                rtn, msg = ar.update_webtob_monitor()
             elif file_name == 'get_ssl_certifile':
-                rtn, msg = ar.update_file_SSL_byAPI()
+                rtn, msg = ar.update_file_ssl_by_api()
             elif file_name.startswith('fileSSL.out'):
-                rtn, msg = ar.updateFileSSL()
+                rtn, msg = ar.update_file_ssl()
             elif file_name.startswith('connectSSL.out'):
-                rtn, msg = ar.updateConnectSSL()
+                rtn, msg = ar.update_connect_ssl()
             elif file_name == 'webtob.license.sh' or file_name == 'webtob.license.bat' or file_name.startswith('RUN.WEBTOB.LICENSE.out'):
-                rtn, msg = ar.updateWebtobLicenseInfo()
+                rtn, msg = ar.update_webtob_license_info()
             elif file_name == 'jeus.license.sh' or file_name == 'jeus.license.bat' or file_name.startswith('RUN.JEUS.LICENSE.out'):
-                rtn, msg = ar.updateJeusLicenseInfo()
+                rtn, msg = ar.update_jeus_license_info()
             elif file_name == 'get_find_cmd.sh' or file_name == 'get_find_cmd.bat' or file_name.startswith('RUN.FIND.CMD.out'):
-                rtn, msg = ar.updateFilteredInfo()
+                rtn, msg = ar.update_filtered_info()
             elif file_name in ['jeus.properties','jeus.properties.cmd']:
-                rtn, msg = ar.updateJeusProperties()
+                rtn, msg = ar.update_jeus_properties()
             elif file_name in ['mwmanager.jar','mwmanager4j6.jar','mwmanager4j7.jar']:
                 continue
             else:
                 rtn = -1
                 msg = 'Invalid file_name :' + file_name
             
-            ar.updateResultStatus('COMPLITED' if rtn > 0 else 'NOCHANGE' if rtn==0 else 'ERROR', msg)
+            ar.update_result_status('COMPLITED' if rtn > 0 else 'NOCHANGE' if rtn==0 else 'ERROR', msg)
             
             db.session.commit()
 
@@ -386,7 +375,7 @@ class CommandMasterAliveView(ModelView):
                 print('cancel_commands : ',e)
 
         cids = [item.command_id for item in items]
-        cancelCommands(cids)
+        cancel_commands(cids)
         db.session.commit()
 
         self.update_redirect()
@@ -421,196 +410,6 @@ class AutorunResultModelView(ModelView):
                 }
 
     base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
-
-class CommandApi(BaseApi):
-
-    resource_name = 'command'
-
-    @expose('/<agent_id>/<agent_version>', methods=['GET'])
-    @protect()
-    def command(self, agent_id, agent_version):
-
-        logging.debug(f"command is called. agent_id / agent_version : {agent_id} / {agent_version}")
-
-        rtn , msg = checkAgentAproved(agent_id)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , msg = checkAgentUpdated(agent_version)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , data = sendCommands(agent_id, agent_version)
-
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'message':'OK', 'data':data}), 200
-
-    @expose('/<agent_id>/<agent_version>/<agent_type>', methods=['GET'])
-    @protect()
-    def command_v2(self, agent_id, agent_version, agent_type):
-        
-        rtn , msg = checkAgentAproved(agent_id)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , msg = checkAgentUpdated(agent_version)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , data = sendCommands(agent_id, agent_version, agent_type)
-
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'message':'OK', 'data':data}), 200
-
-    @expose('/<agent_id>/<agent_version>/<agent_type>/<agent_status>', methods=['GET'])
-    @protect()
-    def command_v4(self, agent_id, agent_version, agent_type, agent_status):
-
-        logging.debug(f"command_v4 is called. agent_id : {agent_id}")
-
-        rtn , msg = checkAgentAproved(agent_id)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , msg = checkAgentUpdated(agent_version)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , data = sendCommands(agent_id, agent_version, agent_type)
-
-        #최초 접속인 경우
-        if agent_status == 'BOOT':
-            data.append(dict(
-                        command_class     = 'BOOT',
-                        kafka_broker_address = ','.join(KAFKA_BROKERS)
-                    ))
-
-        db.session.commit()
-
-        logging.debug(f"command_v4 returned data : {data}")
-
-        return jsonify({'return_code':rtn, 'message':'OK', 'data':data}), 200
-
-    @expose('/<agent_id>', methods=['GET'])
-    @protect()
-    def command_v3(self, agent_id):
-
-        logging.debug(f"command_v3 is called. agent_id : {agent_id}")
-
-        rtn , msg = checkAgentAproved(agent_id)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , data = sendCommands(agent_id)
-
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'message':'OK', 'data':data}), 200
-
-    @expose('/result', methods=['POST'])
-    @protect()
-    def agent(self, **kwargs):
-
-        data = json.loads(request.data)
-
-        ip_address = request.remote_addr
-
-        if not data.get('agent_id'):
-            return jsonify({'return_code':-2,'message':'agent_id does not exist'}), 201
-        elif not data.get('command_id'):
-            return jsonify({'return_code':-2,'message':'command_id does not exist'}), 201
-        elif not data.get('repetition_seq'):
-            return jsonify({'return_code':-2,'message':'command_id does not exist'}), 201
-        elif not data.get('host_id'):
-            return jsonify({'return_code':-2,'message':'host_id does not exist'}), 201
-        elif data.get('result_text') == None :
-            return jsonify({'return_code':-2,'message':'result_text does not exist'}), 201
-
-        rtn , result_id = addResult(data)
-
-        db.session.commit()
-
-        #Result 상태가 'CREATE' 인 경우 Auto Run Result 수행
-        if rtn > 0:
-
-            msg = ''
-            try:
-                ar = AutorunResult(result_id=result_id)
-                rtn2, msg = ar.callAutorunFunc()
-            except Exception as e:
-                excType, excValue, traceback = sys.exc_info()
-                logging.error(f'callAutorunFunc Error : 1{excType} 2{excValue} 3{traceback}')
-                rtn2 = -1
-
-            if rtn2 > 0:
-                db.session.commit()
-            else:
-                command_id = data.get('command_id')
-                logging.error(f'callAutorunFunc [command_id:{command_id}][msg:{msg}]')
-                db.session.rollback()
-
-        return jsonify({'return_code':1, 'message':'OK'}), 200
-
-class AgentApi(BaseApi):
-
-    resource_name = 'agent'
-
-    @expose('/boot', methods=['POST'])
-    @protect()
-    def agentBoot(self, **kwargs):
-        return jsonify({'return_code':1, 'message':'OK'}), 200
-
-    @expose('/agent', methods=['POST'])
-    @protect()
-    def agent(self, **kwargs):
-
-        data = json.loads(request.data)
-
-        ip_address = request.remote_addr
-
-        if not data.get('agent_id'):
-            return jsonify({'return_code':-2,'message':'agent_id does not exist'}), 401
-        elif not data.get('host_id'):
-            return jsonify({'return_code':-2,'message':'host_id does not exist'}), 401
-        elif not data.get('agent_type'):
-            return jsonify({'return_code':-2,'message':'agent_type does not exist'}), 401
-
-        agent_id   = data['agent_id']
-        host_id    = data['host_id']
-        agent_type = data['agent_type']
-        installation_path  = data['installation_path']
-
-        rtn , msg = addAgent(agent_id, host_id, agent_type, ip_address, installation_path=installation_path)
-        
-        return jsonify({'return_code':1, 'message':'OK'}), 200
-
-    @expose('/download/<agent_type>/<file_name>', methods=['GET'])
-    @protect()
-    def download_file(self, agent_type, file_name):
-
-        #get file name from db
-        realname = getLatestFile(agent_type, file_name)
-
-        if not realname:
-            return jsonify({'return_code':-1, 'message':'File not found'}), 404
-
-        fm = S3FileManager()
-        file_body = fm.get_file(realname)
-
-        return send_file(BytesIO(file_body), download_name=file_name, as_attachment=True)
-        
-    @expose('/getRefreshToken/<agent_id>', methods=['GET'])
-    @protect()
-    def getRefreshToken(self, agent_id):
-
-        refresh_token = create_refresh_token(g.user.id , expires_delta=timedelta(days=15))
-        expiration_date = datetime.now() + timedelta(days=15)
-        rtn , msg = updateExpiration(agent_id, expiration_date, refresh_token)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg, 'refresh_token':''}), 401
-        return jsonify({'return_code':rtn, 'message':'OK', 'refresh_token':refresh_token}), 200
 
 class AjaxView(BaseView):
 
@@ -699,5 +498,3 @@ appbuilder.add_view(
     icon="fa-folder-open-o",
     category="Agent&Command"
 )
-appbuilder.add_api(CommandApi)
-appbuilder.add_api(AgentApi)

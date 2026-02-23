@@ -20,25 +20,23 @@ except Exception as e:
     exit(1)
 
 # Test Data
-xml_path = '/home/hennry/projects/kdb_mw_20260116/tmp/domain_piciaa11.xml'
+httpm_path = '/home/hennry/projects/kdb_mw_20260116/tmp/http_piciaa11.m'
 host_id = 'piciaa11'
-domain_id = 'PICI_Domain'
-system_user = 'jeus'
+system_user = 'webtob'
 
-if not os.path.exists(xml_path):
-    print(f'Error: XML file not found at {xml_path}')
+if not os.path.exists(httpm_path):
+    print(f'Error: WebToB config file not found at {httpm_path}')
     exit(1)
 
-print(f'Reading XML from {xml_path}...')
-with open(xml_path, 'r', encoding='utf-8') as fd:
+print(f'Reading WebToB config from {httpm_path}...')
+with open(httpm_path, 'r', encoding='utf-8') as fd:
     content = fd.read()
 
 # Prepare request
-api_url = url + '/api/v1/config/jeusdomain'
+api_url = url + '/api/v1/config/httpm'
 payload = dict(
     content=content,
     host_id=host_id,
-    domain_id=domain_id,
     system_user=system_user
 )
 auth_headers = {
@@ -51,7 +49,7 @@ print(f'Sending POST request to {api_url}...')
 try:
     resp = requests.post(api_url, data=json.dumps(payload), headers=auth_headers)
     print(f'Status Code: {resp.status_code}')
-    if resp.status_code == 201:
+    if resp.status_code in [200, 201]:
         print('Response Body:')
         print(json.dumps(resp.json(), indent=2, ensure_ascii=False))
     else:

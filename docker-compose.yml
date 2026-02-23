@@ -54,6 +54,9 @@ services:
   mwm-app:
     container_name: mwm-app
     image: mwm-app
+    build:
+      context: .
+      dockerfile: Dockerfile.app
     #    restart: no
     depends_on:
       - mwm-db

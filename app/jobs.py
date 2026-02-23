@@ -5,8 +5,8 @@ from sqlalchemy.sql import select, update
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgResult, AgAgentGroup, AgAgent
 from app.models.common import CommandClassEnum
-from app.sqls.agent import finish_commands_by_scheduler, createCommandDetail_bySch\
-    , get_commands, get_closeto_token_expiry_bysch, getLastRundatetime
+from app.sqls.agent import finish_commands_by_scheduler, create_command_detail_by_sch\
+    , get_commands, get_closeto_token_expiry_bysch, get_last_run_datetime
 from app.sqls.batch import run_batch_by_scheduler
 from app.sqls.monitor import get_not_running_was_list
 from app.views.common import call_notification
@@ -50,7 +50,7 @@ def job_ag_create_job(target):
     elif target.periodic_type.name == 'PERIODIC':
 
         #주기작업의 다음 실행 시각을 계산 : 마지막 수행시간 + 주기, 현재시간보다 과거인 경우 현재시간 적용
-        last_job_start_time = getLastRundatetime(target.command_id)
+        last_job_start_time = get_last_run_datetime(target.command_id)
 
         if last_job_start_time:
 
@@ -86,7 +86,7 @@ def job_ag_create_job(target):
         scheduler.add_job(
                   id      ='CreDetail_'+target.command_id
                 , name    = target.command_type_id
-                , func    = createCommandDetail_bySch
+                , func    = create_command_detail_by_sch
                 , args    = (target.command_id,)
                 , **dynamic_dict
             )

@@ -1,13 +1,15 @@
 from abc import ABC, abstractmethod
+import logging
 from flask import g
 from . import appbuilder, db
 from datetime import datetime
-from sqlalchemy import null, text
+from sqlalchemy import null, text, delete
 from sqlalchemy.dialects.postgresql import insert, JSON
 from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, DailyReport\
     , MwWebServer, MwAppMaster, MwDBMaster
-from app.sqls.was import getLandscape, getRealWebHostId
+from app.sqls.was import get_landscape
+from app.sqls.relationship import get_real_web_host_id
 from app.sqls.monitor import select_row 
 from app.sqls.knowledge import insert_tag
 
@@ -70,106 +72,123 @@ class JeusDomain(ABC):
     def upsertJeusDomain(self):
 
         # 
-        self.landscape = getLandscape(self.host_id)
+        self.landscape = get_landscape(self.host_id)
 
-        # Upsert mw_was
-        _, insert_dict, update_dict = self.__getDictOfWas(self.domain)
+        if self.landscape is None:
+            error_msg = f"Host '{self.host_id}' not found in MwServer. Please register the server first."
+            logging.error(f"Hennry upsertJeusDomain Error: {error_msg}")
+            return -10, error_msg
 
-        stmt = insert(MwWas).values(insert_dict)    
-        do_update_stmt = stmt.on_conflict_do_update(
-            index_elements=['was_id'],
-            set_=update_dict
-        )
-        db.session.execute(do_update_stmt)
-        
-        # Upsert mw_datasource
-        _, insert_array, update_array \
-            = self.__getArrayDictOfDatasources(self.databases)
-        
-        for insert_dict, update_dict in zip(insert_array, update_array):
+        try:
+            # Upsert mw_was
+            _, insert_dict, update_dict = self.__getDictOfWas(self.domain)
 
-            stmt = insert(MwDatasource).values(insert_dict)    
+            stmt = insert(MwWas).values(insert_dict)    
             do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['was_id', 'datasource_id'],
-                set_=update_dict
-            ).returning(MwDatasource.datasource_id, MwDatasource.id)
-            result = db.session.execute(do_update_stmt)
-
-            for rec in result:
-                self.datasources_dict.update({rec[0]:rec[1]})
-
-        # Upsert mw_db_master (2021-09-03)
-        self.__upsertDBMaster(insert_array)
-
-        # Upsert mw_application
-        _, insert_array, update_array \
-            = self.__getArrayDictOfApplications(self.applications)
-        
-        for insert_dict, update_dict in zip(insert_array, update_array):
-
-            stmt = insert(MwApplication).values(insert_dict)    
-            do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['was_id', 'application_id'],
-                set_=update_dict
-            ).returning(MwApplication.application_id, MwApplication.id)
-            result = db.session.execute(do_update_stmt)
-
-            for rec in result:
-                self.applications_dict.update({rec[0]:rec[1]})
-
-        # Upsert mw_was_instance
-        _, insert_array, update_array, tag_array \
-            = self.__getArrayDictOfWasInstances(self.servers, self.clusters)
-
-        # Upsert mw_app_master (2021-09-03)
-        self.__upsertAppMaster(insert_array)
-
-        for insert_dict, update_dict, tag in zip(insert_array, update_array, tag_array):
-
-            stmt = insert(MwWasInstance).values(insert_dict)    
-            do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['was_id', 'was_instance_id'],
-                set_=update_dict
-            ).returning(MwWasInstance.was_instance_id, MwWasInstance.id)
-            result = db.session.execute(do_update_stmt)
-
-            for rec in result:
-                self.__updateWasInstanceTag(rec[1], tag)
-            #    self.was_instances_dict.update({rec[0]:rec[1]})
-
-        # insert/delete mw_datasource_wasinstance
-        self.__updateDatasource_Wasinstances(self.servers)
-
-        # insert/delete mw_application_wasinstance
-        self.__updateApplication_Wasinstances(self.applications)
-
-        # Upsert mw_webconnection
-        _, insert_http_array, update_http_array, insert_webtob_array, update_webtob_array\
-            = self.__getArrayDictOfWebConnections(self.servers)
-
-        ## Upsert mw_was_httplistener
-        for insert_dict, update_dict in zip(insert_http_array, update_http_array):
-
-            stmt = insert(MwWasHttpListener).values(insert_dict)    
-            do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['was_id', 'was_instance_id', 'webconnection_id'],
+                index_elements=['was_id'],
                 set_=update_dict
             )
             db.session.execute(do_update_stmt)
+            
+            # Upsert mw_datasource
+            _, insert_array, update_array \
+                = self.__getArrayDictOfDatasources(self.databases)
+            
+            for insert_dict, update_dict in zip(insert_array, update_array):
 
-        ## Upsert mw_was_webtobconnector
-        for insert_dict, update_dict in zip(insert_webtob_array, update_webtob_array):
+                stmt = insert(MwDatasource).values(insert_dict)    
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['was_id', 'datasource_id'],
+                    set_=update_dict
+                ).returning(MwDatasource.datasource_id, MwDatasource.id)
+                result = db.session.execute(do_update_stmt)
 
-            stmt = insert(MwWasWebtobConnector).values(insert_dict)    
-            do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['was_id', 'was_instance_id', 'webconnection_id'],
-                set_=update_dict
+                for rec in result:
+                    self.datasources_dict.update({rec[0]:rec[1]})
+
+            # Upsert mw_db_master (2021-09-03)
+            self.__upsertDBMaster(insert_array)
+
+            # Upsert mw_application
+            _, insert_array, update_array \
+                = self.__getArrayDictOfApplications(self.applications)
+            
+            for insert_dict, update_dict in zip(insert_array, update_array):
+
+                stmt = insert(MwApplication).values(insert_dict)    
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['was_id', 'application_id'],
+                    set_=update_dict
+                ).returning(MwApplication.application_id, MwApplication.id)
+                result = db.session.execute(do_update_stmt)
+
+                for rec in result:
+                    self.applications_dict.update({rec[0]:rec[1]})
+
+            # Upsert mw_was_instance
+            _, insert_array, update_array, tag_array \
+                = self.__getArrayDictOfWasInstances(self.servers, self.clusters)
+
+            # delete removed was instances (2026-02-23)
+            current_instance_ids = [ia['was_instance_id'] for ia in insert_array]
+            delete_stmt = delete(MwWasInstance).where(
+                    (MwWasInstance.was_id == self.domain_id),
+                    ~MwWasInstance.was_instance_id.in_(current_instance_ids)
             )
-            db.session.execute(do_update_stmt)
+            db.session.execute(delete_stmt)
 
-        # Commit
-        #db.session.commit()
-        return 1, {'result':'OK'}
+            # Upsert mw_app_master (2021-09-03)
+            self.__upsertAppMaster(insert_array)
+
+            for insert_dict, update_dict, tag in zip(insert_array, update_array, tag_array):
+
+                stmt = insert(MwWasInstance).values(insert_dict)    
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['was_id', 'was_instance_id'],
+                    set_=update_dict
+                ).returning(MwWasInstance.was_instance_id, MwWasInstance.id)
+                result = db.session.execute(do_update_stmt)
+
+                for rec in result:
+                    self.__updateWasInstanceTag(rec[1], tag)
+                #    self.was_instances_dict.update({rec[0]:rec[1]})
+
+            # insert/delete mw_datasource_wasinstance
+            self.__updateDatasource_Wasinstances(self.servers)
+
+            # insert/delete mw_application_wasinstance
+            self.__updateApplication_Wasinstances(self.applications)
+
+            # Upsert mw_webconnection
+            _, insert_http_array, update_http_array, insert_webtob_array, update_webtob_array\
+                = self.__getArrayDictOfWebConnections(self.servers)
+
+            ## Upsert mw_was_httplistener
+            for insert_dict, update_dict in zip(insert_http_array, update_http_array):
+
+                stmt = insert(MwWasHttpListener).values(insert_dict)    
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['was_id', 'was_instance_id', 'webconnection_id'],
+                    set_=update_dict
+                )
+                db.session.execute(do_update_stmt)
+
+            ## Upsert mw_was_webtobconnector
+            for insert_dict, update_dict in zip(insert_webtob_array, update_webtob_array):
+
+                stmt = insert(MwWasWebtobConnector).values(insert_dict)    
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['was_id', 'was_instance_id', 'webconnection_id'],
+                    set_=update_dict
+                )
+                db.session.execute(do_update_stmt)
+
+            return 1, 'OK'
+
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Hennry upsertJeusDomain Exception: {str(e)}")
+            return -1, str(e)
 
     def __getDictOfWas(self, domain):
 
@@ -780,7 +799,7 @@ class NewJeusDomain(JeusDomain):
                 update_dict = dict(
 
                     web_host_id            = web_host_id,
-                    real_web_host_id       = getRealWebHostId(web_host_id, self.host_id),
+                    real_web_host_id       = get_real_web_host_id(web_host_id, self.host_id),
                     web_home               = web_home,
                     jsv_port               = jsv_port,
                     jsv_id                 = webconn['registration-id'],

@@ -14,11 +14,11 @@ from flask_jwt_extended import create_refresh_token
 from app.models.monitor import MoWasStatusTemplate, MoWasStatusReport, MoGridConfig, MoWasInstanceStatus
 from .common import FilterStartsWithFunction, get_mw_user, get_userid, get_reporttime
 from datetime import datetime, timedelta
-from app.sqls.monitor import select_row, getGridConfig, createWasStatusReport\
+from app.sqls.monitor import select_row, get_grid_config, create_was_status_report\
                     , get_not_running_was_list, get_column_type, get_target_table_name\
                     , select_rows2
-from app.sqls.agent import get_agent_stat, getErrorResults, insertCommandMaster
-from app.sqls.was import getChangedWAS, getChangedWEB
+from app.sqls.agent import get_agent_stat, get_error_results, insert_command_master
+from app.sqls.was import get_changed_was, get_changed_web
 from wtforms import FieldList, StringField
 #from app.auto_report.auto_report import run_auto_report
 import sys
@@ -118,7 +118,7 @@ class MoWasStatusReportModelView(ModelView):
     def create_report(self, items):
 
         print('Here')
-        rtn , msg = createWasStatusReport()
+        rtn , msg = create_was_status_report()
 
         self.update_redirect()
         return redirect(self.get_redirect())
@@ -140,7 +140,7 @@ class MonitorApi(BaseApi):
     @protect()
     def createWasStatusReport(self):
 
-        rtn , msg = createWasStatusReport()
+        rtn , msg = create_was_status_report()
         if rtn < 0:
             return jsonify({'return_code':rtn, 'message':msg}), 401
         return jsonify({'return_code':rtn, 'message':'OK'}), 200
@@ -154,7 +154,7 @@ class MonitorApi(BaseApi):
         cond_list = []
         if param:
             param = str(param)
-            rec = getGridConfig(param)
+            rec = get_grid_config(param)
 
             table_name = rec.table_name
             conditions = rec.condition_columns.split(',') if rec.condition_columns else ''
@@ -300,7 +300,7 @@ class MonitorApi(BaseApi):
                         command_type_id = 'NEWGEN.jmx.monitor'
                     agent_id = w[1]
 
-                    insertCommandMaster(command_type_id, [agent_id])
+                    insert_command_master(command_type_id, [agent_id])
 
                     agents.append(agent_id)
 
@@ -379,10 +379,10 @@ class MonitorApi(BaseApi):
 
     @expose('/getErrorResults', methods=['GET'])
     @has_access
-    def getErrorResults(self):
+    def get_error_results(self):
 
         d3daysAgo = datetime.now() - timedelta(days=3)
-        recs = getErrorResults(create_on=d3daysAgo)
+        recs = get_error_results(create_on=d3daysAgo)
 
         configFiles_List = []
         erroWas_List = []
@@ -457,7 +457,7 @@ class MonitorApi(BaseApi):
         d3daysAgo = datetime.now() - timedelta(days=3)
 
         changedWAS_List = []
-        recs = getChangedWAS(create_on=d3daysAgo)
+        recs = get_changed_was(create_on=d3daysAgo)
         if recs:
             [ changedWAS_List.append(
                 {'id':r.id
@@ -469,7 +469,7 @@ class MonitorApi(BaseApi):
                 ) for r in recs ]
 
         changedWEB_List = []
-        recs = getChangedWEB(create_on=d3daysAgo)
+        recs = get_changed_web(create_on=d3daysAgo)
         if recs:
             [ changedWEB_List.append(
                 {'id':r.id

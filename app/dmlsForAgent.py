@@ -2,10 +2,10 @@ import logging
 from app import db
 from .dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
 from .dmlsForWebtob import WebtobHttpm, WebtobHttpmFactory, NewHttpm, httpmToDict
-from app.sqls.was import getDomainIdAsPK, getWasInstanceId
-from app.sqls.agent import updateResultStatus, updateWasStatus, getResult, getAutorunFunc\
-    , sendCommandImmediately, getOrInsertCommandType, insertCommandMaster\
-    , getCommandMaster
+from app.sqls.was import get_domain_id_as_pk, get_was_instance_id
+from app.sqls.agent import update_result_status, update_was_status, get_result, get_autorun_func\
+    , send_command_immediately, get_or_insert_command_type, insert_command_master\
+    , get_command_master
 from app.sqls.monitor import update_rows, insert_row, select_row, select_rows
 from app.models.common import get_date
 from datetime import datetime, timedelta
@@ -21,35 +21,35 @@ class AutorunResult:
         if result!=None:
             self.result = result
         elif result_id!=None:
-            self.result = getResult(result_id)
+            self.result = get_result(result_id)
         else:
             self.result=None
 
-    def getAutorunFunc(self):
+    def get_autorun_func(self):
 
         if self.result.ag_command_detail.command_class.name == 'DownloadFile':
             return None, None
 
-        real_key_value1 = self._getRealKeyValue1(self.result.key_value1)
+        real_key_value1 = self._get_real_key_value1(self.result.key_value1)
 
-        return getAutorunFunc(self.result.command_id, real_key_value1)
+        return get_autorun_func(self.result.command_id, real_key_value1)
 
-    def _getRealKeyValue1(self, key_value1):
+    def _get_real_key_value1(self, key_value1):
 
         real_key_value1 = key_value1
 
         n_list = key_value1.rsplit('.',1)
 
         if len(n_list) == 2 and len(n_list[1]) == 12:
-            rec = getCommandMaster(n_list[1])
+            rec = get_command_master(n_list[1])
             if rec:
                 real_key_value1 = n_list[0]
 
         return real_key_value1
 
-    def callAutorunFunc(self):
+    def call_autorun_func(self):
 
-        autorunFunc, autorunParam = self.getAutorunFunc()
+        autorunFunc, autorunParam = self.get_autorun_func()
 
         if not autorunFunc:
             return 0, 'No Autorun'
@@ -69,14 +69,14 @@ class AutorunResult:
                 rtn, msg = func()
 
             code = 'COMPLITED' if rtn > 0 else 'NOCHANGE' if rtn==0 else 'ERROR'
-            self.updateResultStatus(code, msg)
+            self.update_result_status(code, msg)
 
         except Exception as e:
             db.session.rollback()
             excType, excValue, traceback = sys.exc_info()
             logging.error(f'AutorunResult.callAutorunFunc Error : autorunFunc: {autorunFunc} autorunParam: {autorunParam} command_id: {self.result.command_id}')
             logging.error(f'AutorunResult.callAutorunFunc Error : 1{excType} 2{excValue} 3{traceback}')
-            self.updateResultStatus('ERROR', str(excValue))
+            self.update_result_status('ERROR', str(excValue))
 
         return 1, 'OK'
 
@@ -104,7 +104,7 @@ class AutorunResult:
             fpl = file_path.split('/')
             real_domain_id = fpl[fpl.index('config')-1]
 
-        domain_id = getDomainIdAsPK(host_id, real_domain_id)
+        domain_id = get_domain_id_as_pk(host_id, real_domain_id)
         # 예외로직 : utc10t 두번째 jeusok 의 domain id를 jeusok2_dev로 고정
         if host_id == 'uok01a' and 'usropt01/jeus60/jeusok' in file_path:
             domain_id = 'jeusok2_dev'
@@ -117,7 +117,7 @@ class AutorunResult:
             agent_id = agent_id,
         )
 
-    def updateJeusDomain(self):
+    def update_jeus_domain(self):
         domain_info = self.__get_domain_info()
         return AutorunResult.update_domain(domain_info)
 
@@ -168,11 +168,11 @@ class AutorunResult:
         elif dict2_type.get('jeus-system'):
             jeus = OldJeusDomain(**param)
 
-        rtn , _ = fac.jeus_domain(jeus)
+        rtn , msg = fac.jeus_domain(jeus)
         
-        return rtn, ''
+        return rtn, msg
 
-    def updateUrlRewrite(self):
+    def update_url_rewrite(self):
 
         result = self.result
         
@@ -197,7 +197,7 @@ class AutorunResult:
 
         return 1, ''
 
-    def update_file_SSL_byAPI(self):
+    def update_file_ssl_by_api(self):
 
         result = self.result
 
@@ -208,7 +208,7 @@ class AutorunResult:
 
         ssl_certi = certi['certifile']
 
-        notbefore, notafter = self._getSslDatetime(certi)
+        notbefore, notafter = self._get_ssl_datetime(certi)
 
         update_dict = dict(
             notbefore = notbefore
@@ -228,7 +228,7 @@ class AutorunResult:
 
         return update_rows('mw_web_ssl', update_dict, filter_dict)
 
-    def _getSslDatetime(self, certi):
+    def _get_ssl_datetime(self, certi):
 
         if 'GMT' in certi['notbefore']:
             notbefore = datetime.strptime(certi['notbefore'], "%a %b %d %H:%M:%S %Z %Y")\
@@ -242,7 +242,7 @@ class AutorunResult:
 
         return notbefore, notafter
 
-    def updateConnectSSLByAPI(self):
+    def update_connect_ssl_by_api(self):
 
         result = self.result
         result_text   = result.result_text
@@ -265,7 +265,7 @@ class AutorunResult:
 
             certi = next( r for r in result_dict['certs'] if r['index']=="1")
 
-            notbefore, notafter = self._getSslDatetime(certi)
+            notbefore, notafter = self._get_ssl_datetime(certi)
 
             update_dict.update(
                 dict(
@@ -280,7 +280,7 @@ class AutorunResult:
             certi_ca = next(( r for r in result_dict['certs'] if r['index']=="2"), None )
 
             if certi_ca:
-                notbefore_ca, notafter_ca = self._getSslDatetime(certi_ca)
+                notbefore_ca, notafter_ca = self._get_ssl_datetime(certi_ca)
                 update_dict.update(
                     dict(
                      notbefore_ca = notbefore_ca
@@ -308,14 +308,14 @@ class AutorunResult:
 
         return update_rows('mw_web_domain', update_dict, filter_dict)
 
-    def updateConnectSSL(self):
+    def update_connect_ssl(self):
 
         result = self.result
 
         content   = result.result_text
         host_id   = result.host_id.lower()
 
-        ssl_dict = self._parseSSLInfo(content)
+        ssl_dict = self._parse_ssl_info(content)
 
         if not ssl_dict.get('domain'):
             return -1, 'Domain doesn\'t exist'
@@ -353,14 +353,14 @@ class AutorunResult:
 
         return update_rows('mw_web_domain', update_dict, filter_dict)
 
-    def updateFileSSL(self):
+    def update_file_ssl(self):
 
         result = self.result
 
         content   = result.result_text
         host_id   = result.host_id.lower()
 
-        ssl_dict = self._parseSSLInfo(content)
+        ssl_dict = self._parse_ssl_info(content)
 
         if not ssl_dict.get('file'):
             return -1, 'SSL file doesn\'t exist'
@@ -389,7 +389,7 @@ class AutorunResult:
 
         return update_rows('mw_web_ssl', update_dict, filter_dict)
 
-    def _parseSSLInfo(self, content):
+    def _parse_ssl_info(self, content):
 
         item_names = ['file','domain','notbefore','notafter','subject','serial','issuer']
         rtn_dict = {}
@@ -433,7 +433,7 @@ class AutorunResult:
             fpl = file_path.split('/')
             real_domain_id = fpl[fpl.index('webserver')-1]
 
-            domain_id = getDomainIdAsPK(host_id, real_domain_id)
+            domain_id = get_domain_id_as_pk(host_id, real_domain_id)
             # 예외로직 : utc10t 두번째 jeusok 의 domain id를 jeusok2_dev로 고정
             if host_id == 'uok01a' and 'usropt01/jeus60/jeusok' in file_path:
                 domain_id = 'jeusok2_dev'
@@ -493,10 +493,10 @@ class AutorunResult:
             agent_id  = agent_id
         )
         
-        rtn , _ = fac.webtobHttpm(httpm)
-        return rtn, ''
+        rtn , msg = fac.webtobHttpm(httpm)
+        return rtn, msg
 
-    def updateWebMain(self):
+    def update_web_main(self):
 
         result = self.result
 
@@ -509,7 +509,7 @@ class AutorunResult:
         fpl = file_path.split('/')
         real_domain_id = fpl[fpl.index('config')-1]
 
-        domain_id = getDomainIdAsPK(host_id, real_domain_id)
+        domain_id = get_domain_id_as_pk(host_id, real_domain_id)
         # 예외로직 : utc10t 두번째 jeusok 의 domain id를 jeusok2_dev로 고정
         if host_id == 'uok01a' and 'usropt01/jeus60/jeusok' in file_path:
             domain_id = 'jeusok2_dev'
@@ -522,16 +522,16 @@ class AutorunResult:
         #예) '/usropt02/jeus/config/urt02a/urt02a_servlet_rehi2' => '2'
         engine_command_cand2 = file_path[-1:]
         
-        was_instance_id = getWasInstanceId(host_id, domain_id, engine_command_cand1)
+        was_instance_id = get_was_instance_id(host_id, domain_id, engine_command_cand1)
         if not was_instance_id:
-            was_instance_id = getWasInstanceId(host_id, domain_id, engine_command_cand2)
+            was_instance_id = get_was_instance_id(host_id, domain_id, engine_command_cand2)
 
         if not was_instance_id:
             return -1, 'was_instance_id doesn\'t exist'
 
-        return self._updateWebMain(host_id, domain_id, was_instance_id, content)
+        return self._update_web_main(host_id, domain_id, was_instance_id, content)
         
-    def _updateWebMain(self, host_id, domain_id, was_instance_id, content):
+    def _update_web_main(self, host_id, domain_id, was_instance_id, content):
 
         doc        = xmltodict.parse(content)
         json_type  = json.dumps(doc)
@@ -546,15 +546,15 @@ class AutorunResult:
         
         return rtn, ''
 
-    def readOutFile(self, command_type_id, command_id):
-        rtn , _ = insertCommandMaster(command_type_id, [self.result.agent_id])
+    def read_out_file(self, command_type_id, command_id):
+        rtn , _ = insert_command_master(command_type_id, [self.result.agent_id])
         return rtn, ''
 
-    def readCIDOutFile(self, command_type_id, command_id):
-        rtn , _ = insertCommandMaster(command_type_id, [self.result.agent_id], command_id)
+    def read_cid_out_file(self, command_type_id, command_id):
+        rtn , _ = insert_command_master(command_type_id, [self.result.agent_id], command_id)
         return rtn, ''
 
-    def updateJeusLicenseInfo(self):
+    def update_jeus_license_info(self):
 
         result = self.result
 
@@ -584,7 +584,7 @@ class AutorunResult:
 
         return update_rows('mw_was', update_dict, filter_list)
 
-    def _parseJeusLicenseInfo(self, content):
+    def _parse_jeus_license_info(self, content):
 
         item_names = ['domain','edition','issue-day','cpu','host-name','due-day']
         rtn_dict = {}
@@ -618,7 +618,7 @@ class AutorunResult:
 
         return rtn_dict
 
-    def updateFilteredInfo(self):
+    def update_filtered_info(self):
 
         result = self.result
 
@@ -641,7 +641,7 @@ class AutorunResult:
 
         return update_rows('mw_application', update_dict, filter_list)
 
-    def _parseFilteredInfo(self, content):
+    def _parse_filtered_info(self, content):
 
         item_names = ['domain','application_home']
         rtn_dict = {}
@@ -657,7 +657,7 @@ class AutorunResult:
 
         return rtn_dict
 
-    def updateWebtobLicenseInfo(self):
+    def update_webtob_license_info(self):
 
         result = self.result
 
@@ -684,7 +684,7 @@ class AutorunResult:
 
         return update_rows('mw_web', update_dict, filter_list)
 
-    def _parseWebtobLicenseInfo(self, content):
+    def _parse_webtob_license_info(self, content):
 
         item_names = ['domain','edition','license issue date','license check by hostname']
         rtn_dict = {}
@@ -715,20 +715,20 @@ class AutorunResult:
 
         return rtn_dict
 
-    def updateWasStatus(self):
+    def update_was_status(self):
 
         result = self.result
 
-        rtn, _ = updateWasStatus(result.key_value2, result.result_text, result.host_id)
+        rtn, _ = update_was_status(result.key_value2, result.result_text, result.host_id)
 
         return rtn, ''
 
-    def updateJeusProperties(self):
+    def update_jeus_properties(self):
 
         result = self.result
 
         #혹시 한 jeus에 여러 domain이 설치된 경우도 있을 수 있어서
-        was_ids = self._getWasId4JEUSHome(result.agent_id, result.key_value2)
+        was_ids = self._get_was_id_for_jeus_home(result.agent_id, result.key_value2)
 
         if not was_ids:
             return 0, 'WAS not found'
@@ -748,7 +748,7 @@ class AutorunResult:
 
         return 1, ''
 
-    def updateWebtobMonitor(self):
+    def update_webtob_monitor(self):
 
         result = self.result
 
@@ -805,7 +805,7 @@ class AutorunResult:
 
         return array_
 
-    def updateWebtobVersion(self):
+    def update_webtob_version(self):
 
         result = self.result
 
@@ -818,7 +818,7 @@ class AutorunResult:
 
         return 1, ''
 
-    def _getWasId4JEUSHome(self, agent_id, jeusprop_location):
+    def _get_was_id_for_jeus_home(self, agent_id, jeusprop_location):
 
         filter_dict = dict(
             mapping_key = 'DOMAIN_HOME'
@@ -859,14 +859,14 @@ class AutorunResult:
 
         agent_sub_type = result.ag_command_detail.ag_agent.agent_sub_type.name
         
-        command_type_id = getOrInsertCommandType('ExeShell'
+        command_type_id = get_or_insert_command_type('ExeShell'
            ,target_file_name=_restartShell[agent_sub_type])
 
-        rtn, _ = sendCommandImmediately(result.agent_id, command_type_id)
+        rtn, _ = send_command_immediately(result.agent_id, command_type_id)
 
         return rtn, ''
 
-    def updateResultStatus(self, code, message):
+    def update_result_status(self, code, message):
 
         update_dict = dict(
             result_status  = code
