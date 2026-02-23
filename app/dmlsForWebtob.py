@@ -8,7 +8,7 @@ from sqlalchemy import select, delete, null, text, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, MwWebUri, MwWebServer
-from app.sqls.was import getLandscape
+from app.sqls.was import get_landscape
 from app.sqls.batch import create_domain_name_info, create_ssl_info
 
 class WebtobHttpm(ABC):
@@ -60,104 +60,113 @@ class WebtobHttpm(ABC):
     def upsertWebtobHttpm(self):
 
         # 
-        self.landscape = getLandscape(self.host_id)
+        self.landscape = get_landscape(self.host_id)
 
-        # Upsert mw_web
-        _, insert_dict, update_dict = self.__getDictOfWeb()
+        if self.landscape is None:
+            error_msg = f"Host '{self.host_id}' not found in MwServer. Please register the server first."
+            logging.error(f"Hennry upsertWebtobHttpm Error: {error_msg}")
+            return -10, error_msg
 
-        stmt = insert(MwWeb).values(insert_dict)    
-        do_update_stmt = stmt.on_conflict_do_update(
-            index_elements=['host_id', 'port'],
-            set_=update_dict
-        ).returning(MwWeb.id)
-        rtn = db.session.execute(do_update_stmt)
+        try:
+            # Upsert mw_web
+            _, insert_dict, update_dict = self.__getDictOfWeb()
 
-        self.mw_web_id = next(rec[0] for rec in rtn)
-        
-        # Upsert mw_web_server
-        _, insert_array, update_array \
-            = self.__getArrayDictOfWebServer()
-
-        for insert_dict, update_dict in zip(insert_array, update_array):
-
-            stmt = insert(MwWebServer).values(insert_dict)    
+            stmt = insert(MwWeb).values(insert_dict)    
             do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['mw_web_id', 'svr_id'],
+                index_elements=['host_id', 'port'],
                 set_=update_dict
+            ).returning(MwWeb.id)
+            rtn = db.session.execute(do_update_stmt)
+
+            self.mw_web_id = next(rec[0] for rec in rtn)
+            
+            # Upsert mw_web_server
+            _, insert_array, update_array \
+                = self.__getArrayDictOfWebServer()
+
+            for insert_dict, update_dict in zip(insert_array, update_array):
+
+                stmt = insert(MwWebServer).values(insert_dict)    
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['mw_web_id', 'svr_id'],
+                    set_=update_dict
+                )
+                db.session.execute(do_update_stmt)
+
+            # Upsert mw_web_uri
+            _, insert_array, update_array \
+                = self.__getArrayDictOfWebUri()
+
+            for insert_dict, update_dict in zip(insert_array, update_array):
+
+                stmt = insert(MwWebUri).values(insert_dict)    
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['mw_web_id', 'uri_id'],
+                    set_=update_dict
+                )
+                db.session.execute(do_update_stmt)
+
+            # Upsert mw_web_reverseproxy
+            _, insert_array, update_array \
+                = self.__getArrayDictOfWebReverseproxy()
+
+            for insert_dict, update_dict in zip(insert_array, update_array):
+
+                stmt = insert(MwWebReverseproxy).values(insert_dict)    
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['mw_web_id', 'reverseproxy_id'],
+                    set_=update_dict
+                )
+                db.session.execute(do_update_stmt)
+
+            # Upsert mw_web_vhost
+            _, insert_array, update_array \
+                = self.__getArrayDictOfWebVhost()
+
+            vhost_id_list = []
+
+            for insert_dict, update_dict in zip(insert_array, update_array):
+
+                vhost_id_list.append(insert_dict['vhost_id'])
+
+                stmt = insert(MwWebVhost).values(insert_dict)
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['mw_web_id', 'vhost_id'],
+                    set_=update_dict
+                )            
+                db.session.execute(do_update_stmt)
+
+            delete_stmt = delete(MwWebVhost).where(
+                    (MwWebVhost.mw_web_id==self.mw_web_id) ,
+                    ~MwWebVhost.vhost_id.in_(vhost_id_list)
             )
-            db.session.execute(do_update_stmt)
+            logging.info(f"Hennry MwWebVhost delete_stmt : {delete_stmt}")
+            db.session.execute(delete_stmt)
 
-        # Upsert mw_web_uri
-        _, insert_array, update_array \
-            = self.__getArrayDictOfWebUri()
+            # insert/delete assoc_webserver_vhost
+            self.__updateWebserver_Vhost()
 
-        for insert_dict, update_dict in zip(insert_array, update_array):
+            # insert/delete assoc_webserver_vhost
+            self.__updateWeburi_Webserver()
 
-            stmt = insert(MwWebUri).values(insert_dict)    
-            do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['mw_web_id', 'uri_id'],
-                set_=update_dict
-            )
-            db.session.execute(do_update_stmt)
+            # insert/delete assoc_weburi_vhost
+            self.__updateWeburi_Vhost()
 
-        # Upsert mw_web_reverseproxy
-        _, insert_array, update_array \
-            = self.__getArrayDictOfWebReverseproxy()
+            # insert/delete assoc_webreverseproxy_vhost
+            self.__updateWebreverseproxy_Vhost()
 
-        for insert_dict, update_dict in zip(insert_array, update_array):
+            # insert/update MwWebSsl
+            self.__updateSslInfo()
 
-            stmt = insert(MwWebReverseproxy).values(insert_dict)    
-            do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['mw_web_id', 'reverseproxy_id'],
-                set_=update_dict
-            )
-            db.session.execute(do_update_stmt)
+            # insert/update MwWebDomain
+            self.__updateDomainNameInfo()
 
-        # Upsert mw_web_vhost
-        _, insert_array, update_array \
-            = self.__getArrayDictOfWebVhost()
+            return 1, 'OK'
 
-        vhost_id_list = []
-
-        for insert_dict, update_dict in zip(insert_array, update_array):
-
-            vhost_id_list.append(insert_dict['vhost_id'])
-
-            stmt = insert(MwWebVhost).values(insert_dict)
-            do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['mw_web_id', 'vhost_id'],
-                set_=update_dict
-            )            
-            db.session.execute(do_update_stmt)
-
-        delete_stmt = delete(MwWebVhost).where(
-                (MwWebVhost.mw_web_id==self.mw_web_id) ,
-                ~MwWebVhost.vhost_id.in_(vhost_id_list)
-        )
-        logging.info(f"Hennry MwWebVhost delete_stmt : {delete_stmt}")
-        db.session.execute(delete_stmt)
-
-        # insert/delete assoc_webserver_vhost
-        self.__updateWebserver_Vhost()
-
-        # insert/delete assoc_webserver_vhost
-        self.__updateWeburi_Webserver()
-
-        # insert/delete assoc_weburi_vhost
-        self.__updateWeburi_Vhost()
-
-        # insert/delete assoc_webreverseproxy_vhost
-        self.__updateWebreverseproxy_Vhost()
-
-        # insert/update MwWebSsl
-        self.__updateSslInfo()
-
-        # insert/update MwWebDomain
-        self.__updateDomainNameInfo()
-
-        # Commit
-        #db.session.commit()
-        return 1, {'result':'OK'}
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f"Hennry upsertWebtobHttpm Exception: {str(e)}")
+            return -1, str(e)
 
     def __getDictOfWeb(self):
 

@@ -3,9 +3,9 @@ from app import appbuilder, db, KAFKA_BROKERS, KAFKA_CONSUMER_4_WAS_MONITORING\
 from app.models.was import MwWasWebtobConnector, MwWebServer, MwWas, MwWeb, MwWebVhost\
         , MwWebDomain, MwWebSsl
 from app.views.common import call_notification
-from .was import getWebServers
+from .relationship import get_web_servers
 from .knowledge import insert_tag
-from .agent import finish_commands, getAgent
+from .agent import finish_commands, get_agent
 from .monitor import update_rows, insert_row, select_rows, select_row, get_was_status_template, \
     get_not_running_was_list
 from sqlalchemy.dialects.postgresql import insert
@@ -18,43 +18,6 @@ import functools
 import inspect
 import logging
 
-"""
-def run_batch_by_scheduler(command_id, function_name, additional_param=''):
-
-    if function_name == 'createWebtobConn':
-        createWebtobConn(additional_param)
-    elif function_name == 'createDomainNameInfo':
-        createDomainNameInfo(additional_param)
-    elif function_name == 'sendDailyReport':
-        sendDailyReport(additional_param)
-        
-    elif function_name == 'updateUrlRewriteInfo':
-        updateUrlRewriteInfo()
-    elif function_name == 'updateAgentIdInfoInWeb':
-        updateAgentIdInfoInWeb()
-    elif function_name == 'updateAgentIdInfoInWas':
-        updateAgentIdInfoInWas()
-    elif function_name == 'produceRepeatedMessage':
-        dic_items = json.loads(additional_param)
-        produceRepeatedMessage(dic_items['topic']
-                        , dic_items['message']
-                        , dic_items['key'] if dic_items.get('key') else None)
-    elif function_name == 'updateWasStatus':
-        updateWasStatus()
-    elif function_name == 'stopUpdateWasStatus':
-        stopUpdateWasStatus()
-    elif function_name == 'deleteKafkaTopic':
-        deleteKafkaTopic(additional_param)
-    elif function_name == 'updateResourceTag':
-        updateResourceTag()
-
-    finish_commands([command_id])
-    db.session.commit()
-    print("finished job : ", function_name)
-
-    return 1, 'OK'
-"""
-# A global dictionary to store registered batch functions
 batch_function_registry = {}
 
 def batch_function(func):
@@ -103,16 +66,16 @@ def run_batch_by_scheduler(command_id, function_name, additional_param=''):
         return 0, f"함수 실행 중 오류 발생: {str(e)}"
 
 @batch_function
-def updateResourceTag():
+def update_resource_tag():
     """mw_was_instance tag 일괄 update"""
-    #_updateResourceTag('ag_agent')
-    #_updateResourceTag('mw_was')
-    #_updateResourceTag('mw_web')
-    __updateResourceTag()
-    #updateWASResourceTag()
-    #updateWEBResourceTag()
+    #_update_resource_tag('ag_agent')
+    #_update_resource_tag('mw_was')
+    #_update_resource_tag('mw_web')
+    _update_resource_tag()
+    #update_was_resource_tag()
+    #update_web_resource_tag()
 
-def __updateResourceTag():
+def _update_resource_tag():
 
     recs, _ = select_rows('mw_was_instance', {})
 
@@ -122,11 +85,11 @@ def __updateResourceTag():
             tag1 = rec.was_id.replace('_Domain','')[1:]
             tag2 = rec.was_instance_id.split('_M')[0]
             tag = 'MS-' + tag1 + '_Domain-' + tag2
-            tag_id = __upsertTag(tag)
+            tag_id = _upsert_tag(tag)
             row, _ = select_row('ut_tag',{'id':tag_id})
             rec.ut_tag = [row]
 
-def __upsertTag(tag):
+def _upsert_tag(tag):
 
     rtn = insert_tag(tag)
     return rtn
@@ -139,13 +102,13 @@ def notify_was_abnormal_status():
     [ call_notification(f"WAS_STATUS:{rec['was_instance_id']}-상태 비정상({rec['was_instance_stat']}.{rec['host_id']})") for rec in recs]
 
 @batch_function
-def stopUpdateWasStatus():
+def stop_update_was_status():
     """Kafka  : Stop WAS Monistoring"""
     if consumer4WasMonitoring:
         consumer4WasMonitoring.close()
 
 @batch_function
-def updateWasStatus():
+def update_was_status():
     """Updating WAS_STATUS"""
     # 모니터링대상 WAS List 조회
     recs, groups = get_was_status_template()
@@ -186,13 +149,13 @@ def updateWasStatus():
     return 1, ''
 
 @batch_function
-def deleteKafkaTopic(topic):
+def delete_kafka_topic(topic):
     """Delete Kafka Topic"""
     if kafka_producer:
         kafka_producer.deleteTopic(topic)
 
 @batch_function
-def produceRepeatedMessage(additional_param):
+def produce_repeated_message(additional_param):
     dic_items = json.loads(additional_param)
     topic     = dic_items['topic']
     message   = dic_items['message']
@@ -202,27 +165,7 @@ def produceRepeatedMessage(additional_param):
         kafka_producer.send_message(topic, message, key=key)
 
 @batch_function
-def sendDailyReport(additional_param):
-
-    daygap = int(additional_param) if additional_param else 0
-
-    sender      = 'o2000988@gwe.kdb.co.kr'
-    sender_name = 'LBS Scheduler'
-    receivers   = ['o2000988@gwe.kdb.co.kr','o2000990@gwe.kdb.co.kr','o2000866@gwe.kdb.co.kr','o1404902@gwe.kdb.co.kr']
-    ccs         = ['o2000866@gwe.kdb.co.kr']
-
-    theDay = datetime.now() + timedelta(days=daygap)
-    weekDay = theDay.weekday()
-
-    if weekDay == 5:
-        daygap+=2
-    elif weekDay == 6:
-        daygap+=1
-
-    #run_auto_report(sender, sender_name, receivers, ccs, daygap)
-
-@batch_function
-def updateAgentIdInfoInWeb():
+def update_agent_id_info_in_web():
 
     print('updateAgentIdInfoInWeb started')
     web_recs = db.session.query(MwWeb).all()
@@ -232,7 +175,7 @@ def updateAgentIdInfoInWeb():
 
     for rec in web_recs:
 
-        update_dict = {'agent_id':__getAgent(rec.sys_user, rec.host_id)}
+        update_dict = {'agent_id':_get_agent(rec.sys_user, rec.host_id)}
         filter_dict = dict(
             host_id = rec.host_id
            ,port    = rec.port
@@ -242,7 +185,7 @@ def updateAgentIdInfoInWeb():
     return 1, 'OK'
 
 @batch_function
-def updateAgentIdInfoInWas():
+def update_agent_id_info_in_was():
 
     print('updateAgentIdInfoInWas started')
     was_recs = db.session.query(MwWas).all()
@@ -252,7 +195,7 @@ def updateAgentIdInfoInWas():
 
     for rec in was_recs:
 
-        update_dict = {'agent_id':__getAgent(rec.sys_user, rec.located_host_id)}
+        update_dict = {'agent_id':_get_agent(rec.sys_user, rec.located_host_id)}
         filter_dict = dict(
             was_id     = rec.was_id
         )
@@ -260,12 +203,12 @@ def updateAgentIdInfoInWas():
 
     return 1, 'OK'
 
-def __getAgent(sys_user, host_id):
-    rec = getAgent(host_id + '_' + sys_user + '_J', isApproved=True)
+def _get_agent(sys_user, host_id):
+    rec = get_agent(host_id + '_' + sys_user + '_J', isApproved=True)
     return rec.agent_id if rec else ''
 
 @batch_function
-def updateUrlRewriteInfo():
+def update_url_rewrite_info():
 
     print('updateUrlRewriteInfo started')
     web_recs = db.session.query(MwWeb).all()
@@ -306,10 +249,10 @@ def updateUrlRewriteInfo():
             update_rows('mw_web_vhost',update_dict, filter_dict)
 
 @batch_function
-def createDomainNameInfo(webInfo):
-    return create_domain_name_info(webInfo)
-
 def create_domain_name_info(webInfo):
+    return _create_domain_name_info(webInfo)
+
+def _create_domain_name_info(webInfo):
 
     if not webInfo:
         return 0, 'Parameters don\'t exist'
@@ -404,7 +347,7 @@ def create_domain_name_info(webInfo):
     return 1, 'OK'
 
 @batch_function
-def createWebtobConn(domain_id=''):
+def create_webtob_conn(domain_id=''):
 
     #print('HHH 14 :', createWebtobConn)    
 
@@ -417,7 +360,7 @@ def createWebtobConn(domain_id=''):
 
     for r in result:
 
-        web_recs = getWebServers(r)
+        web_recs = get_web_servers(r)
 
         if web_recs:
             r.mw_web_server = web_recs
@@ -426,10 +369,10 @@ def createWebtobConn(domain_id=''):
 
 
 @batch_function
-def createSslInfo(webInfo):
-    return create_ssl_info(webInfo)
-
 def create_ssl_info(webInfo):
+    return _create_ssl_info(webInfo)
+
+def _create_ssl_info(webInfo):
 
     if not webInfo:
         return 0, ''
@@ -493,3 +436,32 @@ def create_ssl_info(webInfo):
         db.session.execute(do_update_stmt)
 
     return 1, 'OK'
+
+updateResourceTag = update_resource_tag
+updateWasStatus = update_was_status
+updateAgentIdInfoInWeb = update_agent_id_info_in_web
+updateAgentIdInfoInWas = update_agent_id_info_in_was
+updateUrlRewriteInfo = update_url_rewrite_info
+stopUpdateWasStatus = stop_update_was_status
+deleteKafkaTopic = delete_kafka_topic
+createDomainNameInfo = create_domain_name_info
+createSslInfo = create_ssl_info
+createWebtobConn = create_webtob_conn
+produceRepeatedMessage = produce_repeated_message
+
+# Register aliases in the batch function registry for backward compatibility
+for old_name, new_func in [
+    ('updateResourceTag', update_resource_tag),
+    ('updateWasStatus', update_was_status),
+    ('updateAgentIdInfoInWeb', update_agent_id_info_in_web),
+    ('updateAgentIdInfoInWas', update_agent_id_info_in_was),
+    ('updateUrlRewriteInfo', update_url_rewrite_info),
+    ('stopUpdateWasStatus', stop_update_was_status),
+    ('deleteKafkaTopic', delete_kafka_topic),
+    ('createDomainNameInfo', create_domain_name_info),
+    ('createSslInfo', create_ssl_info),
+    ('createWebtobConn', create_webtob_conn),
+    ('produceRepeatedMessage', produce_repeated_message),
+]:
+    batch_function_registry[old_name] = new_func.__doc__ or old_name
+

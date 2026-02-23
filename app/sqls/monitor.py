@@ -218,7 +218,7 @@ def get_target_table_name(table_name, column_name):
     second = next( ( tt for it, tt in inspect(table).relationships.items() if it == column_name), None)
     return second.target.name
 
-def __getCondition(table, condition):
+def _get_condition(table, condition):
     results = []
     for c in condition:
         column = getattr(table, c['column'])
@@ -266,7 +266,7 @@ def select_rows2(table_name, column_name=None, condition=None, join_conditions=N
         base_q    = db.session.query(table)
 
     if condition:
-        flt   = __getCondition(table, condition)
+        flt   = _get_condition(table, condition)
         
         flt_q = base_q.filter(*flt)
     else:
@@ -284,7 +284,7 @@ def select_rows2(table_name, column_name=None, condition=None, join_conditions=N
 
             join_table = table_dict[real_joined_table_name]
             aliased_table = aliased(join_table)
-            join_flt = __getCondition(aliased_table, join_condition)
+            join_flt = _get_condition(aliased_table, join_condition)
 
             join_q  = join_q.join(aliased_table, mn_column)\
                         .filter(*join_flt)
@@ -312,7 +312,7 @@ def select_rows2(table_name, column_name=None, condition=None, join_conditions=N
     else:
         return None, ''
 
-def getGridConfig(grid_key=None):
+def get_grid_config(grid_key=None):
 
     if grid_key:
         return db.session.query(MoGridConfig)\
@@ -320,7 +320,7 @@ def getGridConfig(grid_key=None):
     else:
         return db.session.query(MoGridConfig).all()
 
-def getLastReportedTime():
+def get_last_reported_time():
     
     result = db.session.query(func.max(MoWasStatusReport.reported_time)).first()
 
@@ -466,7 +466,7 @@ def get_not_running_was_list():
     
     return results1, results2, results3
 
-def createWasStatusReport():
+def create_was_status_report():
 
     current_date = datetime.now()
     _threshold = timedelta(hours=1)
