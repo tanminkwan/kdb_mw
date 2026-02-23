@@ -14,12 +14,11 @@ from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, Mw
     , MwWebServer, MwWebUri, MwWaschangeHistory, MwWebchangeHistory\
     , MwBizCategory, MwAppMaster, MwDBMaster, MwWebDomain, MwWebSsl
 from app.models.knowledge import UtTag
-from app.sqls.was import get_next_old_was_text, get_next_old_web_text, getWasInstanceId, getLandscape\
-    , getWasRelationship, getWebRelationship
-from app.sqls.agent import createConnectSSL, createFileSSL, insertCommandMaster, getAgent
+from app.sqls.was import get_was_instance_id, get_landscape
+from app.sqls.relationship import get_was_relationship, get_web_relationship
+from app.sqls.agent import create_connect_ssl, create_file_ssl, insert_command_master, get_agent
 from app.sqls.batch import create_domain_name_info, create_ssl_info
 from app.sqls.monitor import select_row, select_item, select_items
-from app.dmlsForAgent import AutorunResult
 from .common import FilterStartsWithFunction, FilterNotNull, \
     get_mw_user, get_userid, ShowWithIds, ListAdvanced
 
@@ -242,7 +241,7 @@ class WasModelView(ModelView):
 
         for item in items:
 
-            agent_rec = getAgent(item.agent_id)
+            agent_rec = get_agent(item.agent_id)
 
             if not agent_rec:
                 continue
@@ -263,18 +262,18 @@ class WasModelView(ModelView):
                 #JEUS7, JEUS8 인 경우 ExeScript 실행
                 if item.mw_server.os_type.name == 'WINDOWS':
                     addparam += ' ' + '^.*log4.*.jar'
-                    insertCommandMaster('EXE.FILTER4WIN', [agent_rec.agent_id], addparam)
+                    insert_command_master('EXE.FILTER4WIN', [agent_rec.agent_id], addparam)
                 #elif item.mw_server.os_type.name == 'HPUX' and item.newgeneration_yn.name == 'NO':
                 elif item.mw_server.os_type.name == 'HPUX':
                     addparam += ' ' + '*log4*.jar'
-                    insertCommandMaster('RUN.FILTER', [agent_rec.agent_id], addparam, out_CID=True)
+                    insert_command_master('RUN.FILTER', [agent_rec.agent_id], addparam, out_CID=True)
                 else:
                     filter_dict = dict(was_id=item.was_id
                                     , application_home=rec.application_home)
                     appRec, _ = \
                             select_item('mw_application', 'application_id', filter_dict)
                     addparam += ' ' + '*log4*.jar' + ' ' + appRec.application_id
-                    insertCommandMaster('EXE.FILTER', [agent_rec.agent_id], addparam)
+                    insert_command_master('EXE.FILTER', [agent_rec.agent_id], addparam)
 
         db.session.commit()
 
@@ -375,7 +374,7 @@ class WasLicenseView(ModelView):
             else:
                 agent_id = item.located_host_id + '_' + item.sys_user + '_J'
 
-            agent_rec = getAgent(agent_id)
+            agent_rec = get_agent(agent_id)
 
             if not agent_rec:
                 continue
@@ -394,11 +393,11 @@ class WasLicenseView(ModelView):
 
             #JEUS7, JEUS8 인 경우 ExeScript 실행
             if item.mw_server.os_type.name == 'WINDOWS':
-                insertCommandMaster('EXE.JEUS.LICENSE4WIN', [agent_rec.agent_id], addparam)
+                insert_command_master('EXE.JEUS.LICENSE4WIN', [agent_rec.agent_id], addparam)
             elif item.mw_server.os_type.name == 'HPUX':
-                insertCommandMaster('RUN.JEUS.LICENSE', [agent_rec.agent_id], addparam, out_CID=True)
+                insert_command_master('RUN.JEUS.LICENSE', [agent_rec.agent_id], addparam, out_CID=True)
             else:
-                insertCommandMaster('EXE.JEUS.LICENSE', [agent_rec.agent_id], addparam)
+                insert_command_master('EXE.JEUS.LICENSE', [agent_rec.agent_id], addparam)
 
         db.session.commit()
 
@@ -471,7 +470,7 @@ class WebLicenseView(ModelView):
 
         for item in items:
 
-            agent_rec = getAgent(item.agent_id)
+            agent_rec = get_agent(item.agent_id)
 
             if not agent_rec:
                 continue
@@ -481,11 +480,11 @@ class WebLicenseView(ModelView):
             #HPUX 인 경우 ExeScript 의 stdout을 못가져옴
             if item.mw_server.os_type.name == 'WINDOWS':
                 addparam = addparam.replace('/','\\')
-                insertCommandMaster('EXE.WEBTOB.LICENSE4WIN', [agent_rec.agent_id], addparam)
+                insert_command_master('EXE.WEBTOB.LICENSE4WIN', [agent_rec.agent_id], addparam)
             elif item.mw_server.os_type.name == 'HPUX':
-                insertCommandMaster('RUN.WEBTOB.LICENSE', [agent_rec.agent_id], addparam, out_CID=True)
+                insert_command_master('RUN.WEBTOB.LICENSE', [agent_rec.agent_id], addparam, out_CID=True)
             else:
-                insertCommandMaster('EXE.WEBTOB.LICENSE', [agent_rec.agent_id], addparam)
+                insert_command_master('EXE.WEBTOB.LICENSE', [agent_rec.agent_id], addparam)
 
         db.session.commit()
 
@@ -522,12 +521,12 @@ class WebVhostModelView(ModelView):
 
         for item in items:
 
-            agent_rec = getAgent(item.mw_web.agent_id)
+            agent_rec = get_agent(item.mw_web.agent_id)
 
             if not agent_rec:
                 continue
 
-            insertCommandMaster('READ.URLREWRITE', [agent_rec.agent_id]\
+            insert_command_master('READ.URLREWRITE', [agent_rec.agent_id]\
                     , item.urlrewrite_config)
 
         db.session.commit()
@@ -569,12 +568,12 @@ class WebSslModelView(ModelView):
 
         for item in items:
 
-            agent_rec = getAgent(item.mw_web.agent_id)
+            agent_rec = get_agent(item.mw_web.agent_id)
 
             if not agent_rec:
                 continue
 
-            insertCommandMaster('CALL.GET_SSL_CERTIFILE', [agent_rec.agent_id], item.ssl_certi)
+            insert_command_master('CALL.GET_SSL_CERTIFILE', [agent_rec.agent_id], item.ssl_certi)
 
         db.session.commit()
 
@@ -635,12 +634,12 @@ class WebDomainModelView(ModelView):
 
             if item.ssl_yn.name == 'YES':
 
-                agent_rec = getAgent(item.mw_web_vhost.mw_web.agent_id)
+                agent_rec = get_agent(item.mw_web_vhost.mw_web.agent_id)
 
                 if not agent_rec:
                     continue
 
-                insertCommandMaster('CALL.GET_SSL_CERTI', [agent_rec.agent_id], item.domain_name+':'+item.port)
+                insert_command_master('CALL.GET_SSL_CERTI', [agent_rec.agent_id], item.domain_name+':'+item.port)
 
         db.session.commit()
 
@@ -655,7 +654,7 @@ class WebDomainModelView(ModelView):
             print('Get Connect SSL : ', item.ssl_yn.name, item.mw_web_vhost, item.mw_web_vhost.mw_web, item.mw_web_vhost.mw_web.sys_user)
             if item.ssl_yn.name == 'YES':
 
-                createConnectSSL(item.mw_web_vhost.mw_web.agent_id, item.domain_name, item.port)
+                create_connect_ssl(item.mw_web_vhost.mw_web.agent_id, item.domain_name, item.port)
 
         db.session.commit()
 
@@ -813,13 +812,13 @@ class WebModelView(ModelView):
 
             if item.ssl_object and item.sys_user:
 
-                agent_rec = getAgent(item.agent_id)
+                agent_rec = get_agent(item.agent_id)
 
                 if not agent_rec:
                     continue
 
                 for ssl in item.ssl_object:
-                    insertCommandMaster('CALL.GET_SSL_CERTIFILE', [agent_rec.agent_id], ssl['CERTIFICATEFILE'])
+                    insert_command_master('CALL.GET_SSL_CERTIFILE', [agent_rec.agent_id], ssl['CERTIFICATEFILE'])
 
         db.session.commit()
 
@@ -835,7 +834,7 @@ class WebModelView(ModelView):
             if item.ssl_object and item.sys_user:
 
                 for ssl in item.ssl_object:
-                    createFileSSL(item.agent_id, ssl['CERTIFICATEFILE'])
+                    create_file_ssl(item.agent_id, ssl['CERTIFICATEFILE'])
 
         db.session.commit()
 
@@ -1015,123 +1014,7 @@ class ShortQueries(BaseApi):
         print (host_id, app_id)
         return jsonify({'return_code':1}), 201
 
-class MWConfiguration(BaseApi):
 
-    resource_name = 'config'
-
-    @expose('/httpm', methods=['POST'])
-    @protect()
-    def httpm_config(self, **kwargs):
-
-        data = json.loads(request.data)
-
-        if not data.get('content'):
-            return jsonify({'return_code':-2,'message':'content must be included'}), 401
-        elif not data.get('host_id'):
-            return jsonify({'return_code':-2,'message':'host_id must be included'}), 401
-    
-        content   = data['content']
-        host_id   = data['host_id']
-        sys_user = data['sys_user'] if data.get('sys_user') else ''
-
-        rtn, msg = AutorunResult()._update_httpm(host_id, content, sys_user=sys_user)
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'msg':msg}), 201
-
-    @expose('/jeusdomain', methods=['POST'])
-    @protect()
-    def jeusDomainConfig(self, **kwargs):
-
-        data = json.loads(request.data)
-
-        if not data.get('content'):
-            return jsonify({'return_code':-2,'message':'content must be included'}), 401
-        elif not data.get('host_id'):
-            return jsonify({'return_code':-2,'message':'host_id must be included'}), 401
-        elif not data.get('domain_id'):
-            return jsonify({'return_code':-2,'message':'domain_id must be included'}), 401
-    
-        content   = data['content']
-        host_id   = data['host_id']
-        domain_id = data['domain_id']
-        sys_user = data['sys_user'] if data.get('sys_user') else ''
-        
-        domain_info = dict(
-            host_id = host_id,
-            domain_id = domain_id,
-            content = content,
-            sys_user = sys_user,
-            agent_id = '',
-        )
-
-        rtn, msg = AutorunResult.update_domain(domain_info)
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'msg':msg}), 201
-
-    @expose('/webmain', methods=['POST'])
-    @protect()
-    def webmainConfig(self, **kwargs):
-
-        data = json.loads(request.data)
-
-        if not data.get('content'):
-            return jsonify({'return_code':-2,'message':'content must be included'}), 401
-        elif not data.get('host_id'):
-            return jsonify({'return_code':-2,'message':'host_id must be included'}), 401
-        elif not data.get('domain_id'):
-            return jsonify({'return_code':-2,'message':'domain_id must be included'}), 401
-        elif not data.get('was_instance_id'):
-            return jsonify({'return_code':-2,'message':'was_instance_id must be included'}), 401
-    
-        content   = data['content']
-        host_id   = data['host_id']
-        domain_id = data['domain_id']
-        was_instance_id = data['was_instance_id']
-        
-        rtn, msg = AutorunResult()._updateWebMain(host_id, domain_id, was_instance_id, content)
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'msg':msg}), 201
-
-class MwDiff(BaseApi):
-
-    route_base = '/diff'
-
-    @expose('/was/<id>', methods=['GET'])
-    @has_access
-    def diff_was(self, id):
-
-        row, _ = select_row('mw_was_change_history',{'id':id})
-        title = f'{row.mw_was} updated at {row.create_on.strftime("%Y-%m-%d %H:%M:%S")}'
-
-        old_domain, new_domain = get_next_old_was_text(id=id)
-
-        return render_template('diff.html'\
-            , title=title
-            , text1=old_domain
-            , text2=new_domain
-            , base_template=appbuilder.base_template
-            , appbuilder=appbuilder
-            )
-
-    @expose('/web/<id>', methods=['GET'])
-    @has_access
-    def diff_web(self, id):
-
-        row, _ = select_row('mw_web_change_history',{'id':id})
-        title = f'{row.mw_web} updated at {row.create_on.strftime("%Y-%m-%d %H:%M:%S")}'
-
-        old_httpm, new_httpm = get_next_old_web_text(id=id)
-
-        return render_template('diff.html'\
-            , title=title
-            , text1=old_httpm
-            , text2=new_httpm
-            , base_template=appbuilder.base_template
-            , appbuilder=appbuilder
-            )
 
 class FootPrintApi(BaseApi):
 
@@ -1159,10 +1042,6 @@ class DailyReportModelView(ModelView):
     list_columns = ["file_name", "download", "report_date"]
     show_columns = ["file_name", "download", "report_date"]
 
-class ServerModelApi(ModelRestApi):
-    
-    resource_name = 'Server'
-    datamodel = SQLAInterface(MwServer)
 
 class JsonView(BaseView):
 
@@ -1195,10 +1074,10 @@ class JsonView(BaseView):
     def relationship(self, category, key):
 
         if category == 'WAS':
-            json = getWasRelationship(key)
+            json = get_was_relationship(key)
         elif category == 'WEB':
             host_id, port = key.split('__')
-            json = getWebRelationship(host_id, int(port))
+            json = get_web_relationship(host_id, int(port))
 
         return jsonify({'json':json})
 
@@ -1427,13 +1306,9 @@ appbuilder.add_view(
 )
 appbuilder.add_api(HostModelApi)
 appbuilder.add_api(JeusContainerModelApi)
-appbuilder.add_api(ServerModelApi)
 """
-appbuilder.add_api(MWConfiguration)
 appbuilder.add_api(ExampleApi)
 appbuilder.add_api(FootPrintApi)
 appbuilder.add_api(DailyReportApi)
-appbuilder.add_api(ServerModelApi)
 appbuilder.add_api(ShortQueries)
 appbuilder.add_api(JsonView)
-appbuilder.add_api(MwDiff)

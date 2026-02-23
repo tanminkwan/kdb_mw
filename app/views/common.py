@@ -4,7 +4,7 @@ from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
 from flask_appbuilder.widgets import ShowWidget, ListWidget
 from wtforms.validators import ValidationError, StopValidation
 import enum
-from app.sqls.monitor import getLastReportedTime, select_row
+from app.sqls.monitor import get_last_reported_time, select_row
 from app.models.common import get_group
 import requests
 import json
@@ -33,7 +33,7 @@ def get_userid():
     return g.user.username
 
 def get_reporttime():
-    return getLastReportedTime()
+    return get_last_reported_time()
 
 class ShowWithIds(ShowWidget):
     template = 'widgets/showWithIds.html'
