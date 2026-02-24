@@ -16,15 +16,15 @@ import types
 from sys import exc_info
 import logging
 
-table_dict = {table.__tablename__: table for table in db.Model.__subclasses__()}
-table_args = {table.__tablename__: table.t__table_comment if hasattr(table, 't__table_comment') else {} for table in db.Model.__subclasses__()}
+def _get_table_dict():
+    """Returns a dictionary of all tables defined in db.Model."""
+    return {table.__tablename__: table for table in db.Model.__subclasses__()}
 
 def get_all_tables():
-
-    return [ t for t in table_dict ]
+    return [t for t in _get_table_dict()]
 
 def select_row(table_name, filter_dict):
-
+    table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
 
@@ -250,38 +250,30 @@ def _get_condition(table, condition):
 
 def select_rows2(table_name, column_name=None, condition=None, join_conditions=None\
                 , distinct=True, sort_condition=None):
-
+    table_dict = _get_table_dict()
     table     = table_dict[table_name]
 
     if column_name:
-
         column = getattr(table, column_name)
-
         if distinct:
             base_q    = db.session.query(column)
         else:
             base_q    = db.session.query(column, table.id)
-
     else:
         base_q    = db.session.query(table)
 
     if condition:
         flt   = _get_condition(table, condition)
-        
         flt_q = base_q.filter(*flt)
     else:
         flt_q = base_q
     
     if join_conditions:
-
         join_q  = flt_q
-
         for join_table_name, join_condition in join_conditions.items():
-
             mn_column = getattr(table, join_table_name)
-
-            real_joined_table_name = get_target_table_name(table, join_table_name)
-
+            real_joined_table_name = get_target_table_name(table_name, join_table_name)
+            
             join_table = table_dict[real_joined_table_name]
             aliased_table = aliased(join_table)
             join_flt = _get_condition(aliased_table, join_condition)
@@ -293,7 +285,6 @@ def select_rows2(table_name, column_name=None, condition=None, join_conditions=N
 
     if sort_condition:
         sort = []
-
         for s in sort_condition:
             column = getattr(table, s['column'])
             if s.get('option') and s['option'] == 'desc':
@@ -301,16 +292,17 @@ def select_rows2(table_name, column_name=None, condition=None, join_conditions=N
             else:
                 func = column.asc()
             sort.append(func)
-
         join_q = join_q.order_by(*sort)
 
     print('Hennry SQL :', join_q)
-    recs       = join_q.all()
-
-    if recs:
-        return recs, ''
-    else:
-        return None, ''
+    try:
+        # Explicitly fetching all results before the session has a chance to change state
+        recs = join_q.all()
+        # Create a static copy if it's an object with lazy-load potential to avoid closures later
+        return recs, '' if recs else None
+    except Exception as e:
+        print(f"Error in select_rows2: {str(e)}")
+        return None, str(e)
 
 def get_grid_config(grid_key=None):
 
