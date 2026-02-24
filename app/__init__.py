@@ -103,7 +103,11 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 """
-from app.views import was, agent, monitor, knowledge, git
+from . import models
+from app.views import was, agent, monitor, knowledge, git, itam
 from app.sqls import was, agent, monitor, knowledge, batch, server
 from app.api import was_api, agent_api, common_api, model_api, grid_api, batch_api
 from . import dmlsForJeus, dmlsForWebtob, jobs
+
+# with app.app_context():
+#     db.create_all()
