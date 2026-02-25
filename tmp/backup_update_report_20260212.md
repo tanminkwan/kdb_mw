@@ -124,6 +124,153 @@ JEUS 설정 XML 파일을 기반으로 데이터를 업데이트할 때, 설정�
     *   반응형 그리드 및 현대적인 컬러 팔레트를 적용하여 시인성을 극대화했습니다.
     *   기존 AJAX 기능 및 상태 모니터링 로직과 호환성을 유지하면서 최신 트렌드를 반영한 UI로 개선했습니다.
 
----
-**비고:** 모든 파이썬 파일에 대해 `py_compile` 검사를 완료하였으며, 비즈니스 로직상의 정렬 및 데이터 무결성 보완 작업이 완료되었습니다. (현재 앱 버전: `20260223.005`)
+## 11. IT자산관리 테이블 생성 스크립트 (2026-02-25)
+WAS/WEB 구성정보 Excel 임포트를 위한 `it_was`, `it_web` 테이블 생성 SQL입니다.
+On-premise 환경에서 아래 스크립트를 실행하여 테이블을 생성합니다.
 
+```sql
+-- ============================================
+-- it_was 테이블 (WAS 구성정보)
+-- ============================================
+DROP TABLE IF EXISTS it_was CASCADE;
+
+CREATE TABLE it_was (
+    config_id          VARCHAR(50)   NOT NULL PRIMARY KEY,
+    config_name        VARCHAR(500),
+    host_id            VARCHAR(200),
+    biz_system         VARCHAR(500),
+    biz_team           VARCHAR(200),
+    gw_ip              VARCHAR(100),
+    service_ip         VARCHAR(100),
+    run_env            VARCHAR(100),
+    config_status      VARCHAR(100),
+    install_user       VARCHAR(100),
+    jeus_version       VARCHAR(100),
+    os_type            VARCHAR(100),
+    os_ver             VARCHAR(100),
+    domain_name        VARCHAR(200),
+    base_port          VARCHAR(50),
+    java_version       VARCHAR(100),
+    embed_web_yn       VARCHAR(10),
+    embed_web_port     VARCHAR(50),
+    embed_web_ssl_yn   VARCHAR(10),
+    was_ssl_yn         VARCHAR(10),
+    os_kernel          VARCHAR(200),
+    cpu_core           VARCHAR(100),
+    mem_gb             VARCHAR(100),
+    hw_name            VARCHAR(200),
+    hw_group           VARCHAR(200),
+    dept_team          VARCHAR(200),
+    kdb_p_mngr         VARCHAR(100),
+    kdb_s_mngr         VARCHAR(100),
+    ito_p_mngr         VARCHAR(100),
+    ito_s_mngr         VARCHAR(100),
+    user_id            VARCHAR(50)   NOT NULL,
+    create_on          TIMESTAMP     NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON COLUMN it_was.config_id        IS '구성번호';
+COMMENT ON COLUMN it_was.config_name      IS '구성명';
+COMMENT ON COLUMN it_was.host_id          IS '설치호스트명';
+COMMENT ON COLUMN it_was.biz_system       IS '업무시스템';
+COMMENT ON COLUMN it_was.biz_team         IS '업무팀';
+COMMENT ON COLUMN it_was.gw_ip            IS 'OS대표IP(GW기준)';
+COMMENT ON COLUMN it_was.service_ip       IS '서비스IP';
+COMMENT ON COLUMN it_was.run_env          IS '운용환경';
+COMMENT ON COLUMN it_was.config_status    IS '구성상태';
+COMMENT ON COLUMN it_was.install_user     IS '설치계정명';
+COMMENT ON COLUMN it_was.jeus_version     IS 'JEUS버전';
+COMMENT ON COLUMN it_was.os_type          IS 'OS종류';
+COMMENT ON COLUMN it_was.os_ver           IS 'OS버전';
+COMMENT ON COLUMN it_was.domain_name      IS '도메인명';
+COMMENT ON COLUMN it_was.base_port        IS 'BASE포트';
+COMMENT ON COLUMN it_was.java_version     IS 'JAVA버전';
+COMMENT ON COLUMN it_was.embed_web_yn     IS '내장WEB사용여부';
+COMMENT ON COLUMN it_was.embed_web_port   IS '내장WEB노드포트';
+COMMENT ON COLUMN it_was.embed_web_ssl_yn IS '내장WEBSSL사용여부';
+COMMENT ON COLUMN it_was.was_ssl_yn       IS 'WASSSL사용여부';
+COMMENT ON COLUMN it_was.os_kernel        IS 'OS커널';
+COMMENT ON COLUMN it_was.cpu_core         IS 'CPU(Core)';
+COMMENT ON COLUMN it_was.mem_gb           IS 'MEM(GB)';
+COMMENT ON COLUMN it_was.hw_name          IS '하드웨어네임';
+COMMENT ON COLUMN it_was.hw_group         IS '하드웨어그룹';
+COMMENT ON COLUMN it_was.dept_team        IS '담당팀';
+COMMENT ON COLUMN it_was.kdb_p_mngr       IS 'KDB담당자(정)';
+COMMENT ON COLUMN it_was.kdb_s_mngr       IS 'KDB담당자(부)';
+COMMENT ON COLUMN it_was.ito_p_mngr       IS 'ITO담당자(정)';
+COMMENT ON COLUMN it_was.ito_s_mngr       IS 'ITO담당자(부)';
+
+-- ============================================
+-- it_web 테이블 (WEB 구성정보)
+-- ============================================
+DROP TABLE IF EXISTS it_web CASCADE;
+
+CREATE TABLE it_web (
+    config_id          VARCHAR(50)   NOT NULL PRIMARY KEY,
+    config_name        VARCHAR(500),
+    host_id            VARCHAR(200),
+    biz_system         VARCHAR(500),
+    biz_team           VARCHAR(200),
+    gw_ip              VARCHAR(100),
+    service_ip         VARCHAR(100),
+    run_env            VARCHAR(100),
+    config_status      VARCHAR(100),
+    install_user       VARCHAR(100),
+    webtob_version     VARCHAR(100),
+    os_type            VARCHAR(100),
+    os_ver             VARCHAR(100),
+    node_port          VARCHAR(50),
+    ssl_yn             VARCHAR(50),
+    ev_cert_yn         VARCHAR(50),
+    server_loc         VARCHAR(200),
+    os_kernel          VARCHAR(200),
+    cpu_core           VARCHAR(100),
+    mem_gb             VARCHAR(100),
+    hw_name            VARCHAR(200),
+    hw_group           VARCHAR(200),
+    dept_team          VARCHAR(200),
+    kdb_p_mngr         VARCHAR(100),
+    kdb_s_mngr         VARCHAR(100),
+    ito_p_mngr         VARCHAR(100),
+    ito_s_mngr         VARCHAR(100),
+    user_id            VARCHAR(50)   NOT NULL,
+    create_on          TIMESTAMP     NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON COLUMN it_web.config_id      IS '구성번호';
+COMMENT ON COLUMN it_web.config_name    IS '구성명';
+COMMENT ON COLUMN it_web.host_id        IS '설치호스트명';
+COMMENT ON COLUMN it_web.biz_system     IS '업무시스템';
+COMMENT ON COLUMN it_web.biz_team       IS '업무팀';
+COMMENT ON COLUMN it_web.gw_ip          IS 'OS대표IP(GW기준)';
+COMMENT ON COLUMN it_web.service_ip     IS '서비스IP';
+COMMENT ON COLUMN it_web.run_env        IS '운용환경';
+COMMENT ON COLUMN it_web.config_status  IS '구성상태';
+COMMENT ON COLUMN it_web.install_user   IS '설치계정명';
+COMMENT ON COLUMN it_web.webtob_version IS 'Webtob버전';
+COMMENT ON COLUMN it_web.os_type        IS 'OS종류';
+COMMENT ON COLUMN it_web.os_ver         IS 'OS버전';
+COMMENT ON COLUMN it_web.node_port      IS '노드포트';
+COMMENT ON COLUMN it_web.ssl_yn         IS 'SSL사용여부';
+COMMENT ON COLUMN it_web.ev_cert_yn     IS 'EV인증서여부';
+COMMENT ON COLUMN it_web.server_loc     IS 'WEB서버위치';
+COMMENT ON COLUMN it_web.os_kernel      IS 'OS커널';
+COMMENT ON COLUMN it_web.cpu_core       IS 'CPU(Core)';
+COMMENT ON COLUMN it_web.mem_gb         IS 'MEM(GB)';
+COMMENT ON COLUMN it_web.hw_name        IS '하드웨어네임';
+COMMENT ON COLUMN it_web.hw_group       IS '하드웨어그룹';
+COMMENT ON COLUMN it_web.dept_team      IS '담당팀';
+COMMENT ON COLUMN it_web.kdb_p_mngr     IS 'KDB담당자(정)';
+COMMENT ON COLUMN it_web.kdb_s_mngr     IS 'KDB담당자(부)';
+COMMENT ON COLUMN it_web.ito_p_mngr     IS 'ITO담당자(정)';
+COMMENT ON COLUMN it_web.ito_s_mngr     IS 'ITO담당자(부)';
+
+-- ============================================
+-- 권한 부여 (앱 사용자: tiffanie)
+-- ============================================
+GRANT ALL PRIVILEGES ON TABLE it_was TO tiffanie;
+GRANT ALL PRIVILEGES ON TABLE it_web TO tiffanie;
+```
+
+---
+**비고:** 모든 파이썬 파일에 대해 `py_compile` 검사를 완료하였으며, 비즈니스 로직상의 정렬 및 데이터 무결성 보완 작업이 완료되었습니다. (현재 앱 버전: `20260225.001`)
