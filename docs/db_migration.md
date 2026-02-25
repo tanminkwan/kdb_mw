@@ -1,18 +1,140 @@
-Step-by-Step flask db migration
+# DB Migration 가이드 (Flask-Migrate / Alembic)
 
-#### 1. mwm-app container shell 접속
-```
+> **환경**: Docker Compose (`mwm-app`, `mwm-db`)  
+> **DB**: PostgreSQL 15 · 사용자: `tiffanie` · 데이터베이스: `mw`  
+> **프레임워크**: Flask-AppBuilder + Flask-Migrate (Alembic)
+
+---
+
+## 1. 기본 마이그레이션 절차
+
+### 1-1. mwm-app 컨테이너 shell 접속
+```bash
 docker exec -it mwm-app sh
 ```
-#### 2. kill gunicorn processes
-```
+
+### 1-2. gunicorn 프로세스 중지
+> Flask CLI(`flask db`)가 정상 동작하려면 gunicorn이 점유 중인 포트/리소스를 해제해야 합니다.
+```bash
 pkill gunicorn
 ```
-#### 3. create migration file
+
+### 1-3. 마이그레이션 파일 생성 (autogenerate)
+> 모델(`app/models/*.py`)과 현재 DB 스키마를 비교하여 변경사항을 자동 감지합니다.
+```bash
+flask db migrate -m "변경 내용 요약"
 ```
-flask db migrate
-```
-#### 4. apply migration file
-```
+- 생성된 파일: `migrations/versions/<revision_id>_<slug>.py`
+- **반드시 생성된 파일을 열어 내용을 검토**하세요. 자동 감지가 완벽하지 않을 수 있습니다.
+
+### 1-4. 마이그레이션 적용 (upgrade)
+```bash
 flask db upgrade
 ```
+
+### 1-5. gunicorn 재시작 또는 컨테이너 재시작
+```bash
+# 방법 1: 컨테이너 내부에서 gunicorn 재시작
+gunicorn -c gunicorn_config.py run:app &
+
+# 방법 2: 컨테이너 외부에서 재시작 (호스트에서 실행)
+docker compose restart mwm-app
+```
+
+---
+
+## 2. 자주 사용하는 명령어
+
+| 명령어 | 설명 |
+|--------|------|
+| `flask db current` | 현재 DB가 가리키는 마이그레이션 버전 확인 |
+| `flask db history` | 전체 마이그레이션 히스토리 조회 |
+| `flask db heads` | 최신 마이그레이션 버전(head) 확인 |
+| `flask db upgrade` | head까지 마이그레이션 적용 |
+| `flask db upgrade <revision>` | 특정 버전까지 마이그레이션 적용 |
+| `flask db downgrade -1` | 바로 이전 버전으로 롤백 |
+| `flask db downgrade <revision>` | 특정 버전으로 롤백 |
+| `flask db stamp head` | 실제 DDL 실행 없이 현재 DB를 head로 마킹 |
+| `flask db show <revision>` | 특정 마이그레이션 파일의 상세 내용 조회 |
+
+---
+
+## 3. 마이그레이션 없이 수동으로 스키마를 변경한 경우
+
+모델을 수정하고 DB에 직접 `ALTER TABLE`을 실행한 경우, Alembic이 인식하는 버전과 실제 DB 스키마가 불일치합니다.  
+이때는 **stamp** 명령으로 현재 상태를 head로 마킹합니다.
+
+```bash
+# 1. 컨테이너 접속
+docker exec -it mwm-app sh
+
+# 2. gunicorn 중지
+pkill gunicorn
+
+# 3. 빈 마이그레이션 생성 시도 (변경사항 없음 확인)
+flask db migrate -m "sync after manual ALTER"
+# → "No changes in schema detected." 가 나오면 정상
+
+# 4. 현재 DB를 최신 버전으로 마킹
+flask db stamp head
+
+# 5. 확인
+flask db current
+# → (head) 표시되면 성공
+```
+
+---
+
+## 4. DB 스키마 직접 확인 (호스트에서 실행)
+
+```bash
+# 테이블 구조 확인
+docker exec mwm-db psql -U postgres -d mw -c "\d+ <테이블명>"
+
+# 예시
+docker exec mwm-db psql -U postgres -d mw -c "\d+ it_was"
+docker exec mwm-db psql -U postgres -d mw -c "\d+ it_web"
+docker exec mwm-db psql -U postgres -d mw -c "\d+ mw_was"
+
+# 전체 테이블 목록
+docker exec mwm-db psql -U postgres -d mw -c "\dt"
+```
+
+---
+
+## 5. 권한 부여
+
+테이블을 `postgres` 사용자로 생성한 경우 앱 사용자(`tiffanie`)에게 권한을 부여해야 합니다.
+
+```bash
+docker exec mwm-db psql -U postgres -d mw -c "
+GRANT ALL PRIVILEGES ON TABLE <테이블명> TO tiffanie;
+"
+```
+
+---
+
+## 6. 주의사항
+
+1. **모델 수정 후 반드시 `flask db migrate` 실행**  
+   - 모델 파일만 수정해도 DB 스키마는 자동으로 변경되지 않습니다.
+
+2. **마이그레이션 파일은 Git에 커밋**  
+   - `migrations/versions/*.py` 파일은 반드시 Git에 포함시켜야 다른 환경에서도 동일한 스키마를 유지할 수 있습니다.
+
+3. **Enum 타입 변경 시 주의**  
+   - PostgreSQL의 Enum 타입은 `ALTER TYPE ... ADD VALUE`로만 값을 추가할 수 있습니다. Alembic 자동 감지가 안 될 수 있으므로 수동 편집이 필요합니다.
+
+4. **on-premise 배포 시**  
+   - 컨테이너 접속 → `pkill gunicorn` → `flask db upgrade` → gunicorn 재시작 순서로 진행합니다.
+   - 또는 `tmp/backup_update_report_20260212.md`에 포함된 SQL 스크립트를 직접 실행할 수 있습니다.
+
+---
+
+## 7. 마이그레이션 히스토리 (현재까지)
+
+| Revision | 날짜 | 주요 변경 내용 |
+|----------|------|---------------|
+| `1f22dabe20a9` | 초기 | 최초 마이그레이션 |
+| `8929a1afeddb` | - | 스키마 변경 |
+| `e5639b1cfd99` | 2024-08-08 | `ag_command_master.interval_type` Enum 변환, `mw_was.was_text` comment 변경, `mw_web.web_text` / `mw_web_change_history.old_web_text` 컬럼 추가 |
