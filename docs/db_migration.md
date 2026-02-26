@@ -138,3 +138,134 @@ GRANT ALL PRIVILEGES ON TABLE <테이블명> TO tiffanie;
 | `1f22dabe20a9` | 초기 | 최초 마이그레이션 |
 | `8929a1afeddb` | - | 스키마 변경 |
 | `e5639b1cfd99` | 2024-08-08 | `ag_command_master.interval_type` Enum 변환, `mw_was.was_text` comment 변경, `mw_web.web_text` / `mw_web_change_history.old_web_text` 컬럼 추가 |
+| `8e5111323215` | 2026-02-26 | ITAM 대사 결과 테이블 4개 추가 (`it_itam_was_compare`, `it_itam_web_compare`, `it_leebalso_was_compare`, `it_leebalso_web_compare`) |
+
+---
+
+## 8. 트러블슈팅
+
+### 8-1. `Path doesn't exist: '/app/migrations'` 오류
+
+컨테이너 내부에 `migrations` 폴더가 없는 경우 발생. 코드 동기화(빌드/볼륨마운트) 후 `flask db init`으로 초기화 필요.
+
+```bash
+flask db init
+```
+
+### 8-2. `Can't locate revision identified by 'xxxx'` 오류
+
+DB의 `alembic_version` 테이블에 기록된 revision이 `migrations/versions/` 폴더에 없는 경우 발생. `flask db init`으로 새로 초기화한 경우 자주 발생.
+
+```bash
+# alembic_version 초기화 후 다시 migrate
+docker exec mwm-db psql -U postgres -d mw -c "DELETE FROM alembic_version;"
+flask db migrate -m "변경 내용"
+flask db upgrade
+```
+
+### 8-3. `InsufficientPrivilege: must be owner of relation` 오류
+
+`flask db migrate`가 기존 테이블(예: `it_was`, `it_web`)의 COMMENT 변경 등을 감지했으나, 해당 테이블의 owner가 앱 사용자(`tiffanie`)가 아닌 `postgres`인 경우 발생.
+
+**해결 방법 1**: 테이블 owner를 `tiffanie`로 변경
+```bash
+docker exec mwm-db psql -U postgres -d mw -c "
+ALTER TABLE it_was OWNER TO tiffanie;
+ALTER TABLE it_web OWNER TO tiffanie;
+"
+```
+
+**해결 방법 2**: 마이그레이션 없이 직접 SQL로 테이블 생성 후 `stamp head`
+```bash
+# postgres 사용자로 직접 테이블 생성
+docker exec mwm-db psql -U postgres -d mw -c "CREATE TABLE ... ;"
+
+# 권한 부여
+docker exec mwm-db psql -U postgres -d mw -c "GRANT ALL PRIVILEGES ON TABLE <테이블명> TO tiffanie;"
+
+# alembic 버전 마킹 (컨테이너 내부)
+flask db stamp head
+```
+
+### 8-4. `flask db upgrade` 실행 중 멈춤 (Hang)
+
+다른 프로세스(gunicorn 등)가 참조 테이블에 트랜잭션을 잡고 있어 FK 생성 시 락 대기 상태가 되는 경우 발생.
+
+```bash
+# 1. gunicorn 중지 (컨테이너 내부에서)
+pkill -9 gunicorn
+
+# 2. DB의 모든 블로킹 세션 강제 종료 (호스트에서)
+docker exec mwm-db psql -U postgres -d mw -c "
+SELECT pg_terminate_backend(pid) 
+FROM pg_stat_activity 
+WHERE datname = 'mw' AND pid != pg_backend_pid();
+"
+
+# 3. 다시 upgrade 시도
+flask db upgrade
+```
+
+### 8-5. 테이블 owner 확인
+
+```bash
+docker exec mwm-db psql -U postgres -d mw -c "
+SELECT tablename, tableowner FROM pg_tables 
+WHERE schemaname = 'public' ORDER BY tableowner, tablename;
+"
+```
+
+---
+
+## 9. ITAM 대사 테이블 생성 SQL (수동 생성 시 사용)
+
+> 2026-02-26 추가. `flask db migrate/upgrade` 대신 직접 생성할 때 사용.
+
+```sql
+CREATE TABLE it_itam_was_compare (
+    id SERIAL PRIMARY KEY,
+    config_id VARCHAR(50) NOT NULL REFERENCES it_was(config_id) ON DELETE CASCADE,
+    error_type VARCHAR(100) NOT NULL,
+    error_content TEXT,
+    action_yn VARCHAR(3) DEFAULT 'NO',
+    user_id VARCHAR(50) NOT NULL,
+    create_on TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE it_itam_web_compare (
+    id SERIAL PRIMARY KEY,
+    config_id VARCHAR(50) NOT NULL REFERENCES it_web(config_id) ON DELETE CASCADE,
+    error_type VARCHAR(100) NOT NULL,
+    error_content TEXT,
+    action_yn VARCHAR(3) DEFAULT 'NO',
+    user_id VARCHAR(50) NOT NULL,
+    create_on TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE it_leebalso_was_compare (
+    id SERIAL PRIMARY KEY,
+    leebalso_id INTEGER NOT NULL REFERENCES mw_was(id) ON DELETE CASCADE,
+    error_type VARCHAR(100) NOT NULL,
+    error_content TEXT,
+    action_yn VARCHAR(3) DEFAULT 'NO',
+    user_id VARCHAR(50) NOT NULL,
+    create_on TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE it_leebalso_web_compare (
+    id SERIAL PRIMARY KEY,
+    leebalso_id INTEGER NOT NULL REFERENCES mw_web(id) ON DELETE CASCADE,
+    error_type VARCHAR(100) NOT NULL,
+    error_content TEXT,
+    action_yn VARCHAR(3) DEFAULT 'NO',
+    user_id VARCHAR(50) NOT NULL,
+    create_on TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- 권한 부여
+GRANT ALL PRIVILEGES ON TABLE it_itam_was_compare TO tiffanie;
+GRANT ALL PRIVILEGES ON TABLE it_itam_web_compare TO tiffanie;
+GRANT ALL PRIVILEGES ON TABLE it_leebalso_was_compare TO tiffanie;
+GRANT ALL PRIVILEGES ON TABLE it_leebalso_web_compare TO tiffanie;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tiffanie;
+```

@@ -1,7 +1,8 @@
 from flask_appbuilder import Model
-from sqlalchemy import Column, String, DateTime, Text
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum
+from sqlalchemy.orm import relationship
 from datetime import datetime
-from .common import get_user
+from .common import get_user, YnEnum
 
 class ItWas(Model):
     __tablename__ = "it_was"
@@ -41,7 +42,7 @@ class ItWas(Model):
     create_on          = Column(DateTime(), default=datetime.now, nullable=False)    
 
     def __repr__(self):
-        return str(self.config_name) if self.config_name else str(self.config_id)
+        return f"{self.config_id}:{self.domain_name}" if self.domain_name else str(self.config_id)
 
 class ItWeb(Model):
     __tablename__ = "it_web"
@@ -78,4 +79,72 @@ class ItWeb(Model):
     create_on          = Column(DateTime(), default=datetime.now, nullable=False)    
 
     def __repr__(self):
-        return str(self.config_name) if self.config_name else str(self.config_id)
+        return f"{self.config_id}:{self.host_id}" if self.host_id else str(self.config_id)
+
+class ItItamWasCompare(Model):
+    """ITAM WAS 기준 대사 결과 (ITAM WAS + ITAM 내장WEB 대사 결과 포함)"""
+    __tablename__ = "it_itam_was_compare"
+
+    id            = Column(Integer, primary_key=True, nullable=False)
+    config_id     = Column(String(50), ForeignKey('it_was.config_id', ondelete='CASCADE'), nullable=False, comment='ITAM WAS 구성번호')
+    error_type    = Column(String(100), nullable=False, comment='오류 항목')
+    error_content = Column(Text, comment='오류 내용')
+    action_yn     = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("NO"), comment='조치구분')
+    user_id       = Column(String(50), default=get_user, nullable=False)
+    create_on     = Column(DateTime(), default=datetime.now, nullable=False)
+
+    it_was = relationship('ItWas')
+
+    def __repr__(self):
+        return f"{self.config_id}:{self.error_type}"
+
+class ItItamWebCompare(Model):
+    """ITAM WEB 기준 대사 결과"""
+    __tablename__ = "it_itam_web_compare"
+
+    id            = Column(Integer, primary_key=True, nullable=False)
+    config_id     = Column(String(50), ForeignKey('it_web.config_id', ondelete='CASCADE'), nullable=False, comment='ITAM WEB 구성번호')
+    error_type    = Column(String(100), nullable=False, comment='오류 항목')
+    error_content = Column(Text, comment='오류 내용')
+    action_yn     = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("NO"), comment='조치구분')
+    user_id       = Column(String(50), default=get_user, nullable=False)
+    create_on     = Column(DateTime(), default=datetime.now, nullable=False)
+
+    it_web = relationship('ItWeb')
+
+    def __repr__(self):
+        return f"{self.config_id}:{self.error_type}"
+
+class ItLeebalsoWasCompare(Model):
+    """리발소 WAS 기준 대사 결과"""
+    __tablename__ = "it_leebalso_was_compare"
+
+    id            = Column(Integer, primary_key=True, nullable=False)
+    leebalso_id   = Column(Integer, ForeignKey('mw_was.id', ondelete='CASCADE'), nullable=False, comment='리발소 WAS ID')
+    error_type    = Column(String(100), nullable=False, comment='오류 항목')
+    error_content = Column(Text, comment='오류 내용')
+    action_yn     = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("NO"), comment='조치구분')
+    user_id       = Column(String(50), default=get_user, nullable=False)
+    create_on     = Column(DateTime(), default=datetime.now, nullable=False)
+
+    mw_was = relationship('MwWas')
+
+    def __repr__(self):
+        return f"{self.leebalso_id}:{self.error_type}"
+
+class ItLeebalsoWebCompare(Model):
+    """리발소 WEB 기준 대사 결과"""
+    __tablename__ = "it_leebalso_web_compare"
+
+    id            = Column(Integer, primary_key=True, nullable=False)
+    leebalso_id   = Column(Integer, ForeignKey('mw_web.id', ondelete='CASCADE'), nullable=False, comment='리발소 WEB ID')
+    error_type    = Column(String(100), nullable=False, comment='오류 항목')
+    error_content = Column(Text, comment='오류 내용')
+    action_yn     = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("NO"), comment='조치구분')
+    user_id       = Column(String(50), default=get_user, nullable=False)
+    create_on     = Column(DateTime(), default=datetime.now, nullable=False)
+
+    mw_web = relationship('MwWeb')
+
+    def __repr__(self):
+        return f"{self.leebalso_id}:{self.error_type}"

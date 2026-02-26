@@ -5,7 +5,8 @@ from flask_appbuilder.models.sqla.interface import SQLAInterface
 from .common import get_mw_user
 import pandas as pd
 from app import appbuilder, db
-from app.models.itam import ItWas, ItWeb
+from app.models.itam import ItWas, ItWeb, \
+    ItItamWasCompare, ItItamWebCompare, ItLeebalsoWasCompare, ItLeebalsoWebCompare
 import logging
 
 log = logging.getLogger(__name__)
@@ -237,22 +238,162 @@ class ItExcelImportView(BaseView):
             
             item.user_id = g.user.username
 
+
+# ============================================================
+# ITAM 대사 결과 ModelView (4개)
+# ============================================================
+
+class ItItamWasCompareModelView(ModelView):
+    datamodel = SQLAInterface(ItItamWasCompare)
+    
+    list_title = "ITAM WAS 기준 대사 결과"
+    show_title = "ITAM WAS 기준 대사 결과 상세"
+    edit_title = "ITAM WAS 기준 대사 결과 수정"
+    
+    list_columns = ['config_id', 'error_type', 'error_content', 'action_yn', 'create_on']
+    search_columns = ['config_id', 'error_type', 'action_yn']
+    
+    label_columns = {
+        'config_id': 'ITAM 구성번호',
+        'error_type': '오류 항목',
+        'error_content': '오류 내용',
+        'action_yn': '조치구분',
+        'create_on': '생성일시'
+    }
+    
+    edit_columns = ['action_yn']
+
+
+class ItItamWebCompareModelView(ModelView):
+    datamodel = SQLAInterface(ItItamWebCompare)
+    
+    list_title = "ITAM WEB 기준 대사 결과"
+    show_title = "ITAM WEB 기준 대사 결과 상세"
+    edit_title = "ITAM WEB 기준 대사 결과 수정"
+    
+    list_columns = ['config_id', 'error_type', 'error_content', 'action_yn', 'create_on']
+    search_columns = ['config_id', 'error_type', 'action_yn']
+    
+    label_columns = {
+        'config_id': 'ITAM 구성번호',
+        'error_type': '오류 항목',
+        'error_content': '오류 내용',
+        'action_yn': '조치구분',
+        'create_on': '생성일시'
+    }
+    
+    edit_columns = ['action_yn']
+
+
+class ItLeebalsoWasCompareModelView(ModelView):
+    datamodel = SQLAInterface(ItLeebalsoWasCompare)
+    
+    list_title = "리발소 WAS 기준 대사 결과"
+    show_title = "리발소 WAS 기준 대사 결과 상세"
+    edit_title = "리발소 WAS 기준 대사 결과 수정"
+    
+    list_columns = ['leebalso_id', 'error_type', 'error_content', 'action_yn', 'create_on']
+    search_columns = ['error_type', 'action_yn']
+    
+    label_columns = {
+        'leebalso_id': '리발소 WAS ID',
+        'error_type': '오류 항목',
+        'error_content': '오류 내용',
+        'action_yn': '조치구분',
+        'create_on': '생성일시'
+    }
+    
+    edit_columns = ['action_yn']
+
+
+class ItLeebalsoWebCompareModelView(ModelView):
+    datamodel = SQLAInterface(ItLeebalsoWebCompare)
+    
+    list_title = "리발소 WEB 기준 대사 결과"
+    show_title = "리발소 WEB 기준 대사 결과 상세"
+    edit_title = "리발소 WEB 기준 대사 결과 수정"
+    
+    list_columns = ['leebalso_id', 'error_type', 'error_content', 'action_yn', 'create_on']
+    search_columns = ['error_type', 'action_yn']
+    
+    label_columns = {
+        'leebalso_id': '리발소 WEB ID',
+        'error_type': '오류 항목',
+        'error_content': '오류 내용',
+        'action_yn': '조치구분',
+        'create_on': '생성일시'
+    }
+    
+    edit_columns = ['action_yn']
+
+
+# ============================================================
+# ITAM 대사 실행 화면
+# ============================================================
+
+class ItamCompareView(BaseView):
+    route_base = "/itam_compare"
+    default_view = "list"
+    
+    @expose('/list')
+    @has_access
+    def list(self):
+        return self.render_template('itam_compare.html', csrf_token=generate_csrf())
+
+
+# ============================================================
+# 메뉴 등록
+# ============================================================
+
+# ITAM 대사 메뉴
+appbuilder.add_view(
+    ItExcelImportView,
+    "Excel 파일 업로드",
+    icon="fa-upload",
+    category="ITAM 대사"
+)
+appbuilder.add_separator("ITAM 대사")
 appbuilder.add_view(
     ItWasModelView,
     "IT WAS 구성정보",
     icon="fa-server",
-    category="Tools"
+    category="ITAM 대사"
 )
 appbuilder.add_view(
     ItWebModelView,
     "IT WEB 구성정보",
     icon="fa-globe",
-    category="Tools"
+    category="ITAM 대사"
 )
-appbuilder.add_separator("Tools")
+appbuilder.add_separator("ITAM 대사")
 appbuilder.add_view(
-    ItExcelImportView,
-    "Excel 파일 업로드",
-    icon="fa-upload",
-    category="Tools"
+    ItamCompareView,
+    "대사 실행",
+    icon="fa-play",
+    category="ITAM 대사"
+)
+appbuilder.add_separator("ITAM 대사")
+appbuilder.add_view(
+    ItItamWasCompareModelView,
+    "ITAM WAS 기준 대사",
+    icon="fa-exchange",
+    category="ITAM 대사"
+)
+appbuilder.add_view(
+    ItItamWebCompareModelView,
+    "ITAM WEB 기준 대사",
+    icon="fa-exchange",
+    category="ITAM 대사"
+)
+appbuilder.add_view(
+    ItLeebalsoWasCompareModelView,
+    "리발소 WAS 기준 대사",
+    icon="fa-exchange",
+    category="ITAM 대사"
+)
+appbuilder.add_view(
+    ItLeebalsoWebCompareModelView,
+    "리발소 WEB 기준 대사",
+    icon="fa-exchange",
+    category="ITAM 대사"
 )

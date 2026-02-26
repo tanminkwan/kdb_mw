@@ -82,7 +82,7 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20260225.001)"
+APP_NAME = "리발소(VER:20260226.003)"
 
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"
@@ -168,8 +168,9 @@ FAB_API_SHOW_STACKTRACE = True
 # APP_THEME = "simplex.css"
 # APP_THEME = "slate.css"
 # APP_THEME = "spacelab.css"
-APP_THEME = "united.css"
+# APP_THEME = "united.css"
 # APP_THEME = "yeti.css"
+APP_THEME = "flatly.css"
 
 #Added by Hennry
 SCHEDULER_API_ENABLED = True
