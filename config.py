@@ -82,7 +82,7 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20260226.003)"
+APP_NAME = "리발소(VER:20260227.003)"
 
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"
