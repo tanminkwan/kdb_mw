@@ -68,13 +68,16 @@ gitConfig = dict()
 if app.config.get('GITLAB_CONFIG'):
     gitConfig = app.config['GITLAB_CONFIG']
 
-#Constant Values
+#Constant Values (loaded from config.py)
 con_val = dict(
-    TAG_ONCHARGE   = '담당자-'
-   ,TAG_EMAILS     = '이메일-'
-   ,TAG_SYSTEM     = '시스템-'
-   ,KDB_SMTP_IP    = '10.6.20.40'
-   ,KDB_SMTP_PORT  = 50025
+    TAG_EMAILS     = app.config['TAG_EMAILS']
+   ,KDB_SMTP_IP    = app.config['KDB_SMTP_IP']
+   ,KDB_SMTP_PORT  = app.config['KDB_SMTP_PORT']
+   ,SMTP_USE_TLS   = app.config['SMTP_USE_TLS']
+   ,SMTP_USERNAME  = app.config['SMTP_USERNAME']
+   ,SMTP_PASSWORD  = app.config['SMTP_PASSWORD']
+   ,SMTP_SENDER    = app.config['SMTP_SENDER']
+   ,KROKI_URL      = app.config['KROKI_URL']
 )
 
 PLANTUML_URL = app.config.get('PLANTUML_URL')

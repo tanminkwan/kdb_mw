@@ -82,7 +82,7 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20260227.003)"
+APP_NAME = "리발소(VER:20260227.010)"
 
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"
@@ -157,7 +157,7 @@ FAB_API_SHOW_STACKTRACE = True
 # Theme configuration
 # these are located on static/appbuilder/css/themes
 # you can create your own and easily use them placing them on the same dir structure to override
-# APP_THEME = "bootstrap-theme.css"  # default bootstrap
+APP_THEME = "bootstrap-theme.css"  # default bootstrap
 # APP_THEME = "cerulean.css"
 # APP_THEME = "amelia.css"
 # APP_THEME = "cosmo.css"
@@ -170,7 +170,19 @@ FAB_API_SHOW_STACKTRACE = True
 # APP_THEME = "spacelab.css"
 # APP_THEME = "united.css"
 # APP_THEME = "yeti.css"
-APP_THEME = "flatly.css"
+# APP_THEME = "flatly.css"
+
+# ---------------------------------------------------
+# Constant Values (moved from app/__init__.py con_val)
+# ---------------------------------------------------
+TAG_EMAILS    = '이메일-'
+KDB_SMTP_IP   = os.getenv('KDB_SMTP_IP', 'smtp.gmail.com')
+KDB_SMTP_PORT = int(os.getenv('KDB_SMTP_PORT', '587'))
+SMTP_USE_TLS  = os.getenv('SMTP_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+SMTP_USERNAME = os.getenv('SMTP_USERNAME', 'tanminkwan@gmail.com')
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', 'ruak yvem adlh aatv')
+SMTP_SENDER   = os.getenv('SMTP_SENDER', 'tanminkwan@gmail.com')
+KROKI_URL     = os.getenv('KROKI_URL', 'http://mwm-kroki:8000')
 
 #Added by Hennry
 SCHEDULER_API_ENABLED = True

@@ -272,5 +272,29 @@ GRANT ALL PRIVILEGES ON TABLE it_was TO tiffanie;
 GRANT ALL PRIVILEGES ON TABLE it_web TO tiffanie;
 ```
 
+## 12. 이메일 발송 고도화 및 설정 최적화 (2026-02-27)
+이메일 발송 기능의 안정성을 높이고, Mermaid 다이어그램 지원 및 설정을 최적화하였습니다.
+
+*   **설정 관리 방식 개선 (Refactoring):**
+    *   `app/__init__.py`에 하드코딩되어 있던 `con_val` 설정 항목들을 `config.py`로 통합 이동하였습니다.
+    *   SMTP 설정(IP, Port, Username, Password, TLS) 및 TAG 관련 상수를 `config.py`에서 관리하도록 변경하여 유지보수성을 높였습니다.
+    *   미사용 상수(`TAG_ONCHARGE`, `TAG_SYSTEM`)를 코드 전반에서 제거하였습니다.
+
+*   **이메일 첨부파일 기능 정상화:**
+    *   **현상:** 첨부파일이 S3(MinIO)에 저장되어 있어 로컬 경로 참조 시 파일 누락 발생.
+    *   **조치:** `app/mail_sender.py`가 파일 경로뿐만 아니라 직접적인 바이너리 내용(`(파일명, 바이트내용)` 튜플)도 지원하도록 확장했습니다.
+    *   `knowledge.py`에서 `S3FileManager`를 통해 직접 내용을 가져와 첨부하도록 수정하였습니다.
+
+*   **Mermaid 다이어그램 이메일 본문 임베딩:**
+    *   **현상:** 이메일 클라이언트가 JavaScript를 실행하지 못해 Mermaid 다이어그램이 렌더링되지 않음.
+    *   **조치:** 로컬 Kroki 서버를 구축(`docker-compose.yml` 추가)하여 Mermaid 구문을 실시간 이미지(PNG)로 변환하는 기능을 구현했습니다.
+    *   이미지를 외부 URL 링크가 아닌 이메일 자체에 포함하는 **CID(Content-ID) 임베딩** 방식을 적용하여, 사내망 환경에서도 다이어그램이 정상적으로 보이도록 개선했습니다.
+
+*   **드래그 앤 드롭 UI 개선:**
+    *   파일 드래그 앤 드롭 시 본문 상단에 불필요한 Markdown 링크 문법이 자동 삽입되지 않도록 `add_md2.html`, `edit_md2.html` 코드를 수정하였습니다 (첨부 목록은 유지).
+
+*   **의존성 추가:**
+    *   Markdown 변환을 위해 `Markdown==3.6` 패키지를 `requirements.txt`에 추가하였습니다.
+
 ---
-**비고:** 모든 파이썬 파일에 대해 `py_compile` 검사를 완료하였으며, 비즈니스 로직상의 정렬 및 데이터 무결성 보완 작업이 완료되었습니다. (현재 앱 버전: `20260225.001`)
+**비고:** 모든 파이썬 파일에 대해 `py_compile` 검사를 완료하였으며, 비즈니스 로직상의 정렬 및 데이터 무결성 보완 작업이 완료되었습니다. (현재 앱 버전: `20260227.010`)
