@@ -1,10 +1,10 @@
-from flask import g, redirect, render_template, Response, send_file
+from flask import g, redirect, render_template, Response, send_file, request, jsonify
 from flask_babel import lazy_gettext
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder import ModelView, expose, has_access
 from flask_appbuilder.actions import action
 from flask_appbuilder.api import BaseApi, expose, protect
-from flask_appbuilder.filemanager import get_file_original_name, FileManager
+from flask_appbuilder.filemanager import get_file_original_name, FileManager, uuid_namegen
 from wtforms import TextAreaField, DateTimeField
 from flask_appbuilder.fieldwidgets import DateTimePickerWidget
 from app import app, db, appbuilder, con_val, PLANTUML_URL
@@ -14,9 +14,13 @@ from app.models.common import get_user, get_date, get_uuid
 from .common import FilterStartsWithFunction, FilterContainsFunction, TagType, TagMustContains\
     , ListAdvanced, ShowWithIds, get_group_str
 from app.sqls.monitor import select_row
-#from app.auto_report.testSmtp import send_kdbMail
+from app.mail_sender import send_mail
 from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
 from datetime import datetime
+import re
+import zlib
+import base64
+import requests
 
 @db.event.listens_for(UtFile, 'before_insert')
 def set_file_name(mapper, connection, target):
@@ -156,34 +160,56 @@ class UtHtmlContentModelView(ModelView):
             ut_tag = item.ut_tag
             emails = []
             for tag in ut_tag:
-                if con_val['TAG_ONCHARGE'] in tag.tag\
-                    or con_val['TAG_EMAILS'] in tag.tag:
-                    emails = emails + tag.value1.split(',')
+                if con_val['TAG_EMAILS'] in tag.tag:
+                    if tag.value1:
+                        emails = emails + tag.value1.split(',')
 
             emails = list(set(filter(None, emails)))
 
             ut_file = item.ut_file
 
             files = []
-            file_names = []
             for f in ut_file:
-                fm = FileManager()
-                fullname = fm.get_path(f.file)
-                files.append(fullname)
-                file_names.append(f.file_name)
+                s3_fm = S3FileManager()
+                try:
+                    file_content = s3_fm.get_file(f.file)
+                    files.append((f.file_name, file_content))
+                except Exception as e:
+                    log.error(f"Failed to get file from S3: {f.file}, {e}")
 
             if not emails:
                 continue
 
-            #send_kdbMail(con_val['KDB_SMTP_IP'],con_val['KDB_SMTP_PORT']\
-            #        , 'leebalso@kdb.co.kr', g.user.username\
-            #        , emails, item.content_name, item.content_html\
-            #        , files, file_names=file_names)
-
-            #db.session.commit()
+            send_mail(con_val['KDB_SMTP_IP'], con_val['KDB_SMTP_PORT']
+                    , con_val.get('SMTP_SENDER', ''), g.user.username
+                    , emails, item.content_name, item.content_html
+                    , files=files
+                    , use_tls=con_val.get('SMTP_USE_TLS', False)
+                    , username=con_val.get('SMTP_USERNAME')
+                    , password=con_val.get('SMTP_PASSWORD'))
 
         self.update_redirect()
         return redirect(self.get_redirect())
+
+    def _link_uploaded_files(self, item):
+        """Link drag-and-drop uploaded files to the HtmlContent item."""
+        uploaded_file_ids = request.form.get('uploaded_file_ids', '')
+        if uploaded_file_ids:
+            file_ids = [int(fid.strip()) for fid in uploaded_file_ids.split(',') if fid.strip()]
+            if file_ids:
+                existing_ids = [f.id for f in item.ut_file]
+                for fid in file_ids:
+                    if fid not in existing_ids:
+                        file_obj = db.session.query(UtFile).get(fid)
+                        if file_obj:
+                            item.ut_file.append(file_obj)
+                db.session.commit()
+
+    def post_add(self, item):
+        self._link_uploaded_files(item)
+
+    def post_update(self, item):
+        self._link_uploaded_files(item)
 
 class UtMdContentModelView(ModelView):
 
@@ -245,13 +271,129 @@ class UtMdContentModelView(ModelView):
             self.datamodel.add(new_content)
         return redirect(self.get_redirect())
 
+    @action("sendMdEmail"
+            ,"Send Email"
+            ,""
+            ,icon="fa-rocket"
+            ,single=False
+    )
+    def sendMdEmail(self, items):
+        import markdown
+
+        for item in items:
+
+            ut_tag = item.ut_tag
+            emails = []
+            for tag in ut_tag:
+                if con_val['TAG_EMAILS'] in tag.tag:
+                    if tag.value1:
+                        emails = emails + tag.value1.split(',')
+
+            emails = list(set(filter(None, emails)))
+
+            ut_file = item.ut_file
+
+            files = []
+            for f in ut_file:
+                s3_fm = S3FileManager()
+                try:
+                    file_content = s3_fm.get_file(f.file)
+                    files.append((f.file_name, file_content))
+                except Exception as e:
+                    log.error(f"Failed to get file from S3: {f.file}, {e}")
+
+            if not emails:
+                continue
+
+            # Convert Markdown to HTML
+            md_content = item.content_md or ''
+
+            # Replace Mermaid blocks with CID image tags and fetch image data
+            inline_images = []
+            mermaid_counter = 0
+
+            def mermaid_replacer(match):
+                nonlocal mermaid_counter
+                code = match.group(1).strip()
+                try:
+                    zlib_compressed = zlib.compress(code.encode('utf-8'), level=9)
+                    encoded = base64.urlsafe_b64encode(zlib_compressed).decode('utf-8')
+                    kroki_url = con_val.get('KROKI_URL', 'http://mwm-kroki:8000').rstrip('/')
+                    
+                    # Fetch image data from local Kroki
+                    img_resp = requests.get(f"{kroki_url}/mermaid/png/{encoded}", timeout=10)
+                    if img_resp.status_code == 200:
+                        mermaid_counter += 1
+                        cid = f"mermaid_{mermaid_counter}"
+                        inline_images.append((cid, img_resp.content))
+                        return f'<img src="cid:{cid}" style="max-width:100%; border:1px solid #eee; margin:10px 0;">'
+                    else:
+                        log.error(f"Kroki fetch failed: {img_resp.status_code}")
+                        return f"<pre>{code}</pre>"
+                except Exception as e:
+                    log.error(f"Mermaid conversion failed: {e}")
+                    return match.group(0)
+
+            md_content = re.sub(r'```mermaid\s+(.*?)\s+```', mermaid_replacer, md_content, flags=re.DOTALL)
+
+            html_content = markdown.markdown(
+                md_content,
+                extensions=['fenced_code', 'tables', 'codehilite', 'toc', 'nl2br']
+            )
+
+            # Wrap with basic styling for email readability
+            styled_html = '''<div style="font-family: 'Malgun Gothic','맑은 고딕',sans-serif; font-size: 14px; line-height: 1.6; color: #333;">
+<style>
+table { border-collapse: collapse; margin: 10px 0; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background-color: #f2f2f2; }
+pre { background: #f6f8fa; padding: 12px; border-radius: 6px; border: 1px solid #d0d7de; overflow-x: auto; }
+code { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 13px; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #dfe2e5; padding: 0 15px; color: #6a737d; margin: 10px 0; }
+h1, h2, h3 { border-bottom: 1px solid #eaecef; padding-bottom: 5px; }
+</style>
+''' + html_content + '</div>'
+
+            send_mail(con_val['KDB_SMTP_IP'], con_val['KDB_SMTP_PORT']
+                    , con_val.get('SMTP_SENDER', ''), g.user.username
+                    , emails, item.content_name, styled_html
+                    , files=files
+                    , use_tls=con_val.get('SMTP_USE_TLS', False)
+                    , username=con_val.get('SMTP_USERNAME')
+                    , password=con_val.get('SMTP_PASSWORD')
+                    , inline_images=inline_images)
+
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+    def _link_uploaded_files(self, item):
+        """Link drag-and-drop uploaded files to the MdContent item."""
+        uploaded_file_ids = request.form.get('uploaded_file_ids', '')
+        if uploaded_file_ids:
+            file_ids = [int(fid.strip()) for fid in uploaded_file_ids.split(',') if fid.strip()]
+            if file_ids:
+                existing_ids = [f.id for f in item.ut_file]
+                for fid in file_ids:
+                    if fid not in existing_ids:
+                        file_obj = db.session.query(UtFile).get(fid)
+                        if file_obj:
+                            item.ut_file.append(file_obj)
+                db.session.commit()
+
+    def post_add(self, item):
+        self._link_uploaded_files(item)
+
+    def post_update(self, item):
+        self._link_uploaded_files(item)
+
 class UtFileModelView(ModelView):
     datamodel = SQLAInterface(UtFile)
 
-    label_columns = {'ut_html_content':"지식정보","file_name": "File Name", "download": "Download"}
-    add_columns   = ['ut_html_content','file']
-    edit_columns  = ['ut_html_content','file']
-    list_columns  = ['ut_html_content','file_name','file','download','create_on']
+    label_columns = {'ut_html_content':"지식정보(Html)", 'ut_md_content':"지식정보(Markdown)", "file_name": "File Name", "download": "Download"}
+    add_columns   = ['ut_html_content','ut_md_content','file']
+    edit_columns  = ['ut_html_content','ut_md_content','file']
+    list_columns  = ['ut_html_content','ut_md_content','file_name','file','download','create_on']
     show_columns  = ['file', 'file_name','download', 'user_id','create_on']
 
     base_order = ('create_on', 'desc')
@@ -377,6 +519,46 @@ class UtApi(BaseApi):
         return Response(md, 
             mimetype="text/plain",
             headers={"Content-Disposition":"attachment;filename="+content_id+".md"})
+
+    @expose('/upload_file', methods=['POST'])
+    @has_access
+    def upload_file(self):
+        """Drag & Drop file upload API.
+        Saves file to S3 and creates UtFile record.
+        Returns file_id, file_name, download_url.
+        """
+        if 'file' not in request.files:
+            return jsonify(error='No file provided'), 400
+
+        file = request.files['file']
+        if not file.filename:
+            return jsonify(error='Empty filename'), 400
+
+        try:
+            # Generate unique filename and save to S3
+            file_manager = S3FileManager()
+            s3_filename = uuid_namegen(file)
+            file_data = file.read()
+            file_manager.save_file(file_data, s3_filename)
+
+            # Create UtFile record
+            ut_file = UtFile()
+            ut_file.file = s3_filename
+            ut_file.file_name = file.filename
+            ut_file.user_id = g.user.username if g.user else 'system'
+            db.session.add(ut_file)
+            db.session.commit()
+
+            return jsonify(
+                file_id=ut_file.id,
+                file_name=file.filename,
+                s3_filename=s3_filename,
+                download_url='/common/download/' + s3_filename
+            ), 200
+
+        except Exception as e:
+            db.session.rollback()
+            return jsonify(error=str(e)), 500
 
 #appbuilder.add_separator("Server")
 appbuilder.add_separator("Server")

@@ -78,5 +78,17 @@ services:
       - mwm-redis
       - mwm-minio
 
+  mwm-kroki:
+    container_name: mwm-kroki
+    image: yuzutech/kroki:latest
+    environment:
+      - KROKI_MERMAID_HOST=mwm-kroki-mermaid
+    ports:
+      - "8081:8000"
+
+  mwm-kroki-mermaid:
+    container_name: mwm-kroki-mermaid
+    image: yuzutech/kroki-mermaid:latest
+
 volumes:
   redis_data: #  prefect:
