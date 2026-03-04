@@ -9,7 +9,7 @@ from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, pro
 from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
     , FilterEqualFunction, FilterNotEqual, FilterInFunction, FilterStartsWith, FilterEqual
 from app import appbuilder, db, kafka_admin, WAS_STATUS
-from flask_jwt_extended import create_refresh_token
+from flask_jwt_extended import create_access_token, create_refresh_token
 #from .models import Server, JeusContainer, Host
 from app.models.monitor import MoWasStatusTemplate, MoWasStatusReport, MoGridConfig, MoWasInstanceStatus
 from .common import FilterStartsWithFunction, get_mw_user, get_userid, get_reporttime

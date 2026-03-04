@@ -382,7 +382,7 @@ class AutorunResult:
            ,update_dt = datetime.now()
         )
 
-        filter_list = dict(
+        filter_dict = dict(
             host_id     = host_id
            ,ssl_certi   = ssl_certi
         )
@@ -560,7 +560,7 @@ class AutorunResult:
 
         content   = result.result_text
 
-        re_dict = self._parseJeusLicenseInfo(content)
+        re_dict = self._parse_jeus_license_info(content)
 
         logging.info(f're_dict : {re_dict}')
 
@@ -578,11 +578,11 @@ class AutorunResult:
            ,version_info        = re_dict['version-info'] if re_dict.get('version-info') else None
         )
 
-        filter_list = dict(
+        filter_dict = dict(
             was_id     = re_dict['domain']
         )
 
-        return update_rows('mw_was', update_dict, filter_list)
+        return update_rows('mw_was', update_dict, filter_dict)
 
     def _parse_jeus_license_info(self, content):
 
@@ -624,7 +624,7 @@ class AutorunResult:
 
         content   = result.result_text
 
-        re_dict = self._parseFilteredInfo(content)
+        re_dict = self._parse_filtered_info(content)
 
         if not re_dict.get('domain'):
             return -1, 'No data found'
@@ -634,12 +634,12 @@ class AutorunResult:
            ,filtered_update_date = get_date()
         )
 
-        filter_list = dict(
+        filter_dict = dict(
             was_id     = re_dict['domain']
            ,application_home = re_dict['application_home']
         )
 
-        return update_rows('mw_application', update_dict, filter_list)
+        return update_rows('mw_application', update_dict, filter_dict)
 
     def _parse_filtered_info(self, content):
 
@@ -663,7 +663,7 @@ class AutorunResult:
 
         content   = result.result_text
 
-        re_dict = self._parseWebtobLicenseInfo(content)
+        re_dict = self._parse_webtob_license_info(content)
 
         if not re_dict.get('host_id'):
             return -1, 'No data found'
@@ -677,12 +677,12 @@ class AutorunResult:
            ,license_update_date = get_date()
         )
 
-        filter_list = dict(
+        filter_dict = dict(
             host_id  = re_dict['host_id']
            ,port     = re_dict['port']
         )
 
-        return update_rows('mw_web', update_dict, filter_list)
+        return update_rows('mw_web', update_dict, filter_dict)
 
     def _parse_webtob_license_info(self, content):
 
