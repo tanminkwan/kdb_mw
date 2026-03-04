@@ -1016,21 +1016,21 @@ class ShortQueries(BaseApi):
 
 
 
-class FootPrintApi(BaseApi):
-
-    resource_name = 'footprint'
-
-    @expose('/footprint', methods=['POST'])
-#    @protect(allow_browser_login=True)
-    def postFootPrint(self, **kwargs):
-        data = json.loads(request.data)
-        records = data['payLoad']
-        [r.update({'ip':request.remote_addr}) for r in records]
-        print(records)
-        rtn = footprint.insert_many(records)
-        print('rtn:',rtn.inserted_ids)
-        if rtn:
-            return jsonify({'return_code':1}), 201
+# class FootPrintApi(BaseApi):
+# 
+#     resource_name = 'footprint'
+# 
+#     @expose('/footprint', methods=['POST'])
+# #    @protect(allow_browser_login=True)
+#     def postFootPrint(self, **kwargs):
+#         data = json.loads(request.data)
+#         records = data['payLoad']
+#         [r.update({'ip':request.remote_addr}) for r in records]
+#         print(records)
+#         rtn = footprint.insert_many(records)
+#         print('rtn:',rtn.inserted_ids)
+#         if rtn:
+#             return jsonify({'return_code':1}), 201
 
 #class DailyReportModelView(flask_appbuilder.views.ModelView):
 class DailyReportModelView(ModelView):
@@ -1308,7 +1308,7 @@ appbuilder.add_api(HostModelApi)
 appbuilder.add_api(JeusContainerModelApi)
 """
 appbuilder.add_api(ExampleApi)
-appbuilder.add_api(FootPrintApi)
+# appbuilder.add_api(FootPrintApi)
 appbuilder.add_api(DailyReportApi)
 appbuilder.add_api(ShortQueries)
 appbuilder.add_api(JsonView)
