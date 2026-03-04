@@ -20,6 +20,21 @@ def _get_table_dict():
     """Returns a dictionary of all tables defined in db.Model."""
     return {table.__tablename__: table for table in db.Model.__subclasses__()}
 
+def _get_table_args():
+    """Returns a dictionary of __table_args__ for all models."""
+    result = {}
+    for table in db.Model.__subclasses__():
+        targs = getattr(table, '__table_args__', None)
+        if isinstance(targs, tuple):
+            # Last element of tuple is the dict with comment etc.
+            for item in targs:
+                if isinstance(item, dict):
+                    result[table.__tablename__] = item
+                    break
+        elif isinstance(targs, dict):
+            result[table.__tablename__] = targs
+    return result
+
 def get_all_tables():
     return [t for t in _get_table_dict()]
 
@@ -38,7 +53,7 @@ def select_row(table_name, filter_dict):
     return rec, 1 if rec else 0
 
 def select_rows(table_name, filter_dict):
-
+    table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
 
@@ -53,7 +68,7 @@ def select_rows(table_name, filter_dict):
 
  
 def select_item(table_name, column_name, filter_dict):
-
+    table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
     column = getattr(table, column_name)
@@ -68,7 +83,7 @@ def select_item(table_name, column_name, filter_dict):
     return value, 1 if value else 0
 
 def select_items(table_name, column_name, filter_dict):
-
+    table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
     column = getattr(table, column_name)
@@ -83,7 +98,7 @@ def select_items(table_name, column_name, filter_dict):
     return values, 1 if values else 0
 
 def insert_row(table_name, insert_dict):
-
+    table_dict = _get_table_dict()
     table = table_dict[table_name]
 
     if g and g.user:
@@ -104,7 +119,7 @@ def insert_row(table_name, insert_dict):
     return pk[0], 'OK'
 
 def update_rows(table_name, update_dict, filter_dict):
-
+    table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
 
@@ -121,7 +136,7 @@ def update_rows(table_name, update_dict, filter_dict):
     return 1, ''
 
 def select_tags(table_name, column_name, seperator, filter_list):
-
+    table_dict = _get_table_dict()
     table = table_dict[table_name]
     column = getattr(table, column_name)
 
@@ -131,7 +146,8 @@ def select_tags(table_name, column_name, seperator, filter_list):
     return recs, 1 if recs else 0
 
 def get_model_info(table_name):
-
+    table_dict = _get_table_dict()
+    table_args = _get_table_args()
     table = None
     spec = dict(table_name=table_name,columns=[])
     if table_dict.get(table_name):
@@ -191,7 +207,7 @@ def get_model_info(table_name):
     return spec
 
 def get_column_type(table_name, column_name):
-
+    table_dict = _get_table_dict()
     obj = getattr(table_dict[table_name], column_name)
     print('TYPE : ',column_name, obj.type, type(obj.type))
     col_v = ''
@@ -209,7 +225,7 @@ def get_column_type(table_name, column_name):
     return col_v
 
 def get_target_table_name(table_name, column_name):
-
+    table_dict = _get_table_dict()
     if isinstance(table_name, str):
         table = table_dict[table_name]
     else:
@@ -515,6 +531,7 @@ def create_was_status_report():
 
 
 def test2():
+    table_dict = _get_table_dict()
     print("HHH2")
 
     table_name  = 'mw_was_instance'
@@ -548,6 +565,7 @@ def test2():
     """
     
 def test():
+    table_dict = _get_table_dict()
     print("HHH")
 
     table_name = 'ut_tag'
