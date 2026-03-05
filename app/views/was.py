@@ -199,7 +199,6 @@ class WasModelView(ModelView):
         ],
         'selectList':[
          {'text':'Hostname','id':'host-selector','combind':'0','type':'parent'}
-        ,{'text':'시스템','id':'tag-selector','combind':'0','type':'parent','condition':{'operator':'and','column':'tag','value':'시스템'}}
         ],
         'inputList':[
          {'text':'WAS 이름','id':'was-name','combind':'0','condition':'_flt_2_was_name=','size':20}
@@ -765,7 +764,6 @@ class WebModelView(ModelView):
         ],
         'selectList':[
          {'text':'Hostname','id':'host-selector','combind':'0','type':'parent'}
-        ,{'text':'시스템','id':'tag-selector','combind':'0','type':'parent','condition':{'operator':'and','column':'tag','value':'시스템'}}
         ],
         'inputList':[
          {'text':'WEB 이름','id':'web-name','combind':'0','condition':'_flt_2_web_name=','size':20}

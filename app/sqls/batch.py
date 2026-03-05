@@ -11,7 +11,7 @@ from .monitor import update_rows, insert_row, select_rows, select_row, get_was_s
 from sqlalchemy.dialects.postgresql import insert
 #from app.auto_report.auto_report import run_auto_report
 from datetime import datetime, timedelta
-#from app.kafka_customer import Consumer4Kafka
+#from app.kafka.kafka_customer import Consumer4Kafka
 from datetime import datetime
 import re, json
 import functools
