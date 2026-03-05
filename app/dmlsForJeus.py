@@ -126,7 +126,7 @@ class JeusDomain(ABC):
                     self.applications_dict.update({rec[0]:rec[1]})
 
             # Upsert mw_was_instance
-            _, insert_array, update_array, tag_array \
+            _, insert_array, update_array, _tag_array \
                 = self.__getArrayDictOfWasInstances(self.servers, self.clusters)
 
             # delete removed was instances (2026-02-23)
@@ -140,7 +140,7 @@ class JeusDomain(ABC):
             # Upsert mw_app_master (2021-09-03)
             self.__upsertAppMaster(insert_array)
 
-            for insert_dict, update_dict, tag in zip(insert_array, update_array, tag_array):
+            for insert_dict, update_dict in zip(insert_array, update_array):
 
                 stmt = insert(MwWasInstance).values(insert_dict)    
                 do_update_stmt = stmt.on_conflict_do_update(
@@ -149,8 +149,8 @@ class JeusDomain(ABC):
                 ).returning(MwWasInstance.was_instance_id, MwWasInstance.id)
                 result = db.session.execute(do_update_stmt)
 
-                for rec in result:
-                    self.__updateWasInstanceTag(rec[1], tag)
+                #for rec in result:
+                #    self.__updateWasInstanceTag(rec[1], tag)
                 #    self.was_instances_dict.update({rec[0]:rec[1]})
 
             # insert/delete mw_datasource_wasinstance

@@ -298,3 +298,74 @@ GRANT ALL PRIVILEGES ON TABLE it_web TO tiffanie;
 
 ---
 **비고:** 모든 파이썬 파일에 대해 `py_compile` 검사를 완료하였으며, 비즈니스 로직상의 정렬 및 데이터 무결성 보완 작업이 완료되었습니다. (현재 앱 버전: `20260227.010`)
+
+## 13. 지식정보 그룹 권한 및 DB 마이그레이션 (2026-03-04~05)
+콘텐츠 접근 권한을 그룹 단위로 제어하는 기능을 구현하고, Flask-Migrate를 활용한 스키마 관리 체계를 확립하였습니다.
+
+*   **지식관리 그룹(`UtKmGroup`) 도입:**
+    *   `ut_km_group` 테이블 및 association 테이블(`ut_kmgroup_htmlcontent`, `ut_kmgroup_mdcontent`)을 추가하여 콘텐츠별 다대다 그룹 관계를 구현.
+    *   그룹 등록 시 시스템 Role(`xxx_role`) 중 선택하도록 `RoleSelectField` UI 적용.
+    *   `FilterGroupRelation` 필터 구현: 사용자 Role에 매칭되는 그룹 콘텐츠, 전체 공개(그룹 미지정) 콘텐츠, **본인 작성 콘텐츠**를 OR 조건으로 조회.
+
+*   **Flask-Migrate(Alembic) 초기화:**
+    *   신규 컨테이너에서 `migrations/versions` 가 비어있는 경우의 초기화 절차를 문서화 (`docs/db_migration.md`).
+    *   `VARCHAR` → `Enum` 타입 캐스팅 오류 시 수동 `ALTER TYPE ... USING` 후 `flask db stamp head` 워크어라운드 문서화.
+
+## 14. 지식정보 목록 및 조회 페이지 개선 (2026-03-05)
+지식정보(HTML/Markdown) 화면의 사용성과 이메일 발송 기능을 대폭 강화하였습니다.
+
+*   **목록(list) 개선:**
+    *   `작성자 ID`, `작성자`(이름) 컬럼을 목록에 추가. `ab_user.first_name` 조회 메서드 구현.
+    *   컬럼명 `조회` → `조회/발송` 변경.
+    *   기존 활동(Actions) 메뉴의 `Send Email` 액션 제거 (조회 페이지로 이동).
+
+*   **조회(show) 페이지 이메일 발송 기능:**
+    *   `/ut/mdcontent/<id>` 및 `/ut/htmlcontent/<id>` 페이지에 **Send Email** 버튼 추가.
+    *   클릭 시 모달 팝업: **Select2 기반 이메일 Tag 멀티선택** + **직접 입력** (쉼표 구분).
+    *   두 입력의 합집합(중복 제거)으로 발송 대상 구성.
+    *   마스터정보Tag(`ut_tag`)에서 `이메일-` 접두어 태그의 `value1` 필드를 이메일 주소로 활용.
+    *   API 엔드포인트: `GET /ut/email_tags`, `POST /ut/htmlcontent/<id>/send_email`, `POST /ut/mdcontent/<id>/send_email`.
+
+*   **태그 필터 및 폼 정리:**
+    *   add/edit 화면에서 `Ut Tagkm`(지식관리Tag) 항목 제거.
+    *   `Ut Tag`(마스터정보Tag)는 `지식유형-`으로 시작하는 태그만 선택 가능하도록 `FilterStartsWith` 적용.
+
+## 15. 비상대응 가이드 문서 작성 (2026-03-05)
+운영 중 장애 발생 시 빠르게 대응할 수 있도록 `docs/emergency_response.md` 문서를 신규 작성하였습니다.
+
+*   DB 세션 강제 종료 명령
+*   컨테이너 관리 (재시작, 강제 재생성, 로그 확인)
+*   gunicorn 프로세스 제어
+*   Kroki/Redis 서비스 점검
+*   DB 테이블 owner 일괄 변경
+*   빠른 진단 체크리스트
+
+## 16. JEUS Domain 등록 시 ut_tag 자동 생성 비활성화 및 데이터 정리 (2026-03-05)
+JEUS domain upsert 시 `MS-*` 형태의 `ut_tag`를 자동 생성하여 `MwWasInstance`에 연결하는 로직이 있으나,
+생성된 태그가 어디에서도 조회/활용되지 않아 해당 로직을 주석 처리하였습니다.
+
+*   **코드 변경:**
+    *   `app/dmlsForJeus.py`의 `__updateWasInstanceTag()` 호출부를 주석 처리.
+    *   `add/edit` 화면에서 `Ut Tagkm`(지식관리Tag) 제거, `Ut Tag`는 `지식유형-` 접두어 태그만 선택 가능하도록 변경.
+    *   `Ut Tag` 라벨을 `지식유형`으로 변경.
+
+*   **기존 데이터 정리 SQL:**
+    아래 SQL을 실행하여 사용되지 않는 `MS-*` 태그 및 연관 테이블 데이터를 삭제합니다.
+    ```sql
+    -- 1. ut_tag_wasinstance 연관 테이블에서 MS- 태그 연결 삭제
+    DELETE FROM ut_tag_wasinstance
+    WHERE id_of_tag IN (
+        SELECT id FROM ut_tag WHERE tag LIKE 'MS-%'
+    );
+
+    -- 2. ut_tag 테이블에서 MS- 태그 삭제
+    DELETE FROM ut_tag WHERE tag LIKE 'MS-%';
+
+    -- 확인
+    SELECT COUNT(*) AS remaining_ms_tags FROM ut_tag WHERE tag LIKE 'MS-%';
+    SELECT COUNT(*) AS remaining_assoc FROM ut_tag_wasinstance
+    WHERE id_of_tag NOT IN (SELECT id FROM ut_tag);
+    ```
+
+---
+**비고:** 현재 앱 버전: `20260305.012`

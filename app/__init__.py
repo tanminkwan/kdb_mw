@@ -7,8 +7,8 @@ from flask_appbuilder import AppBuilder, SQLA, IndexView
 #from pymongo import MongoClient
 
 from flask_apscheduler import APScheduler
-#from .kafka_producer import Producer4Kafka
-#from .kafka_admin import Admin4Kafka
+#from .kafka.kafka_producer import Producer4Kafka
+#from .kafka.kafka_admin import Admin4Kafka
 #from kafka.errors import NoBrokersAvailable
 #from .ksql4Kafka import Ksql4Kafka
 
