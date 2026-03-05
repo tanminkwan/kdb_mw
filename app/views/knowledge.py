@@ -1,6 +1,7 @@
 from flask import g, redirect, render_template, Response, send_file, request, jsonify
 from flask_babel import lazy_gettext
 from flask_appbuilder.models.sqla.interface import SQLAInterface
+from flask_appbuilder.models.sqla.filters import FilterStartsWith
 from flask_appbuilder import ModelView, expose, has_access
 from flask_appbuilder.actions import action
 from flask_appbuilder.api import BaseApi, expose, protect
@@ -150,11 +151,18 @@ class UtHtmlContentModelView(ModelView):
 
     list_title   = "지식정보(html 형식)"
     list_columns = ['show_html','ut_tag','content_name','user_id','user_name','update_on','create_on','pop_html']
-    label_columns = {'show_html':'조회/발송','user_id':'작성자 ID','user_name':'작성자','update_on':'최종수정일시','create_on':'최초생성일시'
+    label_columns = {'show_html':'조회/발송','ut_tag':'지식유형','user_id':'작성자 ID','user_name':'작성자','update_on':'최종수정일시','create_on':'최초생성일시'
                     ,'ut_kmgroup':'공개그룹'}
 
-    edit_exclude_columns = ['user_id', 'create_on','update_on','group_id']
-    add_exclude_columns = ['user_id', 'create_on','update_on','group_id']
+    edit_exclude_columns = ['user_id', 'create_on','update_on','group_id','ut_tagkm']
+    add_exclude_columns = ['user_id', 'create_on','update_on','group_id','ut_tagkm']
+
+    add_form_query_rel_fields = {
+        'ut_tag': [['tag', FilterStartsWith, '지식유형-']]
+    }
+    edit_form_query_rel_fields = {
+        'ut_tag': [['tag', FilterStartsWith, '지식유형-']]
+    }
 
     base_permissions = ['can_list', 'can_add', 'can_edit', 'can_delete']
     base_order = ('create_on', 'desc')
@@ -229,11 +237,15 @@ class UtMdContentModelView(ModelView):
 
     list_title   = "지식정보(Markdown 형식)"
     list_columns = ['show_md','ut_tag','content_name','user_id','user_name','update_on','create_on','download']
-    label_columns = {'show_md':'조회/발송','user_id':'작성자 ID','user_name':'작성자','update_on':'최종수정일시','create_on':'최초생성일시'
+    label_columns = {'show_md':'조회/발송','ut_tag':'지식유형','user_id':'작성자 ID','user_name':'작성자','update_on':'최종수정일시','create_on':'최초생성일시'
                     ,'ut_kmgroup':'공개그룹'}
 
-    edit_exclude_columns = ['user_id', 'create_on','group_id']
-    add_exclude_columns = ['user_id', 'create_on','update_on','group_id']
+    edit_exclude_columns = ['user_id', 'create_on','group_id','ut_tagkm']
+    add_exclude_columns = ['user_id', 'create_on','update_on','group_id','ut_tagkm']
+
+    add_form_query_rel_fields = {
+        'ut_tag': [['tag', FilterStartsWith, '지식유형-']]
+    }
 
     base_permissions = ['can_list', 'can_add', 'can_edit', 'can_delete']
     base_order = ('create_on', 'desc')
@@ -242,6 +254,9 @@ class UtMdContentModelView(ModelView):
 
     edit_form_extra_fields = {
         'update_on': DateTimeField('수정 일시', widget=DateTimePickerWidget())
+    }
+    edit_form_query_rel_fields = {
+        'ut_tag': [['tag', FilterStartsWith, '지식유형-']]
     }
 
     extra_args = {
