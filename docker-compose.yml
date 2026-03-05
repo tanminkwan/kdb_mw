@@ -62,6 +62,7 @@ services:
       - mwm-db
       - mwm-redis
       - mwm-minio
+      - mwm-kroki
     ports:
       - 8000:8000
     environment:
@@ -77,6 +78,7 @@ services:
       - mwm-db
       - mwm-redis
       - mwm-minio
+      - mwm-kroki
 
   mwm-kroki:
     container_name: mwm-kroki

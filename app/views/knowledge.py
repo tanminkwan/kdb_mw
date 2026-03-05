@@ -5,14 +5,14 @@ from flask_appbuilder import ModelView, expose, has_access
 from flask_appbuilder.actions import action
 from flask_appbuilder.api import BaseApi, expose, protect
 from flask_appbuilder.filemanager import get_file_original_name, FileManager, uuid_namegen
-from wtforms import TextAreaField, DateTimeField
+from wtforms import TextAreaField, DateTimeField, SelectField
 from flask_appbuilder.fieldwidgets import DateTimePickerWidget
 from app import app, db, appbuilder, con_val, PLANTUML_URL
 from app.models.knowledge import UtTag, UtTagKm, UtFile, UtResource, UtResourceAddedText, UtHtmlContent\
-    , UtMdContent
+    , UtMdContent, UtKmGroup
 from app.models.common import get_user, get_date, get_uuid
-from .common import FilterStartsWithFunction, FilterContainsFunction, TagType, TagMustContains\
-    , ListAdvanced, ShowWithIds, get_group_str
+from .common import FilterStartsWithFunction, FilterContainsFunction, FilterGroupMulti, FilterGroupRelation\
+    , TagType, TagMustContains, ListAdvanced, ShowWithIds, get_group_str, get_group_list, GroupSelectField
 from app.sqls.monitor import select_row
 from app.mail_sender import send_mail
 from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
@@ -21,6 +21,9 @@ import re
 import zlib
 import base64
 import requests
+import logging
+
+log = logging.getLogger(__name__)
 
 @db.event.listens_for(UtFile, 'before_insert')
 def set_file_name(mapper, connection, target):
@@ -94,6 +97,47 @@ class UtResourceAddedTextModelView(ModelView):
                     'ut_tag':[TagType('부가정보')]
                 }
 
+class RoleSelectField(SelectField):
+    """SelectField that shows all _role roles from the system."""
+    def iter_choices(self):
+        try:
+            from app import db
+            from flask_appbuilder.security.sqla.models import Role
+            all_roles = db.session.query(Role).filter(Role.name.contains('_role')).order_by(Role.name).all()
+            yield ('', '-- 선택 --', not self.data)
+            for r in all_roles:
+                yield (r.name, r.name, self.data == r.name)
+        except Exception:
+            yield ('', '(없음)', True)
+
+    def pre_validate(self, form):
+        pass  # choices are dynamic
+
+class UtKmGroupModelView(ModelView):
+
+    datamodel = SQLAInterface(UtKmGroup)
+
+    list_title   = "지식관리 그룹"
+    add_title    = "지식관리 그룹 등록"
+    edit_title   = "지식관리 그룹 수정"
+    list_columns = ['group_name']
+    label_columns = {'group_name':'그룹 이름'}
+    add_columns  = ['group_name']
+    edit_columns = ['group_name']
+
+    description_columns = {
+        'group_name': (
+            '시스템에 등록된 Role(xxx_role) 중 하나를 선택합니다.<br>'
+            '• 여기에 등록된 그룹은 지식 콘텐츠의 <b>공개그룹</b>으로 사용됩니다.<br>'
+            '• 콘텐츠 편집 시 공개그룹을 지정하면, 해당 Role을 가진 사용자만 열람할 수 있습니다.<br>'
+            '• 공개그룹이 지정되지 않은 콘텐츠는 <b>전체 공개</b>됩니다.'
+        )
+    }
+
+    add_form_extra_fields = edit_form_extra_fields = {
+        'group_name': RoleSelectField('그룹 이름', description='시스템 Role 중 선택')
+    }
+
 class UtHtmlContentModelView(ModelView):
 
     datamodel = SQLAInterface(UtHtmlContent)
@@ -105,17 +149,17 @@ class UtHtmlContentModelView(ModelView):
 
 
     list_title   = "지식정보(html 형식)"
-    list_columns = ['show_html','ut_tag','content_name','update_on','create_on','pop_html']
-    label_columns = {'show_html':'조회','update_on':'최종수정일시','create_on':'최초생성일시'}
+    list_columns = ['show_html','ut_tag','content_name','user_id','user_name','update_on','create_on','pop_html']
+    label_columns = {'show_html':'조회/발송','user_id':'작성자 ID','user_name':'작성자','update_on':'최종수정일시','create_on':'최초생성일시'
+                    ,'ut_kmgroup':'공개그룹'}
 
-    edit_exclude_columns = ['user_id','group_id', 'create_on','update_on']
-    add_exclude_columns = ['user_id','group_id', 'create_on','update_on']
+    edit_exclude_columns = ['user_id', 'create_on','update_on','group_id']
+    add_exclude_columns = ['user_id', 'create_on','update_on','group_id']
 
     base_permissions = ['can_list', 'can_add', 'can_edit', 'can_delete']
-    #add_form_extra_fields = {'ut_file':TextAreaField('file upload',widget=BS3TextAreaFieldWidget())}
     base_order = ('create_on', 'desc')
 
-    base_filters = [['group_id', FilterStartsWithFunction, get_group_str]]
+    base_filters = [['ut_kmgroup', FilterGroupRelation, get_group_list]]
 
     extra_args = {
         'summer_column':'content_html',
@@ -152,44 +196,7 @@ class UtHtmlContentModelView(ModelView):
             self.datamodel.add(new_content)
         return redirect(self.get_redirect())
 
-    @action("sendEmail","Send Email","","fa-rocket",single=False)
-    def sendEmail(self, items):
 
-        for item in items:
-
-            ut_tag = item.ut_tag
-            emails = []
-            for tag in ut_tag:
-                if con_val['TAG_EMAILS'] in tag.tag:
-                    if tag.value1:
-                        emails = emails + tag.value1.split(',')
-
-            emails = list(set(filter(None, emails)))
-
-            ut_file = item.ut_file
-
-            files = []
-            for f in ut_file:
-                s3_fm = S3FileManager()
-                try:
-                    file_content = s3_fm.get_file(f.file)
-                    files.append((f.file_name, file_content))
-                except Exception as e:
-                    log.error(f"Failed to get file from S3: {f.file}, {e}")
-
-            if not emails:
-                continue
-
-            send_mail(con_val['KDB_SMTP_IP'], con_val['KDB_SMTP_PORT']
-                    , con_val.get('SMTP_SENDER', ''), g.user.username
-                    , emails, item.content_name, item.content_html
-                    , files=files
-                    , use_tls=con_val.get('SMTP_USE_TLS', False)
-                    , username=con_val.get('SMTP_USERNAME')
-                    , password=con_val.get('SMTP_PASSWORD'))
-
-        self.update_redirect()
-        return redirect(self.get_redirect())
 
     def _link_uploaded_files(self, item):
         """Link drag-and-drop uploaded files to the HtmlContent item."""
@@ -221,17 +228,17 @@ class UtMdContentModelView(ModelView):
     list_widget   = ListAdvanced
 
     list_title   = "지식정보(Markdown 형식)"
-    list_columns = ['show_md','ut_tag','content_name','update_on', 'user_id', 'create_on','download']
-    label_columns = {'show_md':'조회','update_on':'최종수정일시', 'user_id':'작성자 ID', 'create_on':'최초생성일시'}
+    list_columns = ['show_md','ut_tag','content_name','user_id','user_name','update_on','create_on','download']
+    label_columns = {'show_md':'조회/발송','user_id':'작성자 ID','user_name':'작성자','update_on':'최종수정일시','create_on':'최초생성일시'
+                    ,'ut_kmgroup':'공개그룹'}
 
-    edit_exclude_columns = ['user_id', 'create_on']
-    add_exclude_columns = ['user_id', 'create_on','update_on']
+    edit_exclude_columns = ['user_id', 'create_on','group_id']
+    add_exclude_columns = ['user_id', 'create_on','update_on','group_id']
 
     base_permissions = ['can_list', 'can_add', 'can_edit', 'can_delete']
-    #add_form_extra_fields = {'ut_file':TextAreaField('file upload',widget=BS3TextAreaFieldWidget())}
     base_order = ('create_on', 'desc')
 
-    base_filters = [['group_id', FilterContainsFunction, get_group_str]]
+    base_filters = [['ut_kmgroup', FilterGroupRelation, get_group_list]]
 
     edit_form_extra_fields = {
         'update_on': DateTimeField('수정 일시', widget=DateTimePickerWidget())
@@ -271,101 +278,7 @@ class UtMdContentModelView(ModelView):
             self.datamodel.add(new_content)
         return redirect(self.get_redirect())
 
-    @action("sendMdEmail"
-            ,"Send Email"
-            ,""
-            ,icon="fa-rocket"
-            ,single=False
-    )
-    def sendMdEmail(self, items):
-        import markdown
 
-        for item in items:
-
-            ut_tag = item.ut_tag
-            emails = []
-            for tag in ut_tag:
-                if con_val['TAG_EMAILS'] in tag.tag:
-                    if tag.value1:
-                        emails = emails + tag.value1.split(',')
-
-            emails = list(set(filter(None, emails)))
-
-            ut_file = item.ut_file
-
-            files = []
-            for f in ut_file:
-                s3_fm = S3FileManager()
-                try:
-                    file_content = s3_fm.get_file(f.file)
-                    files.append((f.file_name, file_content))
-                except Exception as e:
-                    log.error(f"Failed to get file from S3: {f.file}, {e}")
-
-            if not emails:
-                continue
-
-            # Convert Markdown to HTML
-            md_content = item.content_md or ''
-
-            # Replace Mermaid blocks with CID image tags and fetch image data
-            inline_images = []
-            mermaid_counter = 0
-
-            def mermaid_replacer(match):
-                nonlocal mermaid_counter
-                code = match.group(1).strip()
-                try:
-                    zlib_compressed = zlib.compress(code.encode('utf-8'), level=9)
-                    encoded = base64.urlsafe_b64encode(zlib_compressed).decode('utf-8')
-                    kroki_url = con_val.get('KROKI_URL', 'http://mwm-kroki:8000').rstrip('/')
-                    
-                    # Fetch image data from local Kroki
-                    img_resp = requests.get(f"{kroki_url}/mermaid/png/{encoded}", timeout=10)
-                    if img_resp.status_code == 200:
-                        mermaid_counter += 1
-                        cid = f"mermaid_{mermaid_counter}"
-                        inline_images.append((cid, img_resp.content))
-                        return f'<img src="cid:{cid}" style="max-width:100%; border:1px solid #eee; margin:10px 0;">'
-                    else:
-                        log.error(f"Kroki fetch failed: {img_resp.status_code}")
-                        return f"<pre>{code}</pre>"
-                except Exception as e:
-                    log.error(f"Mermaid conversion failed: {e}")
-                    return match.group(0)
-
-            md_content = re.sub(r'```mermaid\s+(.*?)\s+```', mermaid_replacer, md_content, flags=re.DOTALL)
-
-            html_content = markdown.markdown(
-                md_content,
-                extensions=['fenced_code', 'tables', 'codehilite', 'toc', 'nl2br']
-            )
-
-            # Wrap with basic styling for email readability
-            styled_html = '''<div style="font-family: 'Malgun Gothic','맑은 고딕',sans-serif; font-size: 14px; line-height: 1.6; color: #333;">
-<style>
-table { border-collapse: collapse; margin: 10px 0; }
-th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-th { background-color: #f2f2f2; }
-pre { background: #f6f8fa; padding: 12px; border-radius: 6px; border: 1px solid #d0d7de; overflow-x: auto; }
-code { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 13px; }
-pre code { background: none; padding: 0; }
-blockquote { border-left: 4px solid #dfe2e5; padding: 0 15px; color: #6a737d; margin: 10px 0; }
-h1, h2, h3 { border-bottom: 1px solid #eaecef; padding-bottom: 5px; }
-</style>
-''' + html_content + '</div>'
-
-            send_mail(con_val['KDB_SMTP_IP'], con_val['KDB_SMTP_PORT']
-                    , con_val.get('SMTP_SENDER', ''), g.user.username
-                    , emails, item.content_name, styled_html
-                    , files=files
-                    , use_tls=con_val.get('SMTP_USE_TLS', False)
-                    , username=con_val.get('SMTP_USERNAME')
-                    , password=con_val.get('SMTP_PASSWORD')
-                    , inline_images=inline_images)
-
-        self.update_redirect()
-        return redirect(self.get_redirect())
 
     def _link_uploaded_files(self, item):
         """Link drag-and-drop uploaded files to the MdContent item."""
@@ -469,6 +382,7 @@ class UtApi(BaseApi):
             , html=html
             , update_on=update_on
             , update_page='/uthtmlcontentmodelview/edit/'+param
+            , content_id=param
             , files=files
             , base_template=appbuilder.base_template
             , appbuilder=appbuilder
@@ -503,6 +417,7 @@ class UtApi(BaseApi):
             , md=md
             , update_on=update_on
             , update_page='/utmdcontentmodelview/edit/'+param
+            , content_id=param
             , files=files
             , base_template=appbuilder.base_template
             , appbuilder=appbuilder
@@ -560,6 +475,172 @@ class UtApi(BaseApi):
             db.session.rollback()
             return jsonify(error=str(e)), 500
 
+    @expose('/email_tags', methods=['GET'])
+    @has_access
+    def email_tags(self):
+        """Return list of '이메일-' tags with their email addresses (value1)."""
+        tag_prefix = con_val.get('TAG_EMAILS', '이메일-')
+        tags = db.session.query(UtTag).filter(UtTag.tag.startswith(tag_prefix)).order_by(UtTag.tag).all()
+        result = []
+        for t in tags:
+            result.append({
+                'tag': t.tag,
+                'emails': t.value1 or ''
+            })
+        return jsonify(tags=result)
+
+    @expose('/htmlcontent/<int:content_id>/send_email', methods=['POST'])
+    @has_access
+    def send_html_email(self, content_id):
+        """Send email for a specific HtmlContent from the show page."""
+        row, _ = select_row('ut_html_content', {'id': content_id})
+        if not row:
+            return jsonify(error='Content not found'), 404
+
+        data = request.get_json() or {}
+        tag_names = data.get('tag_names', [])
+        manual_emails = data.get('manual_emails', '')
+
+        # Collect emails from selected tags
+        emails = []
+        for tag_name in tag_names:
+            tag = db.session.query(UtTag).filter_by(tag=tag_name).first()
+            if tag and tag.value1:
+                emails.extend(tag.value1.split(','))
+
+        # Add manually entered emails
+        if manual_emails:
+            emails.extend([e.strip() for e in manual_emails.split(',')])
+
+        # Deduplicate and filter empty
+        emails = list(set(filter(None, emails)))
+        if not emails:
+            return jsonify(error='발송 대상 이메일이 없습니다.'), 400
+
+        # Get attached files
+        files = []
+        if row.ut_file:
+            for f in row.ut_file:
+                s3_fm = S3FileManager()
+                try:
+                    file_content = s3_fm.get_file(f.file)
+                    files.append((f.file_name, file_content))
+                except Exception as e:
+                    log.error(f"Failed to get file from S3: {f.file}, {e}")
+
+        try:
+            send_mail(con_val['KDB_SMTP_IP'], con_val['KDB_SMTP_PORT']
+                    , con_val.get('SMTP_SENDER', ''), g.user.username
+                    , emails, row.content_name, row.content_html
+                    , files=files
+                    , use_tls=con_val.get('SMTP_USE_TLS', False)
+                    , username=con_val.get('SMTP_USERNAME')
+                    , password=con_val.get('SMTP_PASSWORD'))
+            return jsonify(success=True, message=f'{len(emails)}명에게 발송 완료', emails=emails)
+        except Exception as e:
+            log.error(f"Email send failed: {e}")
+            return jsonify(error=str(e)), 500
+
+    @expose('/mdcontent/<int:content_id>/send_email', methods=['POST'])
+    @has_access
+    def send_md_email(self, content_id):
+        """Send email for a specific MdContent from the show page."""
+        import markdown
+
+        row, _ = select_row('ut_md_content', {'id': content_id})
+        if not row:
+            return jsonify(error='Content not found'), 404
+
+        data = request.get_json() or {}
+        tag_names = data.get('tag_names', [])
+        manual_emails = data.get('manual_emails', '')
+
+        # Collect emails from selected tags
+        emails = []
+        for tag_name in tag_names:
+            tag = db.session.query(UtTag).filter_by(tag=tag_name).first()
+            if tag and tag.value1:
+                emails.extend(tag.value1.split(','))
+
+        # Add manually entered emails
+        if manual_emails:
+            emails.extend([e.strip() for e in manual_emails.split(',')])
+
+        # Deduplicate and filter empty
+        emails = list(set(filter(None, emails)))
+        if not emails:
+            return jsonify(error='발송 대상 이메일이 없습니다.'), 400
+
+        # Get attached files
+        files = []
+        if row.ut_file:
+            for f in row.ut_file:
+                s3_fm = S3FileManager()
+                try:
+                    file_content = s3_fm.get_file(f.file)
+                    files.append((f.file_name, file_content))
+                except Exception as e:
+                    log.error(f"Failed to get file from S3: {f.file}, {e}")
+
+        # Convert Markdown to HTML with Mermaid support
+        md_content = row.content_md or ''
+        inline_images = []
+        mermaid_counter = 0
+
+        def mermaid_replacer(match):
+            nonlocal mermaid_counter
+            code = match.group(1).strip()
+            try:
+                zlib_compressed = zlib.compress(code.encode('utf-8'), level=9)
+                encoded = base64.urlsafe_b64encode(zlib_compressed).decode('utf-8')
+                kroki_url = con_val.get('KROKI_URL', 'http://mwm-kroki:8000').rstrip('/')
+                img_resp = requests.get(f"{kroki_url}/mermaid/png/{encoded}", timeout=10)
+                if img_resp.status_code == 200:
+                    mermaid_counter += 1
+                    cid = f"mermaid_{mermaid_counter}"
+                    inline_images.append((cid, img_resp.content))
+                    return f'<img src="cid:{cid}" style="max-width:100%; border:1px solid #eee; margin:10px 0;">'
+                else:
+                    log.error(f"Kroki fetch failed: {img_resp.status_code}")
+                    return f"<pre>{code}</pre>"
+            except Exception as e:
+                log.error(f"Mermaid conversion failed: {e}")
+                return match.group(0)
+
+        md_content = re.sub(r'```mermaid\s+(.*?)\s+```', mermaid_replacer, md_content, flags=re.DOTALL)
+
+        html_content = markdown.markdown(
+            md_content,
+            extensions=['fenced_code', 'tables', 'codehilite', 'toc', 'nl2br']
+        )
+
+        styled_html = '''<div style="font-family: 'Malgun Gothic','맑은 고딕',sans-serif; font-size: 14px; line-height: 1.6; color: #333;">
+<style>
+table { border-collapse: collapse; margin: 10px 0; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+th { background-color: #f2f2f2; }
+pre { background: #f6f8fa; padding: 12px; border-radius: 6px; border: 1px solid #d0d7de; overflow-x: auto; }
+code { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 13px; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #dfe2e5; padding: 0 15px; color: #6a737d; margin: 10px 0; }
+h1, h2, h3 { border-bottom: 1px solid #eaecef; padding-bottom: 5px; }
+</style>
+''' + html_content + '</div>'
+
+        try:
+            send_mail(con_val['KDB_SMTP_IP'], con_val['KDB_SMTP_PORT']
+                    , con_val.get('SMTP_SENDER', ''), g.user.username
+                    , emails, row.content_name, styled_html
+                    , files=files
+                    , use_tls=con_val.get('SMTP_USE_TLS', False)
+                    , username=con_val.get('SMTP_USERNAME')
+                    , password=con_val.get('SMTP_PASSWORD')
+                    , inline_images=inline_images)
+            return jsonify(success=True, message=f'{len(emails)}명에게 발송 완료', emails=emails)
+        except Exception as e:
+            log.error(f"Email send failed: {e}")
+            return jsonify(error=str(e)), 500
+
 #appbuilder.add_separator("Server")
 appbuilder.add_separator("Server")
 appbuilder.add_view(
@@ -587,6 +668,13 @@ appbuilder.add_view(
     UtTagKmModelView,
     "지식관리Tag",
     icon="fa-folder-open-o",
+    category="지식관리",
+    category_icon="fa-envelope"
+)
+appbuilder.add_view(
+    UtKmGroupModelView,
+    "지식관리그룹",
+    icon="fa-users",
     category="지식관리",
     category_icon="fa-envelope"
 )

@@ -139,6 +139,7 @@ GRANT ALL PRIVILEGES ON TABLE <테이블명> TO tiffanie;
 | `8929a1afeddb` | - | 스키마 변경 |
 | `e5639b1cfd99` | 2024-08-08 | `ag_command_master.interval_type` Enum 변환, `mw_was.was_text` comment 변경, `mw_web.web_text` / `mw_web_change_history.old_web_text` 컬럼 추가 |
 | `8e5111323215` | 2026-02-26 | ITAM 대사 결과 테이블 4개 추가 (`it_itam_was_compare`, `it_itam_web_compare`, `it_leebalso_was_compare`, `it_leebalso_web_compare`) |
+| `cc8f86f77bff` | 2026-03-05 | 새 컨테이너 초기화 후 재생성. `it_was`/`it_web` comment 추가, `mw_was.blackout_info` comment, `mw_was_httplistener.ssl_yn` VARCHAR→Enum 변환 |
 
 ---
 
@@ -162,6 +163,8 @@ docker exec mwm-db psql -U postgres -d mw -c "DELETE FROM alembic_version;"
 flask db migrate -m "변경 내용"
 flask db upgrade
 ```
+
+> **`flask db upgrade` 실패 시**: 아래 8-6, 8-7을 참고하세요. autogenerate가 이미 반영된 변경을 잘못 감지하거나 타입 캐스팅 문제가 발생할 수 있습니다. 이 경우 수동 수정 후 `flask db stamp head`로 우회합니다.
 
 ### 8-3. `InsufficientPrivilege: must be owner of relation` 오류
 
@@ -213,6 +216,69 @@ docker exec mwm-db psql -U postgres -d mw -c "
 SELECT tablename, tableowner FROM pg_tables 
 WHERE schemaname = 'public' ORDER BY tableowner, tablename;
 "
+```
+
+### 8-6. 새 컨테이너에서 `migrations/versions/`가 비어 있는 경우
+
+새로 빌드한 컨테이너에 migration 파일이 없고, DB의 `alembic_version`도 비어 있는(또는 위치 못 찾는) 경우. DB 테이블은 이미 존재하지만 Alembic 이력이 없는 상태.
+
+```bash
+# 1. 호스트에서: alembic_version 초기화 (이미 비어 있으면 생략 가능)
+docker exec mwm-db psql -U postgres -d mw -c "DELETE FROM alembic_version;"
+
+# 2. 컨테이너 접속
+docker exec -it mwm-app sh
+
+# 3. gunicorn 중지 (실행 중인 경우)
+pkill gunicorn
+
+# 4. 마이그레이션 생성 — 주로 comment 변경, 타입 변경만 감지됨
+flask db migrate -m "init after new container"
+
+# 5-a. upgrade 시도
+flask db upgrade
+# → 성공하면 완료
+
+# 5-b. upgrade 실패 시 (타입 캐스팅 에러 등)
+#    → 수동으로 필요한 DDL만 실행 후 stamp head (아래 8-7 참고)
+docker exec mwm-db psql -U postgres -d mw -c "DELETE FROM alembic_version;"
+# (수동 DDL 실행)
+flask db stamp head
+
+# 6. 확인
+flask db current
+# → (head) 표시되면 성공
+
+# 7. 컨테이너 재시작 (호스트에서)
+docker compose restart mwm-app
+```
+
+### 8-7. `DatatypeMismatch: column cannot be cast automatically to type` 오류
+
+`flask db upgrade` 시 VARCHAR→Enum 변환에서 자동 캐스팅이 안 되는 경우 발생.
+예: `mw_was_httplistener.ssl_yn`을 `VARCHAR(10)`에서 `ynenum`으로 변경 시.
+
+```
+sqlalchemy.exc.ProgrammingError: column "ssl_yn" cannot be cast automatically to type ynenum
+HINT: You might need to specify "USING ssl_yn::ynenum".
+```
+
+**해결 방법**: 수동으로 USING 절을 사용하여 변환 후 `stamp head`
+
+```bash
+# 1. 호스트에서: alembic_version 초기화
+docker exec mwm-db psql -U postgres -d mw -c "DELETE FROM alembic_version;"
+
+# 2. 수동 타입 변환 (USING 절 사용)
+docker exec mwm-db psql -U postgres -d mw -c "
+ALTER TABLE mw_was_httplistener ALTER COLUMN ssl_yn TYPE ynenum USING ssl_yn::ynenum;
+"
+
+# 3. 컨테이너 내부에서 stamp head
+flask db stamp head
+
+# 4. 확인
+flask db current
 ```
 
 ---
@@ -267,5 +333,36 @@ GRANT ALL PRIVILEGES ON TABLE it_itam_was_compare TO tiffanie;
 GRANT ALL PRIVILEGES ON TABLE it_itam_web_compare TO tiffanie;
 GRANT ALL PRIVILEGES ON TABLE it_leebalso_was_compare TO tiffanie;
 GRANT ALL PRIVILEGES ON TABLE it_leebalso_web_compare TO tiffanie;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tiffanie;
+```
+
+---
+
+## 10. 지식관리 그룹 테이블 생성 SQL (수동 생성 시 사용)
+
+> 2026-03-05 추가. `ut_km_group` 및 association 테이블.
+
+```sql
+CREATE TABLE ut_km_group (
+    id SERIAL PRIMARY KEY,
+    group_name VARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE ut_kmgroup_htmlcontent (
+    id SERIAL PRIMARY KEY,
+    id_of_group INTEGER NOT NULL REFERENCES ut_km_group(id) ON DELETE CASCADE,
+    id_of_htmlcontent INTEGER NOT NULL REFERENCES ut_html_content(id) ON DELETE CASCADE
+);
+
+CREATE TABLE ut_kmgroup_mdcontent (
+    id SERIAL PRIMARY KEY,
+    id_of_group INTEGER NOT NULL REFERENCES ut_km_group(id) ON DELETE CASCADE,
+    id_of_mdcontent INTEGER NOT NULL REFERENCES ut_md_content(id) ON DELETE CASCADE
+);
+
+-- 권한 부여
+GRANT ALL PRIVILEGES ON TABLE ut_km_group TO tiffanie;
+GRANT ALL PRIVILEGES ON TABLE ut_kmgroup_htmlcontent TO tiffanie;
+GRANT ALL PRIVILEGES ON TABLE ut_kmgroup_mdcontent TO tiffanie;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tiffanie;
 ```
