@@ -170,6 +170,9 @@ def get_user():
 def get_group():
     return next((r.name for r in g.user.roles if '_role' in r.name),'')
 
+def get_groups():
+    return [r.name for r in g.user.roles if '_role' in r.name]
+
 def get_date():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
