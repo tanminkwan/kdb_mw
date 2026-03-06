@@ -7,6 +7,7 @@ from flask_appbuilder import AppBuilder, SQLA, IndexView
 #from pymongo import MongoClient
 
 from flask_apscheduler import APScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 #from .kafka.kafka_producer import Producer4Kafka
 #from .kafka.kafka_admin import Admin4Kafka
 #from kafka.errors import NoBrokersAvailable
@@ -17,6 +18,10 @@ class MyIndexView(IndexView):
 
 app = Flask(__name__)
 app.config.from_object("config")
+app.config['SCHEDULER_JOBSTORES'] = {
+    'default': SQLAlchemyJobStore(url=app.config['SQLALCHEMY_DATABASE_URI'])
+}
+app.config['SCHEDULER_API_ENABLED'] = True
 
 """
  Logging configuration
@@ -90,9 +95,6 @@ PLANTUML_URL = app.config.get('PLANTUML_URL')
 #scheduler = BlockingScheduler(timezone='Asia/Seoul')
 #os.environ['TZ']='Asia/Seoul'
 scheduler = APScheduler()
-scheduler.init_app(app)
-
-scheduler.start()
 
 """
 from sqlalchemy.engine import Engine
@@ -111,6 +113,9 @@ from app.views import was, agent, monitor, knowledge, git, itam
 from app.sqls import was, agent, monitor, knowledge, batch, server, itam_compare
 from app.api import was_api, agent_api, common_api, model_api, grid_api, batch_api, itam_compare_api
 from . import dmlsForJeus, dmlsForWebtob, jobs
+
+scheduler.init_app(app)
+scheduler.start()
 
 # with app.app_context():
 #     db.create_all()

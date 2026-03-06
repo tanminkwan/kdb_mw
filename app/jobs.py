@@ -29,7 +29,8 @@ def notify_was_abnormal_status():
 #@scheduler.task('cron', id='job_ag_start_jobs', name='Remove Finished Commands', minute='*/1')
 @scheduler.task('date', id='job_ag_start_jobs')
 def job_ag_start_jobs():
-    logging.debug('job_ag_start_jobs is called.')
+    db.session.remove()
+    logging.debug('job_ag_start_jobs (one-time sync) is called.')
 
     commands = get_commands()
     
@@ -40,8 +41,24 @@ def job_ag_create_job(target):
 
     logging.debug(f"job_ag_create_job called : {target}")
 
-    # The reason 5 secs are added : when job runs immediately, the transaction triggered the job may not be committed yet.
-    start_date = target.time_to_exe if target.time_to_exe else datetime.now() + timedelta(seconds=10)
+    # Prevent duplicate registration
+    job_id = 'CreDetail_' + target.command_id
+    if target.ag_command_type.command_class == CommandClassEnum.ServerFunc:
+        job_id = 'RunBatch_' + target.command_id
+
+    if scheduler.get_job(job_id):
+        return
+
+    # [Normalization] If the target time is already past or too close (within 1s),
+    # schedule it 5 seconds from now to ensure the scheduler triggers it immediately.
+    target_time = target.time_to_exe if target.time_to_exe else datetime.now() + timedelta(seconds=10)
+    
+    if target_time <= datetime.now() + timedelta(seconds=1):
+        start_date = datetime.now() + timedelta(seconds=5)
+        logging.info(f"Setting start_date for {job_id} to 5s from now: {start_date} (requested: {target_time})")
+    else:
+        start_date = target_time
+
     end_date = target.time_to_stop if target.time_to_stop else None
 
     if target.periodic_type.name in ('IMMEDIATE', 'ONETIME'):
@@ -77,6 +94,7 @@ def job_ag_create_job(target):
                 , name    = target.command_type_id
                 , func    = run_batch_by_scheduler
                 , args    = (target.command_id, target.ag_command_type.target_file_name, target.additional_params,)
+                , misfire_grace_time = 300
                 , **dynamic_dict
             )
     else:
@@ -88,6 +106,7 @@ def job_ag_create_job(target):
                 , name    = target.command_type_id
                 , func    = create_command_detail_by_sch
                 , args    = (target.command_id,)
+                , misfire_grace_time = 300
                 , **dynamic_dict
             )
 

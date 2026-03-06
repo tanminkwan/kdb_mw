@@ -97,10 +97,11 @@ class AutorunResult:
             sys_user = agent_id[agent_id.find('_')+1:agent_id.rfind('_')]
 
         #Getting domain id from file_path ex) /sw/jeus/domains/PPRM_Domain/config
-        if file_name == 'domain.xml':
+        real_domain_id = ''
+        if 'domain' in file_name and file_name.endswith('.xml'):
             real_domain_id = file_path[file_path.find('domains')+8:file_path.find('config')-1]
 
-        elif file_name == 'JEUSMain.xml':
+        elif 'JEUSMain' in file_name:
             fpl = file_path.split('/')
             real_domain_id = fpl[fpl.index('config')-1]
 
