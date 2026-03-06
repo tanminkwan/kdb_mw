@@ -108,7 +108,7 @@ class MoWasStatusReportModelView(ModelView):
                     , 'c_wi_11':' ', 'c_wi_12':' ', 'c_wi_13':' ', 'c_wi_14':' ', 'c_wi_15':' '
                     , 'c_comment':'비고'
                     , 'checked_date':'확인일시' }
-    formatters_columns={'checked_date': lambda x:x.strftime('%Y.%m.%d %H:%M')}
+    formatters_columns={'checked_date': lambda x: x.strftime('%Y.%m.%d %H:%M') if x else ''}
     base_filters = [['reported_time', FilterStartsWithFunction, get_reporttime]
                     ]
 
