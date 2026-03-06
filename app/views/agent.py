@@ -54,6 +54,20 @@ def create_command_detail1(mapper, connection, target):
     else:
         create_command_detail(target)
 
+@db.event.listens_for(AgCommandMaster, 'after_delete')
+def delete_command_job(mapper, connection, target):
+    
+    logging.debug(f"after_delete delete_command_job called : {target}")
+    try:
+        scheduler.remove_job('CreDetail_'+ target.command_id)
+    except Exception as e:
+        pass
+
+    try:
+        scheduler.remove_job('RunBatch_'+ target.command_id)
+    except Exception as e:
+        pass
+
 @db.event.listens_for(AgCommandMaster, 'before_insert')
 def set_interval_type(mapper, connection, target):
     
@@ -395,6 +409,10 @@ class AutorunResultModelView(ModelView):
                     ,'autorun_func':'자동실행 기능'
                     ,'autorun_param':'Parameter'
                      }
+    
+    description_columns = {
+        'target_file_name': '파일명, 기능명 또는 정규식(Regex)을 입력하십시오. (예: run\.agent\.(sh|bat))'
+    }
 
     add_columns  = ['autorun_id', 'autorun_type', 'target_file_name', 'command_id'\
                     , 'autorun_func', 'autorun_param']

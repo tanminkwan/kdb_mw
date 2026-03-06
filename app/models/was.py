@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import JSON, JSONB
 from sqlalchemy import Column, Integer, String, ForeignKey\
 , DateTime, Enum, UniqueConstraint, ForeignKeyConstraint\
 , Table, Date, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 import enum
 from datetime import datetime
 from flask_appbuilder.models.mixins import FileColumn
@@ -279,6 +279,12 @@ class MwWas(Model):
 
     UniqueConstraint(was_id)
 
+    @validates('located_host_id')
+    def validate_located_host_id(self, key, host_id):
+        if host_id:
+            return host_id.lower()
+        return host_id
+
     __table_args__ = (
         t__table_comment,
     )
@@ -464,6 +470,12 @@ class MwWasInstance(Model):
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     UniqueConstraint(was_id, was_instance_id)
 
+    @validates('host_id')
+    def validate_host_id(self, key, host_id):
+        if host_id:
+            return host_id.lower()
+        return host_id
+
     __table_args__ = (
         t__table_comment,
     )
@@ -576,6 +588,12 @@ class MwWeb(Model):
 
     #UniqueConstraint(host_id, jsv_port)
     UniqueConstraint(host_id, port)
+
+    @validates('host_id')
+    def validate_host_id(self, key, host_id):
+        if host_id:
+            return host_id.lower()
+        return host_id
 
     __table_args__ = (
         t__table_comment,
@@ -1189,6 +1207,12 @@ class MwServer(Model):
     user_id          = Column(String(50), default=get_user, nullable=False)
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     UniqueConstraint(host_id)
+    
+    @validates('host_id')
+    def validate_host_id(self, key, host_id):
+        if host_id:
+            return host_id.lower()
+        return host_id
 
     __table_args__ = (
         t__table_comment,
