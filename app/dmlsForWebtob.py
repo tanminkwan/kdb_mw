@@ -415,8 +415,8 @@ class WebtobHttpm(ABC):
             # Logging 이 두개 이상일 경우
             if isinstance(vhost['LOGGING'], list):
                 tmp = []
-                for logging in vhost['LOGGING']:
-                    tmp.append(next( c['FILENAME'] for c in self.logging if logging==c['NAME']))
+                for log_entry in vhost['LOGGING']:
+                    tmp.append(next( c['FILENAME'] for c in self.logging if log_entry==c['NAME']))
                 acc_dir = ','.join(tmp)
             else:
                 acc_dir = next( c['FILENAME'] for c in self.logging if vhost['LOGGING']==c['NAME'])

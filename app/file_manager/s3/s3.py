@@ -9,12 +9,6 @@ from app import app
 class S3Client:
 
     def __init__(self):
-        
-        print(f"AWS_URL : {app.config['AWS_URL']}")
-        print(f"AWS_ACCESS_KEY_ID : {app.config['AWS_ACCESS_KEY_ID']}")
-        print(f"BUCKET_NAME : {app.config['BUCKET_NAME']}")
-        print(f"BUCKET_PREFIX : {app.config['BUCKET_PREFIX']}")
-
         # S3 클라이언트 생성
         self.s3 = boto3.client('s3',
                         endpoint_url=app.config['AWS_URL'],

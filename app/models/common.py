@@ -202,7 +202,7 @@ def getColoredText(obj):
         color = color_map[obj.__class__.__name__][obj.name]
         text = '<p style="color:' + color + ';">' + obj.value + '</p>'
     except KeyError:
-        text = '<p style="color:black;">' +  'Null' if obj is None else obj.value + '</p>'
+        text = '<p style="color:black;">' + ('Null' if obj is None else obj.value) + '</p>'
     return text
 
 def isNotNull(obj):

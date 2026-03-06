@@ -542,7 +542,7 @@ class AutorunResult:
         domain.update(name=was_instance_id)
         
         fac = JeusDomainFactory()
-        jeusDomain = OldJeusDomain(domain_id, host_id, domain, doc)
+        jeusDomain = OldJeusDomain(domain_id, host_id, domain, content)
         rtn , _ = fac.jeus_web_connection(jeusDomain)
         
         return rtn, ''

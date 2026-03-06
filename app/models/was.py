@@ -630,7 +630,7 @@ class MwWeb(Model):
 
     def c_ip_address(self):
         ip = self.mw_server.ip_address
-        return Markup('<p style="color:blue;">' + ip if ip is not None else "" + '</p>')
+        return Markup('<p style="color:blue;">' + (ip if ip is not None else "") + '</p>')
 
     def t__domainInfo_yn(self):
 
