@@ -368,4 +368,32 @@ JEUS domain upsert 시 `MS-*` 형태의 `ut_tag`를 자동 생성하여 `MwWasIn
     ```
 
 ---
-**비고:** 현재 앱 버전: `20260305.012`
+## 17. 서버(Host) ID 소문자 정합성 강제 및 기존 데이터 정리 (2026-03-06)
+서버 등록 및 조회 시 호스트명 대소문자 불일치로 인한 조회 실패(Host not found) 문제를 근본적으로 해결하기 위해, 모든 호스트 관련 필드(host_id, located_host_id)를 **소문자**로 통일하도록 정책을 변경하고 시스템에 강제 로직을 적용했습니다.
+
+*   **시스템 변경 사항:**
+    *   `MwServer`, `MwWas`, `MwWasInstance`, `MwWeb` 모델에 `validates`를 적용하여 데이터 등록/수정 시 자동으로 소문자 변환.
+    *   에이전트로부터 전달받은 호스트명을 쿼리 수행 전 소문자로 변환하여 DB 인덱스 활용 및 정확한 매칭 보장.
+    *   `insert_row`, `update_rows` 등 공통 DML 함수에서도 호스트 관련 필드 자동 소문자화 지원.
+
+*   **기존 데이터 정리 SQL:**
+    시스템 적용 이전에 등록된 대문자 포함 데이터들을 소문자로 일괄 변환해야 합니다. 참조 무결성(FK)을 위해 아래 순서대로 실행을 권장합니다.
+    ```sql
+    -- 1. 참조 테이블(Was, Web, Instance) 먼저 업데이트 (시스템에 ON UPDATE CASCADE가 설정되지 않은 경우 대비)
+    UPDATE mw_was SET located_host_id = LOWER(located_host_id) WHERE located_host_id <> LOWER(located_host_id);
+    UPDATE mw_was SET standby_host_id = LOWER(standby_host_id) WHERE standby_host_id <> LOWER(standby_host_id);
+    UPDATE mw_was_instance SET host_id = LOWER(host_id) WHERE host_id <> LOWER(host_id);
+    UPDATE mw_web SET host_id = LOWER(host_id) WHERE host_id <> LOWER(host_id);
+    UPDATE mw_web SET standby_host_id = LOWER(standby_host_id) WHERE standby_host_id <> LOWER(standby_host_id);
+
+    -- 2. 메인 서버 테이블 업데이트
+    UPDATE mw_server SET host_id = LOWER(host_id) WHERE host_id <> LOWER(host_id);
+    UPDATE mw_server SET primary_host_id = LOWER(primary_host_id) WHERE primary_host_id <> LOWER(primary_host_id);
+    UPDATE mw_server SET dr_host_id = LOWER(dr_host_id) WHERE dr_host_id <> LOWER(dr_host_id);
+
+    -- 확인
+    SELECT host_id FROM mw_server WHERE host_id ~ '[A-Z]';
+    ```
+
+---
+**비고:** 현재 앱 버전: `20260306.001`

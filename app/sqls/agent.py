@@ -56,12 +56,26 @@ def get_autorun_func(command_id, target_file_name):
 
     if target_file_name:
 
+        # Exact match first
         result = db.session.query(AgAutorunResult)\
             .filter(AgAutorunResult.target_file_name==target_file_name\
                 ,AgAutorunResult.autorun_type=='FILENAME').first()
 
         if result:
             return result.autorun_func, result.autorun_param
+
+        # Regex match
+        results = db.session.query(AgAutorunResult)\
+            .filter(AgAutorunResult.autorun_type=='FILENAME').all()
+
+        for res in results:
+            if res.target_file_name:
+                try: 
+                    if re.search(res.target_file_name, target_file_name):
+                        logging.debug(f"Regex match found: {res.target_file_name} matches {target_file_name}")
+                        return res.autorun_func, res.autorun_param
+                except re.error:
+                    continue
 
     return None, None
 

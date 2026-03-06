@@ -126,4 +126,34 @@ WHERE schemaname = 'public' AND tableowner = 'postgres';
 | 3 | DB 연결 | `docker exec mwm-db psql -U postgres -d mw -c "SELECT 1;"` |
 | 4 | DB 세션 | 위 §1의 활성 세션 확인 명령 |
 | 5 | Redis 연결 | `docker exec mwm-redis redis-cli ping` |
-| 6 | 테이블 owner | `docker exec mwm-db psql -U postgres -d mw -c "SELECT tablename, tableowner FROM pg_tables WHERE schemaname='public' AND tableowner!='tiffanie';"` |
+| 6 | 테이블 owner | `docker exec mwm-db psql -U postgres -d mw -c \"SELECT tablename, tableowner FROM pg_tables WHERE schemaname='public' AND tableowner!='tiffanie';\"` |
+
+---
+
+## 8. 스케줄러(APScheduler)와 멀티 프로세스 구조
+
+현재 시스템은 **DB 기반(SQLAlchemyJobStore)** APScheduler를 사용하여 정합성과 가용성을 보장합니다.
+
+### ✅ 주요 설계 (Architecture)
+1.  **DB 공유 저장소 (`SQLAlchemyJobStore`)**: 
+    *   스케줄 작업(Job) 목록을 메모리가 아닌 PostgreSQL(`apscheduler_jobs` 테이블)에 저장합니다.
+    *   서버 재기동 후에도 작업 목록이 유지되며, 여러 워커가 하나의 장부를 공유합니다.
+2.  **멀티 워커 지원 (`Multi-Worker`)**:
+    *   Gunicorn 워커가 여러 개(`workers > 1`)여도 DB 락(Lock) 기능을 통해 **오직 한 명의 워커만** 특정 작업을 수행합니다. (중복 실행 방지)
+3.  **마스터-워커 분리 (`preload_app = 0`)**:
+    *   Gunicorn Master는 앱을 로드하지 않고 관리만 하며, 실제 작업을 수행하는 **Worker에서만 스케줄러가 기동**되도록 설정되어 있습니다.
+4.  **실행 보정 로직 (5s Normalization)**:
+    *   등록 시점과 실행 예정 시점의 오차(ms 단위)로 인해 알람을 놓치는 `Race Condition`을 방지하기 위해, 시작 시간이 지났거나 임박한 작업은 **현재 시각 + 5초** 뒤에 즉시 실행되도록 보정합니다.
+
+### ⚠️ 운영 및 트러블슈팅
+*   **작업 미실행 시**: 
+    *   로그에서 `Setting start_date for ... to 5s from now` 메시지가 있는지 확인하십시오. 
+    *   `misfire_grace_time`은 300초(5분)로 설정되어 있어, 일시적인 부하로 인한 지연 실행을 허용합니다.
+*   **DB 세션 이슈**: 
+    *   백그라운드 작업 시작 시 `db.session.remove()`를 호출하여 항상 최신 DB 데이터를 참조하도록 보장합니다.
+*   **작업 수동 확인**:
+    *   DB 접속 후 `SELECT * FROM apscheduler_jobs;` 명령으로 현재 예약된 모든 작업의 상태와 다음 실행 시각을 확인할 수 있습니다.
+
+### 🚀 배포 가이드
+*   코드 변경 후에는 반드시 `docker compose up -d --build --force-recreate mwm-app`을 수행하여 마스터/워커 프로세스의 스케줄러가 새로운 로직으로 갱신되도록 하십시오.
+

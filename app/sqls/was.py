@@ -100,6 +100,8 @@ def get_changed_web(create_on=None):
         return None 
 
 def get_was_instance_id(host_id, domain_id, engine_command):
+    if host_id:
+        host_id = host_id.lower()
 
     was_instance_rec = db.session.query(MwWasInstance)\
                     .filter(MwWasInstance.host_id==host_id
@@ -111,6 +113,8 @@ def get_was_instance_id(host_id, domain_id, engine_command):
         return None
 
 def get_domain_id_as_pk(host_id, real_domain_id, second=False):
+    if host_id:
+        host_id = host_id.lower()
 
     #차세대
     if real_domain_id.find('_Domain') >= 0:
@@ -141,6 +145,8 @@ def get_domain_id_as_pk(host_id, real_domain_id, second=False):
     return domain_id
 
 def get_landscape(host_id):
+    if host_id:
+        host_id = host_id.lower()
 
     print('HH :',host_id)
     server_rec = db.session.query(MwServer)\

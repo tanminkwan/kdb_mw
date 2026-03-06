@@ -108,6 +108,11 @@ def insert_row(table_name, insert_dict):
 
     insert_dict.update(dict(user_id=user_id, create_on=datetime.now()))
 
+    # Normalize host fields
+    for field in ['host_id', 'located_host_id']:
+        if field in insert_dict and isinstance(insert_dict[field], str):
+            insert_dict[field] = insert_dict[field].lower()
+
     stmt = insert(table).values(insert_dict)
 
     try:
@@ -122,6 +127,13 @@ def update_rows(table_name, update_dict, filter_dict):
     table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
+
+    # Normalize update and filter fields
+    for field in ['host_id', 'located_host_id']:
+        if field in update_dict and isinstance(update_dict[field], str):
+            update_dict[field] = update_dict[field].lower()
+        if field in filter_dict and isinstance(filter_dict[field], str):
+            filter_dict[field] = filter_dict[field].lower()
 
     for item in filter_dict:
         col = getattr(table, item)
