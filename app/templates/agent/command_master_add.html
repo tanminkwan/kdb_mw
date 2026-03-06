@@ -1,0 +1,23 @@
+{% extends "appbuilder/general/model/add.html" %}
+
+{% block tail_js %}
+{{ super() }}
+<script type="text/javascript">
+    $(document).ready(function () {
+        function handleBroadcastChange() {
+            var broadcast_yn = $('#broadcast_yn').val();
+            if (broadcast_yn == 'YES') {
+                $('#ag_agent').prop('disabled', true);
+                $('#ag_agent_group').prop('disabled', true);
+                $('#ag_agent').val(null).trigger('change');
+                $('#ag_agent_group').val(null).trigger('change');
+            } else {
+                $('#ag_agent').prop('disabled', false);
+                $('#ag_agent_group').prop('disabled', false);
+            }
+        }
+        $('#broadcast_yn').on('change', handleBroadcastChange);
+        handleBroadcastChange();
+    });
+</script>
+{% endblock %}

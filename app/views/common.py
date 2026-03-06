@@ -177,28 +177,44 @@ def call_notification(text):
 class RequiredOnContidion(object):
 
     def __init__(self, fieldname, value, message=None):
-        self.fieldname = fieldname
+        self.fieldnames = fieldname if isinstance(fieldname, list) else [fieldname]
         self.message = message
-        self.value = value if isinstance(value, list) else [value] 
+        # If fieldnames is a list, value should ideally be a list of lists or a list of values
+        # To keep it simple and backward compatible:
+        self.values = value if isinstance(value, list) else [value]
         
     def __call__(self, form, field):
-        try:
-            other = form[self.fieldname]
-        except KeyError:
-            raise ValidationError(field.gettext("Invalid field name '%s'.") % self.fieldname)
+        condition_met = True
+        
+        for i, fname in enumerate(self.fieldnames):
+            try:
+                other = form[fname]
+            except KeyError:
+                raise ValidationError(field.gettext("Invalid field name '%s'.") % fname)
 
-        if isinstance(other.data, enum.Enum):
-            real_data = other.data.name
-        else:
-            real_data = other.data
+            if isinstance(other.data, enum.Enum):
+                real_data = other.data.name
+            else:
+                real_data = other.data
+            
+            # Match against the corresponding value in self.values
+            # If self.values is shorter than fieldnames, we check against the first value or use indices
+            target_value = self.values[i] if i < len(self.values) else self.values[0]
+            
+            # If target_value is a list, check if real_data is in it. Otherwise, direct comparison.
+            if isinstance(target_value, list):
+                if real_data not in target_value:
+                    condition_met = False
+                    break
+            else:
+                if real_data != target_value:
+                    condition_met = False
+                    break
         
-        if real_data in self.value and not field.data:
-        
+        if condition_met and not field.data:
             message = self.message
             if message is None:
                 message = field.gettext('This field is required')
-
-            #raise ValidationError(message % d)
             raise StopValidation(message)
 
 class ValidateBatchFunctionName:

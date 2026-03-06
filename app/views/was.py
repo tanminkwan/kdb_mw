@@ -553,7 +553,7 @@ class WebSslModelView(ModelView):
                     ,'update_dt':'확인일시'
                     }
     search_columns = ['host_id', 'notafter', 'update_dt', 'ssl_certi']
-    formatters_columns={'update_dt': lambda x:x.strftime('%Y.%m.%d %H:%M')}         
+    formatters_columns={'update_dt': lambda x: x.strftime('%Y.%m.%d %H:%M') if x else ''}         
     base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
 
     extra_args = {
