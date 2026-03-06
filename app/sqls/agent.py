@@ -232,11 +232,15 @@ def create_command_detail(command):
             
     # Append all Agents and Agent groups of a command master into a list
     ags = []
-    for agg in command_rec.ag_agent_group:
-        for ag in agg.ag_agent:
-            ags.append(ag)
-
-    ags += command_rec.ag_agent
+    
+    if command_rec.broadcast_yn.name == 'YES':
+        # Add all approved agents if broadcast is enabled
+        ags = db.session.query(AgAgent).filter(AgAgent.approved_yn == 'YES').all()
+    else:
+        for agg in command_rec.ag_agent_group:
+            for ag in agg.ag_agent:
+                ags.append(ag)
+        ags += command_rec.ag_agent
 
     # Remove duplicated agents by set func
     for ag in set(ags):

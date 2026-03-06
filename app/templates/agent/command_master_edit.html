@@ -1,0 +1,34 @@
+{% extends "appbuilder/general/model/edit.html" %}
+
+{% block tail_js %}
+{{ super() }}
+<script type="text/javascript">
+    $(document).ready(function () {
+        function handleBroadcastChange() {
+            var broadcast_yn = $('#broadcast_yn').val();
+            if (broadcast_yn == 'YES') {
+                // Disable and clear Agent/Group fields
+                $('#ag_agent').prop('disabled', true);
+                $('#ag_agent_group').prop('disabled', true);
+                // Clear selections (Select2 usually needs a trigger or setting val to null)
+                $('#ag_agent').val(null).trigger('change');
+                $('#ag_agent_group').val(null).trigger('change');
+            } else {
+                $('#ag_agent').prop('disabled', false);
+                $('#ag_agent_group').prop('disabled', false);
+            }
+        }
+
+        // Detect broadcast_yn change
+        $('#broadcast_yn').on('change', function () {
+            handleBroadcastChange();
+        });
+
+        // Initialize on page load
+        handleBroadcastChange();
+
+        // Ensure disabled fields are re-enabled on form submit so they are posted if needed
+        // But for broadcast, we actually want them to be empty anyway.
+    });
+</script>
+{% endblock %}
