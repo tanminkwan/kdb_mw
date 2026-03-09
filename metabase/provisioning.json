@@ -1,0 +1,115 @@
+{
+    "database": {
+        "name": "MWM Database",
+        "engine": "postgres"
+    },
+    "questions": [
+        {
+            "name": "Total Agents",
+            "display": "scalar",
+            "query": "SELECT count(*)::integer as total FROM ag_agent WHERE 1=1 [[ AND ({{landscape}} = '전체' OR landscape::text = {{landscape}}) ]]"
+        },
+        {
+            "name": "Online Agents",
+            "display": "scalar",
+            "query": "SELECT count(*)::integer as online FROM ag_agent WHERE approved_yn::text = 'YES' AND last_checked_date > NOW() - INTERVAL '300 seconds' [[ AND ({{landscape}} = '전체' OR landscape::text = {{landscape}}) ]]"
+        },
+        {
+            "name": "Agent List",
+            "display": "table",
+            "query": "SELECT agent_id, agent_name, ip_address, landscape, last_checked_date, CASE WHEN approved_yn::text = 'NO' THEN '미승인' WHEN last_checked_date IS NULL THEN 'Offline' WHEN last_checked_date > NOW() - INTERVAL '300 seconds' THEN 'Online' ELSE 'Offline' END as status FROM ag_agent WHERE 1=1 [[ AND ({{landscape}} = '전체' OR landscape::text = {{landscape}}) ]]"
+        },
+        {
+            "name": "Agents by Landscape",
+            "display": "bar",
+            "query": "SELECT landscape::text as landscape, count(*)::integer as count FROM ag_agent GROUP BY 1"
+        }
+    ],
+    "dashboard": {
+        "name": "Agent Status Dashboard",
+        "parameters": [
+            {
+                "name": "Landscape",
+                "slug": "landscape",
+                "type": "string/=",
+                "values_source_type": "static-list",
+                "values_source_config": {
+                    "values": [
+                        "전체",
+                        "PROD",
+                        "DEV",
+                        "TEST"
+                    ]
+                },
+                "values_query_type": "list",
+                "default": "전체"
+            }
+        ],
+        "cards": [
+            {
+                "card_name": "Total Agents",
+                "row": 0,
+                "col": 0,
+                "size_x": 6,
+                "size_y": 4,
+                "parameter_mappings": [
+                    {
+                        "parameter_mapping": "landscape",
+                        "target": [
+                            "variable",
+                            [
+                                "template-tag",
+                                "landscape"
+                            ]
+                        ]
+                    }
+                ]
+            },
+            {
+                "card_name": "Online Agents",
+                "row": 0,
+                "col": 6,
+                "size_x": 6,
+                "size_y": 4,
+                "parameter_mappings": [
+                    {
+                        "parameter_mapping": "landscape",
+                        "target": [
+                            "variable",
+                            [
+                                "template-tag",
+                                "landscape"
+                            ]
+                        ]
+                    }
+                ]
+            },
+            {
+                "card_name": "Agents by Landscape",
+                "row": 0,
+                "col": 12,
+                "size_x": 12,
+                "size_y": 4
+            },
+            {
+                "card_name": "Agent List",
+                "row": 4,
+                "col": 0,
+                "size_x": 24,
+                "size_y": 10,
+                "parameter_mappings": [
+                    {
+                        "parameter_mapping": "landscape",
+                        "target": [
+                            "variable",
+                            [
+                                "template-tag",
+                                "landscape"
+                            ]
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

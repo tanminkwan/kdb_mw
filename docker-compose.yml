@@ -15,8 +15,8 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD='1q2w3e4r!!'
       - PGDATA=/var/lib/postgresql/data/pgdata
-    #    ports:
-    #      - '5432:5432'
+    ports:
+      - '5433:5432'
     volumes:
       - /home/hennry/data1:/var/lib/postgresql/data
       - ./create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
@@ -91,6 +91,22 @@ services:
   mwm-kroki-mermaid:
     container_name: mwm-kroki-mermaid
     image: yuzutech/kroki-mermaid:latest
+
+  mwm-metabase:
+    container_name: mwm-metabase
+    image: metabase/metabase:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_DBNAME=metabase
+      - MB_DB_PORT=5432
+      - MB_DB_USER=tiffanie
+      - MB_DB_PASS=1q2w3e4r!!
+      - MB_DB_HOST=mwm-db
+      - TZ=Asia/Seoul
+    depends_on:
+      - mwm-db
 
 volumes:
   redis_data: #  prefect:
