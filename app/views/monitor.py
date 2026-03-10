@@ -56,7 +56,7 @@ class MoGridConfigModelView(ModelView):
     edit_exclude_columns = ['update_on', 'create_on']
     add_exclude_columns = ['update_on', 'create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class MoWasInstanceStatusModelView(ModelView):
     
@@ -65,7 +65,7 @@ class MoWasInstanceStatusModelView(ModelView):
     list_title   = "WAS instance 상태"    
     list_columns = ['was_id', 'was_instance_id', 'was_instance_status', 'host_id'\
                     , 'landscape','update_on']
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class MoWasStatusTemplateModelView(ModelView):
     
@@ -83,7 +83,7 @@ class MoWasStatusTemplateModelView(ModelView):
     edit_exclude_columns = ['update_on', 'create_on']
     add_exclude_columns = ['update_on', 'create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class MoWasStatusReportModelView(ModelView):
     

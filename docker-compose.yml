@@ -73,6 +73,7 @@ services:
       AWS_ACCESS_KEY_ID: ixbjcVrcQnQPNKuW01eO
       AWS_SECRET_ACCESS_KEY: jzXQCcfUzBAPajLSSChOgIArbGhyEUoXcG9v4DrR
       BUCKET_NAME: mwm-contents
+      KROKI_URL: http://mwm-kroki:8000
     #      PLANTUML_URL: https://mwm-plantuml.kdb.co.kr:20443
     links:
       - mwm-db
