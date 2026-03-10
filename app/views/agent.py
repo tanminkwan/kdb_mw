@@ -110,7 +110,7 @@ class AgentModelView(ModelView):
     }
 
     base_permissions = ['can_list', 'can_show', 'can_edit']
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class CommandHelperModelView(ModelView):
     
@@ -127,7 +127,7 @@ class AgentGroupModelView(ModelView):
     list_columns  = ['agent_group_id','agent_group_name', 'ag_agent']
     add_columns   = ['agent_group_id','agent_group_name', 'agent_type', 'ag_agent']
     edit_columns  = ['agent_group_id','agent_group_name', 'agent_type', 'ag_agent']
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class FileModelView(ModelView):
     datamodel = SQLAInterface(AgFile)
@@ -173,7 +173,7 @@ class CommandTypeModelView(ModelView):
 
     add_columns = ['command_type_id', 'command_type_name', 'command_class', 'target_file_name', 'target_file_path']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     validators_columns = {
                     'target_file_name':[ValidateBatchFunctionName()]
@@ -227,7 +227,7 @@ class ResultModelView(ModelView):
 
     formatters_columns={'create_on': lambda x: x.strftime('%Y.%m.%d %H:%M') if x else ''}
     
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     @action("update_config","Update Config","진짜로?","fa-rocket",single=False)
     def update_config(self, items):
@@ -307,7 +307,7 @@ class CommandDetailModelView(ModelView):
     base_order   = ('create_on', 'desc')
     search_columns = ['command_id','agent_id','command_type_id','command_class']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     related_views = [ResultModelView]
 
@@ -355,7 +355,7 @@ class CommandMasterModelView(ModelView):
                   , 'ag_agent':[RequiredOnContidion(['ag_agent_group', 'broadcast_yn'], [[], 'NO'], message='Agent, 그룹 또는 전체 대상을 선택하세요.')]
                 }
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     related_views = [CommandDetailModelView]
 
@@ -380,7 +380,7 @@ class CommandMasterAliveView(ModelView):
 
     base_order   = ('create_on', 'desc')
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user],['finished_yn', FilterEqual, 'NO']]
+    base_filters = [['finished_yn', FilterEqual, 'NO']]
     base_permissions = ['can_list', 'can_show', 'can_edit']
     related_views = [CommandDetailModelView]
 
@@ -432,7 +432,7 @@ class AutorunResultModelView(ModelView):
                   , 'command_id':[RequiredOnContidion('autorun_type', 'COMMAND', message='Command ID를 입력하세요.')]
                 }
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class AjaxView(BaseView):
 

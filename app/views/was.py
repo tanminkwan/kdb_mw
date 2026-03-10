@@ -56,7 +56,7 @@ class DatasourceModelView(ModelView):
 
     search_columns = ['mw_was', 'db_user_id', 'db_dbms_id', 'db_server_name']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WaschangeHistoryModelView(ModelView):
     
@@ -81,7 +81,7 @@ class WaschangeHistoryModelView(ModelView):
     base_order = ('create_on', 'desc')
     base_permissions = ['can_list', 'can_show']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class ApplicationModelView(ModelView):
     
@@ -98,7 +98,7 @@ class ApplicationModelView(ModelView):
                     ,'deploy_type':'배포Type'}
 
     search_columns = ['mw_was']
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WasHttpListenerModelView(ModelView):
 
@@ -123,7 +123,7 @@ class WasHttpListenerModelView(ModelView):
     add_exclude_columns = ['httplistener_object','create_on']
     search_exclude_columns = ['httplistener_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WasWebtobConnectorModelView(ModelView):
 
@@ -148,7 +148,7 @@ class WasWebtobConnectorModelView(ModelView):
     add_exclude_columns = ['webtobconnector_object','create_on']
     search_exclude_columns = ['webtobconnector_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WasInstanceModelView(ModelView):
 
@@ -179,7 +179,7 @@ class WasInstanceModelView(ModelView):
     search_columns = ['was_id', 'was_instance_id', 'host_id', 'apm_type'\
                     ,'min_heap_size', 'max_heap_size', 'clustered_yn']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
     related_views = [WasWebtobConnectorModelView, WasHttpListenerModelView]
 
 class WasModelView(ModelView):
@@ -229,8 +229,7 @@ class WasModelView(ModelView):
     add_exclude_columns = ['cluster_object','was_object','license_update_date','jeus_properties_update_date','create_on']
     search_exclude_columns = ['cluster_object','was_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]
-                    ,['use_yn', FilterEqual, 'YES']]
+    base_filters = [['use_yn', FilterEqual, 'YES']]
     base_order = ('c_was_id', 'asc')    
 
     related_views = [WasInstanceModelView, ApplicationModelView, DatasourceModelView, WaschangeHistoryModelView]
@@ -298,8 +297,7 @@ class WasLinkView(ModelView):
 
     search_exclude_columns = ['cluster_object','was_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]
-                    ,['landscape', FilterEqual, 'PROD']
+    base_filters = [['landscape', FilterEqual, 'PROD']
                     ,['newgeneration_yn', FilterEqual, 'YES']
                     ]
     base_order = ('was_id', 'asc')    
@@ -359,7 +357,7 @@ class WasLicenseView(ModelView):
                         ,'license_issue_date': lambda x:x.strftime('%Y-%m-%d') if x else ''
                         ,'license_due_date': lambda x:x.strftime('%Y-%m-%d') if x else ''}
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
     base_order = ('was_id', 'asc')    
     base_permissions = ['can_list','can_show']
 
@@ -460,7 +458,7 @@ class WebLicenseView(ModelView):
                         ,'license_issue_date': lambda x:x.strftime('%Y-%m-%d') if x else ''
                         ,'license_due_date': lambda x:x.strftime('%Y-%m-%d') if x else ''}
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
     base_order = ('host_id', 'asc')
     base_permissions = ['can_list','can_show']
 
@@ -513,7 +511,7 @@ class WebVhostModelView(ModelView):
     add_exclude_columns = ['uri_object','create_on']
     search_exclude_columns = ['uri_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     @action("call_url_rewrite","Call URL Rewrite","","fa-rocket",single=False)
     def callUrlRewrote(self, items):
@@ -554,7 +552,7 @@ class WebSslModelView(ModelView):
                     }
     search_columns = ['host_id', 'notafter', 'update_dt', 'ssl_certi']
     formatters_columns={'update_dt': lambda x: x.strftime('%Y.%m.%d %H:%M') if x else ''}         
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     extra_args = {
         'inputList':[
@@ -608,9 +606,7 @@ class WebDomainModelView(ModelView):
     search_columns = ['host_id', 'ssl_yn', 'domain_name','notafter'\
                     , 'update_dt', 'ssl_certi']
     formatters_columns={'update_dt': lambda x:x.strftime('%Y.%m.%d %H:%M') if x is not None else ""}             
-    base_filters = [
-        ['user_id', FilterStartsWithFunction, get_mw_user] ,
-    ]
+    base_filters = []
     
     search_form_query_rel_fields = {
         'notafter':[['Not Null',FilterNotNull,'a']] ,
@@ -677,7 +673,7 @@ class WebServerModelView(ModelView):
     edit_exclude_columns = ['monitor_now', 'monitor_history', 'create_on']
     add_exclude_columns = ['monitor_now', 'monitor_history', 'create_on']
     search_exclude_columns = ['monitor_now', 'monitor_history'] 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WebUriModelView(ModelView):
     
@@ -695,7 +691,7 @@ class WebUriModelView(ModelView):
     edit_exclude_columns = ['create_on']
     add_exclude_columns = ['create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WebReverseproxyModelView(ModelView):
     
@@ -719,7 +715,7 @@ class WebReverseproxyModelView(ModelView):
     edit_exclude_columns = ['create_on']
     add_exclude_columns = ['create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WebchangeHistoryModelView(ModelView):
     
@@ -744,7 +740,7 @@ class WebchangeHistoryModelView(ModelView):
     search_columns = ['mw_web','create_on']
     base_order = ('create_on', 'desc')
     base_permissions = ['can_list', 'can_show']
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WebModelView(ModelView):
     
@@ -797,7 +793,7 @@ class WebModelView(ModelView):
     search_exclude_columns = ['ssl_object', 'logging_object', 'errordocument_object'\
             , 'proxy_ssl_object', 'tcpgw_object', 'httpm_object', 'ext_object', 'license_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     base_order = ('host_id', 'asc')    
 
@@ -883,7 +879,7 @@ class BizCategoryModelView(ModelView):
     edit_exclude_columns = ['create_on']
     add_exclude_columns = ['create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
     related_views = [WasModelView, WebModelView]
 
 class DBMasterModelView(ModelView):
@@ -904,7 +900,7 @@ class DBMasterModelView(ModelView):
     edit_exclude_columns = ['create_on']
     add_exclude_columns = ['create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class AppMasterModelView(ModelView):
     
@@ -938,8 +934,7 @@ class AppMasterModelView(ModelView):
     edit_exclude_columns = ['create_on']
     add_exclude_columns = ['create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]
-                    ,['app_id', FilterNotEqual, 'NOAPP']
+    base_filters = [['app_id', FilterNotEqual, 'NOAPP']
                     ]
 
 class ServerModelView(ModelView):
@@ -981,7 +976,7 @@ class ServerModelView(ModelView):
 
     base_order = ('host_id', 'asc')    
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     related_views = [WasModelView, WebModelView]
 
