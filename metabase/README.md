@@ -10,6 +10,7 @@
 
 | 파일명 | 역할 및 설명 |
 | :--- | :--- |
+| **`init.sql`** | Metabase 전용 데이터베이스 인스턴스(`metabase`) 및 접속 계정 권한을 초기 생성하기 위한 수동 실행 DB 스크립트. (`create_db.sql`에 포함된 경우 실행 불필요) |
 | **`provisioning.json`** | 대시보드의 **상태 정의서**. SQL 쿼리, 필터 명세, 카드 배치가 JSON으로 정의됨. |
 | **`setup.py`** | 최신 Metabase API 규격을 반영한 **현행화 엔진**. 인증 및 리소스 생성을 수행. |
 | **`manager.py`** | `provisioning.json`의 내용을 분석하여 Metabase와 **동기화 로직**을 담당하는 핵심 클래스. |
