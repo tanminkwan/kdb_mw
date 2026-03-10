@@ -26,7 +26,7 @@ class GtGroupUsersView(ModelView):
 
     base_order   = ('create_on', 'desc')
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class GitView(BaseApi):
 
