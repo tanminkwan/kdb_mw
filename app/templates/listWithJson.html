@@ -216,7 +216,7 @@
     {% if sl['id'] == 'biz-selector' %}
     {% set arr = { 'name': 'biz', 'url': '/api/v1/model/column_all/mw_biz_category.biz_category', 'filter1': '_flt_0_mw_biz_category=', 'filter2': '_flt_0_biz_category=' } %}
     {% elif sl['id'] == 'host-selector' %}
-    {% set arr = { 'name': 'host', 'url': '/api/v1/model/column_all/mw_server.host_id', 'filter1': '_flt_0_mw_server=', 'filter2': '_flt_0_host_id=' } %}
+    {% set arr = { 'name': 'host', 'url': '/api/v1/mw_server/list', 'filter1': '_flt_0_mw_server=', 'filter2': '_flt_0_host_id=' } %}
     {% elif sl['id'] == 'agent-selector' %}
     {% set arr = { 'name': 'agent', 'url': '/api/v1/model/column_all/ag_agent.agent_id', 'filter1': '_flt_0_mw_agent=', 'filter2': '_flt_0_agent_id=' } %}
     {% elif sl['id'] == 'app-selector' %}
@@ -270,10 +270,12 @@
         $.ajax({
             url: "{{arr.url}}" + condition,
             success: function (data) {
-                var obj = data.list
+                var obj = data.list || data;
                 $('#{{arr.name}}-selector').append("<option data-value='0' value='전체'></option>");
                 $(obj).each(function (key, item) {
-                    $('#{{arr.name}}-selector').append("<option data-value='" + item.pk + "' value='" + item.value + "'></option>");
+                    var pk = item.pk !== undefined ? item.pk : item.id;
+                    var value = item.value !== undefined ? item.value : item.host_id;
+                    $('#{{arr.name}}-selector').append("<option data-value='" + pk + "' value='" + value + "'></option>");
                 });
             },
             complete: function () {
