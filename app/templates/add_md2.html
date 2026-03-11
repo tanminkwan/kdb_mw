@@ -93,6 +93,14 @@
             events: {
                 change: f_onChanged
             },
+            hooks: {
+                addImageBlobHook: function (blob, callback) {
+                    if (!blob.name) {
+                        blob.name = 'Pasted_Image_' + new Date().getTime() + '.png';
+                    }
+                    uploadFile(blob, callback);
+                }
+            },
             plugins: [tableMergedCell, [uml, umlOptions], [colorSyntax, colorSyntaxOptions], codeSyntaxHighlight, chart, mermaidPlugin]
         });
 
@@ -138,19 +146,24 @@
 
         function handleFiles(files) { for (var i = 0; i < files.length; i++) uploadFile(files[i]); }
 
-        function uploadFile(file) {
+        function uploadFile(file, callback) {
             var fd = new FormData();
-            fd.append('file', file);
-            dropzone.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 업로드 중: ' + file.name;
+            fd.append('file', file, file.name);
+            dropzone.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 업로드 중: ' + (file.name || '이미지');
             $.ajax({
                 url: '/ut/upload_file', type: 'POST', data: fd,
                 processData: false, contentType: false,
                 success: function (data) {
-                    uploadedFileIds.push(data.file_id);
-                    hiddenInput.value = uploadedFileIds.join(',');
-                    // editor.insertText('\n[📎 ' + data.file_name + '](' + data.download_url + ')\n');
-                    var item = '<span class="uploaded-file-item"><a href="' + data.download_url + '">📎 ' + data.file_name + '</a></span>';
-                    fileListEl.innerHTML += item;
+                    if (callback) {
+                        // Insert image markdown into editor only (don't add as attachment)
+                        callback(data.download_url, data.file_name);
+                    } else {
+                        // Display in file list and register as a document attachment
+                        uploadedFileIds.push(data.file_id);
+                        hiddenInput.value = uploadedFileIds.join(',');
+                        var item = '<span class="uploaded-file-item"><a href="' + data.download_url + '">📎 ' + data.file_name + '</a></span>';
+                        fileListEl.innerHTML += item;
+                    }
                     dropzone.innerHTML = '<i class="fa fa-cloud-upload"></i> 파일을 여기에 드래그하여 첨부하세요';
                 },
                 error: function (xhr) {
