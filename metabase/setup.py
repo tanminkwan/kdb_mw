@@ -3,9 +3,17 @@ import time
 import json
 import os
 import re
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 환경 변수 설정
 METABASE_URL = os.getenv("METABASE_URL", "http://mwm-metabase:3000")
+
+session = requests.Session()
+if METABASE_URL.startswith("https"):
+    session.verify = False
+
 ADMIN_EMAIL = os.getenv("METABASE_ADMIN_EMAIL", "admin@example.com")
 ADMIN_PASSWORD = os.getenv("METABASE_ADMIN_PASSWORD", "Password123!")
 DB_HOST = os.getenv("DB_HOST", "mwm-db")
@@ -22,7 +30,7 @@ def wait_for_metabase():
     print(f"Waiting for Metabase at {METABASE_URL}...")
     while True:
         try:
-            res = requests.get(f"{METABASE_URL}/api/health")
+            res = session.get(f"{METABASE_URL}/api/health")
             if res.status_code == 200:
                 print("Metabase is ready!")
                 break
@@ -32,14 +40,14 @@ def wait_for_metabase():
 
 def setup_metabase():
     try:
-        res = requests.get(f"{METABASE_URL}/api/setup/admin_checklist")
+        res = session.get(f"{METABASE_URL}/api/setup/admin_checklist")
         if res.status_code == 403:
             return authenticate()
     except:
         pass
 
     print("Initial setup in progress...")
-    props = requests.get(f"{METABASE_URL}/api/session/properties").json()
+    props = session.get(f"{METABASE_URL}/api/session/properties").json()
     token = props.get("setup-token")
     if not token: return authenticate()
 
@@ -56,7 +64,7 @@ def setup_metabase():
             "allow_tracking": False
         }
     }
-    res = requests.post(f"{METABASE_URL}/api/setup", json=setup_data)
+    res = session.post(f"{METABASE_URL}/api/setup", json=setup_data)
     if res.status_code != 200:
         print(f"Initial setup POST /api/setup failed: {res.status_code} - {res.text}")
     
@@ -65,7 +73,7 @@ def setup_metabase():
 def authenticate():
     print(f"Attempting authentication as {ADMIN_EMAIL}...")
     try:
-        res = requests.post(f"{METABASE_URL}/api/session", json={"username": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
+        res = session.post(f"{METABASE_URL}/api/session", json={"username": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
         if res.status_code == 200:
             return res.json().get("id")
         else:
@@ -87,7 +95,7 @@ def provision_resources(session_id):
     with open(prov_file_path, 'r') as f: config = json.load(f)
 
     # 1. Database Sync
-    dbs = requests.get(f"{METABASE_URL}/api/database", headers=headers).json()
+    dbs = session.get(f"{METABASE_URL}/api/database", headers=headers).json()
     if isinstance(dbs, dict): dbs = dbs.get('data', [])
     db_id = next((d['id'] for d in dbs if d['name'] == config['database']['name']), None)
 
@@ -97,11 +105,11 @@ def provision_resources(session_id):
             "name": config['database']['name'], "engine": config['database']['engine'],
             "details": {"host": DB_HOST, "port": int(DB_PORT), "dbname": DB_NAME, "user": DB_USER, "password": DB_PASS, "ssl": False}
         }
-        db_id = requests.post(f"{METABASE_URL}/api/database", headers=headers, json=payload).json().get("id")
+        db_id = session.post(f"{METABASE_URL}/api/database", headers=headers, json=payload).json().get("id")
 
     # 2. Questions (Cards) Sync
     card_map = {}
-    existing_cards = requests.get(f"{METABASE_URL}/api/card", headers=headers).json()
+    existing_cards = session.get(f"{METABASE_URL}/api/card", headers=headers).json()
     for q_cfg in config['questions']:
         card = next((c for c in existing_cards if c['name'] == q_cfg['name']), None)
         
@@ -122,16 +130,16 @@ def provision_resources(session_id):
         if card:
             # 설정(특히 template-tags)이 변경되었을 수 있으므로 강제 업데이트 수행
             print(f"Updating question: {q_cfg['name']}")
-            requests.put(f"{METABASE_URL}/api/card/{card['id']}", headers=headers, json=payload)
+            session.put(f"{METABASE_URL}/api/card/{card['id']}", headers=headers, json=payload)
             card_id = card['id']
         else:
             print(f"Creating question: {q_cfg['name']}")
-            res_card = requests.post(f"{METABASE_URL}/api/card", headers=headers, json=payload)
+            res_card = session.post(f"{METABASE_URL}/api/card", headers=headers, json=payload)
             card_id = res_card.json().get("id")
         card_map[q_cfg['name']] = card_id
 
     # 3. Dashboard Sync (Metadata & Parameters)
-    dashboards = requests.get(f"{METABASE_URL}/api/dashboard", headers=headers).json()
+    dashboards = session.get(f"{METABASE_URL}/api/dashboard", headers=headers).json()
     dash = next((d for d in dashboards if d['name'] == config['dashboard']['name']), None)
     
     # 파라미터 ID 부여 (Metabase v0.47+ 필수)
@@ -154,14 +162,14 @@ def provision_resources(session_id):
 
     if not dash:
         print(f"Creating dashboard: {config['dashboard']['name']}")
-        dash_id = requests.post(f"{METABASE_URL}/api/dashboard", headers=headers, json=dash_meta).json().get("id")
+        dash_id = session.post(f"{METABASE_URL}/api/dashboard", headers=headers, json=dash_meta).json().get("id")
     else:
         dash_id = dash['id']
         print(f"Updating dashboard metadata for ID {dash_id}")
-        requests.put(f"{METABASE_URL}/api/dashboard/{dash_id}", headers=headers, json=dash_meta)
+        session.put(f"{METABASE_URL}/api/dashboard/{dash_id}", headers=headers, json=dash_meta)
 
     # 4. Dashboard Layout & Mappings (v0.47+ Bulk Sync with Negative IDs)
-    dash_details = requests.get(f"{METABASE_URL}/api/dashboard/{dash_id}", headers=headers).json()
+    dash_details = session.get(f"{METABASE_URL}/api/dashboard/{dash_id}", headers=headers).json()
     p_map = {p['slug']: p['id'] for p in dash_details.get('parameters', [])}
     e_dashcards = {dc['card_id']: dc['id'] for dc in dash_details.get('dashcards', []) if dc.get('card_id')}
 
@@ -189,7 +197,7 @@ def provision_resources(session_id):
         final_dashcards.append(item)
     
     print(f"Updating dashboard layout with {len(final_dashcards)} cards...")
-    res = requests.put(f"{METABASE_URL}/api/dashboard/{dash_id}/cards", headers=headers, json={"cards": final_dashcards})
+    res = session.put(f"{METABASE_URL}/api/dashboard/{dash_id}/cards", headers=headers, json={"cards": final_dashcards})
     if res.status_code == 200: print("Successfully updated dashboard state.")
     else: print(f"Failed to update dashboard: {res.status_code} - {res.text}")
 

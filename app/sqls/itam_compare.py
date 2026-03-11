@@ -136,7 +136,7 @@ def compare_itam_was(config_id=None):
 
     for rec in records:
         # 1) hostname 미등록
-        if rec.host_id not in valid_hosts:
+        if rec.host_id and str(rec.host_id).lower() not in valid_hosts:
             results.append(ItItamWasCompare(
                 config_id=rec.config_id,
                 error_type='hostname 미등록',
@@ -169,7 +169,7 @@ def compare_itam_was(config_id=None):
             continue
 
         # 3) 설치 서버 불일치
-        if rec.host_id != mw_was_rec.located_host_id:
+        if rec.host_id and str(rec.host_id).lower() != mw_was_rec.located_host_id:
             results.append(ItItamWasCompare(
                 config_id=rec.config_id,
                 error_type='설치 서버 불일치',
@@ -256,7 +256,7 @@ def compare_itam_embed_web(config_id=None):
 
         # 1) 내장 WEB 미등록
         mw_web_rec = db.session.query(MwWeb).filter(
-            MwWeb.host_id == rec.host_id,
+            MwWeb.host_id == (str(rec.host_id).lower() if rec.host_id else None),
             MwWeb.port == port_int
         ).first()
 
@@ -337,7 +337,7 @@ def compare_itam_web(config_id=None):
 
     for rec in records:
         # 1) hostname 미등록
-        if rec.host_id not in valid_hosts:
+        if rec.host_id and str(rec.host_id).lower() not in valid_hosts:
             results.append(ItItamWebCompare(
                 config_id=rec.config_id,
                 error_type='hostname 미등록',
@@ -360,7 +360,7 @@ def compare_itam_web(config_id=None):
 
         # 2) WEB 미등록
         mw_web_rec = db.session.query(MwWeb).filter(
-            MwWeb.host_id == rec.host_id,
+            MwWeb.host_id == (str(rec.host_id).lower() if rec.host_id else None),
             MwWeb.port == port_int
         ).first()
 
@@ -493,7 +493,7 @@ def compare_leebalso_embed_web(web_id=None):
     for rec in records:
         # ITAM 미등록 체크
         itam_exists = db.session.query(ItWas).filter(
-            ItWas.host_id == rec.host_id,
+            func.lower(ItWas.host_id) == str(rec.host_id).lower(), # rec는 리발소지만 안전을 위해 lower
             ItWas.embed_web_port == str(rec.port),
             ItWas.embed_web_yn == 'Y'
         ).first()
@@ -534,7 +534,7 @@ def compare_leebalso_web(web_id=None):
     for rec in records:
         # ITAM 미등록 체크
         itam_exists = db.session.query(ItWeb).filter(
-            ItWeb.host_id == rec.host_id,
+            func.lower(ItWeb.host_id) == str(rec.host_id).lower(), # rec는 리발소지만 안전을 위해 lower
             ItWeb.node_port == str(rec.port)
         ).first()
 
