@@ -14,7 +14,7 @@ class MwServerApi(BaseApi):
     resource_name = 'mw_server'
 
     @expose('/list', methods=['GET'])
-    @protect()
+    @protect(allow_browser_login=True)
     def list(self):
         """List all servers or filter by host_id"""
         host_id = request.args.get('host_id')
@@ -209,11 +209,6 @@ class MwDiff(BaseApi):
             , appbuilder=appbuilder
             )
 
-class ServerModelApi(ModelRestApi):
-    resource_name = 'Server'
-    datamodel = SQLAInterface(MwServer)
-
 appbuilder.add_api(MwServerApi)
 appbuilder.add_api(MWConfiguration)
 appbuilder.add_api(MwDiff)
-appbuilder.add_api(ServerModelApi)
