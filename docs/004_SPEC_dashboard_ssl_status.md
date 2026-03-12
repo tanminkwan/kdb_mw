@@ -1,36 +1,40 @@
 # 004_SPEC_dashboard_ssl_status
 
 ## 1. 개요
-Metabase 대시보드의 기능을 앱 내 `myindex` 화면으로 이식하고, 데이터 가독성 및 운영 편의성을 높이기 위한 강화 작업을 수행함.
+Metabase 대시보드의 기능을 앱 내 `my_index` 화면으로 이식하고, SSL 인증서 관리의 편의성과 데이터 가독성을 극대화하기 위한 강화 작업을 수행함.
 
 ## 2. 주요 변경 사항
 
-### 2.1. SSL 인증서 만료 현황 블럭 추가
-- **기능**: SSL 인증서의 만료 상태(만료, 임박, 주의, 정상, 미확인)를 집계하여 대시보드에 표시.
-- **상세**:
+### 2.1. SSL 인증서 만료 현황 (Dashboard)
+- **기능**: SSL 인증서의 만료 상태별 건수를 **Landscape(PROD, TEST, DEV)**별로 세분화하여 집계.
+- **UI/UX 개선**:
+    - **가독성**: 건수가 0인 상태(Row)는 화면에서 자동 숨김 처리.
+    - **정렬**: 숫자 데이터는 우측 정렬(Right-align)하여 가독성 확보.
+    - **설명 추가**: 표 하단에 `임박`(만료 7일 이내) 및 `주의`(만료 30일 이내)에 대한 기준 설명 추가.
+- **상태 정의**:
     - `만료`: 만료일 <= 현재
     - `임박`: 현재 < 만료일 <= 7일 이내
     - `주의`: 7일 < 만료일 <= 30일 이내
     - `정상`: 30일 < 만료일
-    - `미확인`: 만료일 정보 없음
-- **이동**: 각 상태 클릭 시 `/webdomainmodelview/list/` 화면으로 이동하며, 해당 상태의 데이터만 보이도록 필터 파라미터 전달.
+    - `미확인`: 만료일 정보 없음 (기능 개선을 통해 '미확인' 클릭 시 실제 NULL 데이터 필터링 연동)
 
-### 2.2. 조건부 블럭 노출 (Hide/Show)
-- **대상**: [Agent 상태]를 제외한 모든 섹션 (WAS 상태, 설정 변경, 신규 지식, 오류 소식 등).
-- **로직**: 각 API 호출 결과 데이터가 0건인 경우 대시보드에서 해당 카드(Card)를 숨김 처리하여 화면 공간 효율화.
+### 2.2. WebDomainModelView 필터 및 리스트 최적화
+- **Landscape 필터 제거**: 사용자 요청에 따라 `WebDomainModelView`의 리스트, 레이블, 검색 컬럼 및 상단 버튼에서 `landscape` 필터 기능을 완전히 제거하여 화면을 간소화함.
+- **NULL 필터 도입**: `FilterIsNull`을 새롭게 정의하여, 만료일(`notafter`)이나 확인일시(`update_dt`) 정보가 없는 '미확인' 데이터를 정확하게 조회할 수 있도록 개선.
+- **날짜 필터 정교화**: DASHBOARD 클릭 시 전달되는 날짜 파라미터 형식을 서버 표준(`MM/DD/YYYY`)으로 일치시켜 필터링 정확도 확보.
 
-### 2.3. WebDomainModelView 강화
-- **추가**: `WebDomainModelView` 리스트에 `Landscape` 컬럼 추가.
-- **목적**: 도메인 목록에서 해당 서버의 환경(운영/개발 등)을 즉시 확인 가능. (단, FAB 검색 제약으로 검색 필터에서는 제외)
+### 2.3. 조건부 블록 노출 (Hide/Show)
+- **대상**: [Agent 상태]를 제외한 대시보드 내 모든 카드 섹션.
+- **로직**: AJAX 호출 결과 데이터가 0건인 카드는 메인 화면에서 자동으로 숨겨져 운영자가 확인해야 할 중요 정보에 집중할 수 있도록 함.
 
 ## 3. 수정 파일 목록
-- `app/sqls/monitor.py`: `get_cert_expiry_stat()` 함수 추가 (상태 집계 SQL).
-- `app/views/monitor.py`: `/monitor/cert_expiry_stat` API 엔드포인트 추가.
-- `app/views/was.py`: `WebDomainModelView`의 `list_columns`, `label_columns` 수정.
-- `app/templates/my_index.html`: 레이아웃 변경, CSS 추가, JS 로직(AJAX 및 조건부 숨김) 적용.
-- `config.py`: 앱 버전 업데이트.
+- `app/views/common.py`: `FilterIsNull` 클래스 추가 (DB NULL 값 필터 기능).
+- `app/sqls/monitor.py`: `get_cert_expiry_stat()` 고도화 (Landscape별 그룹화 및 집계 로직).
+- `app/views/was.py`: `WebDomainModelView`에서 landscape 관련 필터 제거 및 `search_filters` (FilterIsNull) 적용.
+- `app/templates/my_index.html`: Landscape별 테이블 레이아웃 적용, 우측 정렬 스타일 추가, 건수 0개 Row 숨김 로직 및 설명 코맨트 추가.
+- `config.py`: 반영 이력 관리를 위한 앱 버전 업데이트.
 
 ## 4. 사용 방법
-1. 대시보드(`myindex`) 접속 시 우측에 SSL 인증서 현황 확인 가능.
-2. 특정 숫자를 클릭하면 해당 도메인 리스트로 이동.
-3. 리스트 상단 검색 또는 컬럼을 통해 `Landscape` 확인 가능.
+1. 대시보드(`my_index`) 접속 시 [SSL 인증서 만료 현황] 카드에서 운영/테스트/개발별 현황을 즉시 확인.
+2. 특정 상태(만료/임박 등)의 숫자를 클릭하면 해당 조건이 적용된 도메인 리스트 화면으로 새 창 이동.
+3. 리스트 화면에서 '미확인' 데이터를 클릭한 경우, 만료일 정보가 없는 대상들만 조회됨.
