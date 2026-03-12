@@ -10,12 +10,54 @@ from app.models.common import get_uuid
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgResult, AgAgentGroup, AgAgent, AgFile, AgCommandHelper, AgAutorunResult
 from app.models.monitor import MoWasInstanceStatus
+from app.models.was import MwWas, MwWeb
 from .was import get_domain_id_as_pk
 from .relationship import get_host_id
 from .monitor import select_row
 from sys import exc_info
 import json
 import re
+
+# ---- Broadcast Callback Registry ----
+broadcast_callback_registry = {}
+
+def register_broadcast_callback(name):
+    """Decorator to register a broadcast callback function."""
+    def decorator(func):
+        broadcast_callback_registry[name] = func
+        return func
+    return decorator
+
+@register_broadcast_callback('get_all_agents')
+def get_all_agents():
+    """Approved 된 전체 agent 목록을 return"""
+    agents = db.session.query(AgAgent)\
+        .filter(AgAgent.approved_yn == 'YES').all()
+    return agents if agents else []
+
+@register_broadcast_callback('get_was_agents')
+def get_was_agents():
+    """WAS(use_yn=YES)를 등록한 전체 approved agent 목록을 return"""
+    was_agent_ids = db.session.query(MwWas.agent_id)\
+        .filter(MwWas.use_yn == 'YES', MwWas.agent_id != None, MwWas.agent_id != '').distinct().all()
+    agent_id_list = [r[0] for r in was_agent_ids]
+    if not agent_id_list:
+        return []
+    agents = db.session.query(AgAgent)\
+        .filter(AgAgent.approved_yn == 'YES', AgAgent.agent_id.in_(agent_id_list)).all()
+    return agents if agents else []
+
+@register_broadcast_callback('get_web_agents')
+def get_web_agents():
+    """WEB(use_yn=YES)를 등록한 전체 approved agent 목록을 return"""
+    web_agent_ids = db.session.query(MwWeb.agent_id)\
+        .filter(MwWeb.use_yn == 'YES', MwWeb.agent_id != None, MwWeb.agent_id != '').distinct().all()
+    agent_id_list = [r[0] for r in web_agent_ids]
+    if not agent_id_list:
+        return []
+    agents = db.session.query(AgAgent)\
+        .filter(AgAgent.approved_yn == 'YES', AgAgent.agent_id.in_(agent_id_list)).all()
+    return agents if agents else []
 
 def get_error_results(create_on=None):
 
@@ -233,14 +275,19 @@ def create_command_detail(command):
     # Append all Agents and Agent groups of a command master into a list
     ags = []
     
-    if command_rec.broadcast_yn.name == 'YES':
-        # Add all approved agents if broadcast is enabled
-        ags = db.session.query(AgAgent).filter(AgAgent.approved_yn == 'YES').all()
-    else:
-        for agg in command_rec.ag_agent_group:
-            for ag in agg.ag_agent:
-                ags.append(ag)
-        ags += command_rec.ag_agent
+    if command_rec.broadcast_callback:
+        # Call the registered broadcast callback function to get agents
+        callback_func = broadcast_callback_registry.get(command_rec.broadcast_callback)
+        if callback_func:
+            ags = callback_func()
+        else:
+            logging.error(f"Broadcast callback '{command_rec.broadcast_callback}' not found in registry.")
+            return 0, f"Broadcast callback '{command_rec.broadcast_callback}' not found."
+
+    for agg in command_rec.ag_agent_group:
+        for ag in agg.ag_agent:
+            ags.append(ag)
+    ags += command_rec.ag_agent
 
     # Remove duplicated agents by set func
     for ag in set(ags):

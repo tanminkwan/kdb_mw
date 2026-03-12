@@ -20,3 +20,10 @@
 - **Format**: `리발소(VER:YYYYMMDD.seq)` (e.g., `리발소(VER:20260312.001)`)
 - **Rule**: This update MUST be done before any `docker compose build` or `up --build` command.
 - **Constraint**: **Do NOT** execute python scripts directly (e.g., `python run.py`) for running the application after modification. Always use the Docker-based workflow to ensure the environment is consistent and all dependencies (DB, Redis, Minio, etc.) are correctly linked.
+
+## 4. Documentation Policy
+- **Location**: `docs/` 디렉토리
+- **Naming Format**: `{SEQ}_SPEC_{기능명}.md` (e.g., `001_SPEC_broadcast_callback.md`)
+- **SEQ**: 3자리 순번. 기능 추가/변경 시마다 순번을 증가시킴.
+- **Content**: 변경 배경, DB Migration SQL, 수정 파일 목록, 기술 spec, 사용법 등을 포함.
+- **Rule**: 기능 추가/변경 작업 시 반드시 해당 SPEC 문서를 작성해야 함.
