@@ -116,6 +116,7 @@ def provision_resources(session_id):
         # SQL 파라미터 {{...}} 감지 및 Template Tag 자동 생성
         tags = {}
         for tn in re.findall(r"\{\{([a-zA-Z0-9_-]+)\}\}", q_cfg['query']):
+            # 다시 'text'로 원복하여 데이터 조회 정상화 (Native Query 파라미터 규격)
             tags[tn] = {"id": tn, "name": tn, "display-name": tn.capitalize(), "type": "text"}
             
         payload = {
@@ -124,82 +125,102 @@ def provision_resources(session_id):
                 "database": db_id, "type": "native", 
                 "native": {"query": q_cfg['query'], "template-tags": tags}
             },
-            "visualization_settings": {}
+            "visualization_settings": q_cfg.get('visualization_settings', {})
         }
         
         if card:
-            # 설정(특히 template-tags)이 변경되었을 수 있으므로 강제 업데이트 수행
             print(f"Updating question: {q_cfg['name']}")
-            session.put(f"{METABASE_URL}/api/card/{card['id']}", headers=headers, json=payload)
+            res = session.put(f"{METABASE_URL}/api/card/{card['id']}", headers=headers, json=payload)
+            if res.status_code != 200:
+                print(f"  Failed: {res.status_code} - {res.text}")
             card_id = card['id']
         else:
             print(f"Creating question: {q_cfg['name']}")
             res_card = session.post(f"{METABASE_URL}/api/card", headers=headers, json=payload)
+            if res_card.status_code != 200:
+                print(f"  Failed: {res_card.status_code} - {res_card.text}")
             card_id = res_card.json().get("id")
         card_map[q_cfg['name']] = card_id
 
-    # 3. Dashboard Sync (Metadata & Parameters)
+    # 3 & 4. Dashboards Sync
     dashboards = session.get(f"{METABASE_URL}/api/dashboard", headers=headers).json()
-    dash = next((d for d in dashboards if d['name'] == config['dashboard']['name']), None)
     
-    # 파라미터 ID 부여 (Metabase v0.47+ 필수)
-    params = []
-    for p in config['dashboard'].get('parameters', []):
-        p_copy = p.copy()
-        if 'id' not in p_copy: p_copy['id'] = p_copy.get('slug')
+    for d_cfg in config.get('dashboards', []):
+        dash = next((d for d in dashboards if d['name'] == d_cfg['name']), None)
         
-        # [Validation] Ensure static-list parameters have the exact complex structure Metabase requires.
-        if p_copy.get('values_source_type') == 'static-list':
-            p_copy['values_query_type'] = 'list'
-            p_copy['type'] = 'string/='
-            # If a user accidentally provided a flat 'values' array (old/incorrect format), auto-correct it
-            if 'values' in p_copy and 'values_source_config' not in p_copy:
-                p_copy['values_source_config'] = {"values": p_copy.pop('values')}
-                
-        params.append(p_copy)
+        # 파라미터 ID 부여 (Metabase v0.47+ 필수)
+        params = []
+        for p in d_cfg.get('parameters', []):
+            p_copy = p.copy()
+            if 'id' not in p_copy: p_copy['id'] = p_copy.get('slug')
+            
+            if p_copy.get('values_source_type') == 'static-list':
+                p_copy['values_query_type'] = 'list'
+                p_copy['type'] = 'string/='
+                if 'values' in p_copy and 'values_source_config' not in p_copy:
+                    p_copy['values_source_config'] = {"values": p_copy.pop('values')}
+            params.append(p_copy)
 
-    dash_meta = {"name": config['dashboard']['name'], "parameters": params}
+        dash_meta = {"name": d_cfg['name'], "parameters": params}
 
-    if not dash:
-        print(f"Creating dashboard: {config['dashboard']['name']}")
-        dash_id = session.post(f"{METABASE_URL}/api/dashboard", headers=headers, json=dash_meta).json().get("id")
-    else:
-        dash_id = dash['id']
-        print(f"Updating dashboard metadata for ID {dash_id}")
-        session.put(f"{METABASE_URL}/api/dashboard/{dash_id}", headers=headers, json=dash_meta)
-
-    # 4. Dashboard Layout & Mappings (v0.47+ Bulk Sync with Negative IDs)
-    dash_details = session.get(f"{METABASE_URL}/api/dashboard/{dash_id}", headers=headers).json()
-    p_map = {p['slug']: p['id'] for p in dash_details.get('parameters', [])}
-    e_dashcards = {dc['card_id']: dc['id'] for dc in dash_details.get('dashcards', []) if dc.get('card_id')}
-
-    next_negative_id = -1
-    final_dashcards = []
-    for c_cfg in config['dashboard']['cards']:
-        cid = card_map.get(c_cfg['card_name'])
-        if not cid: continue
-
-        mappings = []
-        for m in c_cfg.get('parameter_mappings', []):
-            slug = m['parameter_mapping']
-            if slug in p_map:
-                mappings.append({"parameter_id": p_map[slug], "card_id": cid, "target": m['target']})
-
-        item = {
-            "card_id": cid, "row": c_cfg['row'], "col": c_cfg['col'], 
-            "size_x": c_cfg['size_x'], "size_y": c_cfg['size_y'], 
-            "parameter_mappings": mappings, "visualization_settings": {}
-        }
-        if cid in e_dashcards: item['id'] = e_dashcards[cid]
+        if not dash:
+            print(f"Creating dashboard: {d_cfg['name']}")
+            res = session.post(f"{METABASE_URL}/api/dashboard", headers=headers, json=dash_meta)
+            if res.status_code != 200:
+                print(f"  Failed to create dashboard: {res.status_code} - {res.text}")
+                continue
+            dash_id = res.json().get("id")
         else:
-            item['id'] = next_negative_id
-            next_negative_id -= 1
-        final_dashcards.append(item)
-    
-    print(f"Updating dashboard layout with {len(final_dashcards)} cards...")
-    res = session.put(f"{METABASE_URL}/api/dashboard/{dash_id}/cards", headers=headers, json={"cards": final_dashcards})
-    if res.status_code == 200: print("Successfully updated dashboard state.")
-    else: print(f"Failed to update dashboard: {res.status_code} - {res.text}")
+            dash_id = dash['id']
+            print(f"Updating dashboard metadata for ID {dash_id} ({d_cfg['name']})")
+            res = session.put(f"{METABASE_URL}/api/dashboard/{dash_id}", headers=headers, json=dash_meta)
+            if res.status_code != 200:
+                print(f"  Failed to update dashboard metadata: {res.status_code} - {res.text}")
+
+        # Dashboard Layout & Mappings
+        dash_details = session.get(f"{METABASE_URL}/api/dashboard/{dash_id}", headers=headers).json()
+        p_map = {p['slug']: p['id'] for p in dash_details.get('parameters', [])}
+        e_dashcards = {dc['card_id']: dc['id'] for dc in dash_details.get('dashcards', []) if dc.get('card_id')}
+
+        next_negative_id = -1
+        final_dashcards = []
+        for c_cfg in d_cfg.get('cards', []):
+            cid = card_map.get(c_cfg['card_name'])
+            if not cid: continue
+
+            mappings = []
+            for m in c_cfg.get('parameter_mappings', []):
+                slug = m['parameter_mapping']
+                if slug in p_map:
+                    mappings.append({"parameter_id": p_map[slug], "card_id": cid, "target": m['target']})
+
+            # 질문(Card)에 정의된 기본 시각화 설정을 가져와서 대시보드 카드에 상속
+            base_viz = {}
+            target_q = next((q for q in config['questions'] if q['name'] == c_cfg['card_name']), None)
+            if target_q:
+                # 얕은 복사가 아닌 내용 병합을 위해 복사본 사용
+                base_viz = json.loads(json.dumps(target_q.get('visualization_settings', {})))
+            
+            # 대시보드 특정 설정(클릭 동작 등)이 있다면 병합
+            dash_card_viz = c_cfg.get('visualization_settings', {})
+            base_viz.update(dash_card_viz)
+
+            item = {
+                "card_id": cid, "row": c_cfg['row'], "col": c_cfg['col'], 
+                "size_x": c_cfg['size_x'], "size_y": c_cfg['size_y'], 
+                "parameter_mappings": mappings, 
+                "visualization_settings": base_viz
+            }
+            if cid in e_dashcards: item['id'] = e_dashcards[cid]
+            else:
+                item['id'] = next_negative_id
+                next_negative_id -= 1
+            final_dashcards.append(item)
+        
+        print(f"Updating layout for dashboard: {d_cfg['name']} with {len(final_dashcards)} cards...")
+        res = session.put(f"{METABASE_URL}/api/dashboard/{dash_id}/cards", headers=headers, json={"cards": final_dashcards})
+        if res.status_code == 200: print(f"Successfully updated {d_cfg['name']}.")
+        else: print(f"Failed to update {d_cfg['name']}: {res.status_code} - {res.text}")
 
 if __name__ == "__main__":
     wait_for_metabase()
