@@ -16,7 +16,7 @@ from .common import FilterStartsWithFunction, get_mw_user, get_userid, get_repor
 from datetime import datetime, timedelta
 from app.sqls.monitor import select_row, get_grid_config, create_was_status_report\
                     , get_not_running_was_list, get_column_type, get_target_table_name\
-                    , select_rows2
+                    , select_rows2, get_cert_expiry_stat
 from app.sqls.agent import get_agent_stat, get_error_results, insert_command_master
 from app.sqls.was import get_changed_was, get_changed_web
 from wtforms import FieldList, StringField
@@ -449,6 +449,12 @@ class MonitorApi(BaseApi):
 
             recent_knowledge_list.sort(key=lambda x: x["update_on"], reverse=True)
         return jsonify({'recent_knowledge_list':recent_knowledge_list})
+
+    @expose('/cert_expiry_stat', methods=['GET'])
+    @has_access
+    def cert_expiry_stat(self):
+        result = get_cert_expiry_stat()
+        return jsonify({'cert_expiry_stat': result})
 
     @expose('/get_changed_configs', methods=['GET'])
     @has_access
