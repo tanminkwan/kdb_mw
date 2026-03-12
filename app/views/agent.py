@@ -49,7 +49,8 @@ def job_after_update_command(mapper, connection, target):
 def create_command_detail1(mapper, connection, target):
     
     logging.debug(f"after_insert create_command_detail1 called : {target}")
-    if target.periodic_type.name in ('PERIODIC','ONETIME'):
+    # [서버내부기능] 이거나 주기가 있는 작업은 scheduler로 등록
+    if target.periodic_type.name in ('PERIODIC','ONETIME') or target.ag_command_type.command_class.name == 'ServerFunc':
         job_ag_create_job(target)
     else:
         create_command_detail(target)
@@ -353,7 +354,6 @@ class CommandMasterModelView(ModelView):
                     'cycle_to_exe':[RequiredOnContidion('periodic_type', 'PERIODIC', message='주기작업의 경우 필수입력항목입니다.')]
                   , 'time_to_exe':[RequiredOnContidion('periodic_type', 'ONETIME', message='1회성작업의 경우 필수입력항목입니다.')]
                   , 'target_object':[RequiredOnContidion('result_receiver', ['KAFKA','SERVER_N_KAFKA'], message='Result를 KAFKA로 선택한 경우 Target Object에 topic이름을 입력하세요.')]
-                  , 'ag_agent':[RequiredOnContidion(['ag_agent_group', 'broadcast_callback'], [[], [None, '']], message='Agent, 그룹 또는 Broadcast Callback을 선택하세요.')]
                 }
 
 

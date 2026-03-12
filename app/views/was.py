@@ -19,7 +19,7 @@ from app.sqls.relationship import get_was_relationship, get_web_relationship
 from app.sqls.agent import create_connect_ssl, create_file_ssl, insert_command_master, get_agent
 from app.sqls.batch import create_domain_name_info, create_ssl_info
 from app.sqls.monitor import select_row, select_item, select_items
-from .common import FilterStartsWithFunction, FilterNotNull, \
+from .common import FilterStartsWithFunction, FilterNotNull, FilterIsNull, \
     get_mw_user, get_userid, ShowWithIds, ListAdvanced
 
 import json
@@ -610,8 +610,11 @@ class WebDomainModelView(ModelView):
     formatters_columns={'update_dt': lambda x:x.strftime('%Y.%m.%d %H:%M') if x is not None else ""}             
     base_filters = []
     
-    search_form_query_rel_fields = {
-        'notafter':[['Not Null',FilterNotNull,'a']] ,
+    search_form_query_rel_fields = {}
+    
+    search_filters = {
+        'notafter': [FilterIsNull],
+        'update_dt': [FilterIsNull]
     }
     
     extra_args = {

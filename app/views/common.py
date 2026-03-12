@@ -146,6 +146,14 @@ class FilterGroupRelation(BaseFilter):
 
         return query.filter(or_(has_matching, has_none, is_mine))
 
+class FilterIsNull(BaseFilter):
+    name = "Is null or empty"
+    arg_name = "null"
+
+    def apply(self, query, value):
+        query, field = get_field_setup_query(query, self.model, self.column_name)
+        return query.filter(field == None)
+
 class FilterNotNull(BaseFilter):
     name = "Is not null and not empty"
     arg_name = "nn"

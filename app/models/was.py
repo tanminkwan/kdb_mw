@@ -1105,6 +1105,7 @@ class MwWebDomain(Model):
     mw_web_vhost = relationship('MwWebVhost')
     mw_web_ssl   = relationship('MwWebSsl', secondary=assoc_webssl_domain, backref='mw_web_domain')
 
+
     def t__domain(self):
         return self.domain_name + ':' + self.port
 
