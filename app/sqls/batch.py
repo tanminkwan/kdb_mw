@@ -449,7 +449,6 @@ createSslInfo = create_ssl_info
 createWebtobConn = create_webtob_conn
 produceRepeatedMessage = produce_repeated_message
 
-# Register aliases in the batch function registry for backward compatibility
 for old_name, new_func in [
     ('updateResourceTag', update_resource_tag),
     ('updateWasStatus', update_was_status),
@@ -464,4 +463,139 @@ for old_name, new_func in [
     ('produceRepeatedMessage', produce_repeated_message),
 ]:
     batch_function_registry[old_name] = new_func.__doc__ or old_name
+
+# ---- Role/Permission Sync ----
+
+# 메뉴 카테고리 → role 매핑. Was/Web은 mw_rgroup으로 통합.
+MENU_CATEGORY_TO_ROLE = {
+    'Server':        'server_rgroup',
+    'Was':           'mw_rgroup',
+    'Web':           'mw_rgroup',
+    'Agent&Command': 'agent_rgroup',
+    'Monitor':       'monitor_rgroup',
+    'System':        'system_rgroup',
+    '지식관리':       'knowledge_rgroup',
+    'ITAM 대사':     'itam_rgroup',
+    'Tools':         'tools_rgroup',
+}
+
+# 모든 유저가 기본적으로 가져야 할 공통 권한 (Home, 프로필 등)
+COMMON_VIEWS_FOR_ALL = [
+    'MyIndexView', 'UserDBModelView', 'ResetPasswordView', 
+    'UserInfoEditView', 'CommonView'
+]
+
+@batch_function
+def sync_role_permissions():
+    """메뉴 및 API 기반 Role 자동 생성 및 권한 할당"""
+    sm = appbuilder.sm
+    role_perms = {}  # {role_name: set of (permission_name, view_menu_name)}
+
+    def add_perms_for_view(role_name, view):
+        """View 및 관련된 모든 권한(PVM)을 수집하여 role_perms에 추가"""
+        if not view:
+            return
+        
+        # 검색할 ViewMenu 이름 후보군
+        v_names = set()
+        v_names.add(view.__class__.__name__)
+        if hasattr(view, 'view_name'):
+            v_names.add(view.view_name)
+        
+        for name in v_names:
+            if not name: continue
+            pvm_list = db.session.query(sm.permissionview_model)\
+                .join(sm.viewmenu_model)\
+                .filter(sm.viewmenu_model.name == name).all()
+            for pvm in pvm_list:
+                if pvm.permission and pvm.view_menu:
+                    role_perms[role_name].add((pvm.permission.name, pvm.view_menu.name))
+        
+        # related_views(상세 보기 등)에 대한 권한도 포함
+        if hasattr(view, 'related_views'):
+            for related_view_class in view.related_views:
+                rv_name = related_view_class.__name__
+                pvm_list = db.session.query(sm.permissionview_model)\
+                    .join(sm.viewmenu_model)\
+                    .filter(sm.viewmenu_model.name == rv_name).all()
+                for pvm in pvm_list:
+                    if pvm.permission and pvm.view_menu:
+                        role_perms[role_name].add((pvm.permission.name, pvm.view_menu.name))
+
+    # 1. 메뉴 기반 처리
+    for menu_item in appbuilder.menu.menu:
+        category_name = menu_item.name
+        role_name = MENU_CATEGORY_TO_ROLE.get(category_name)
+        if not role_name:
+            continue
+
+        if role_name not in role_perms:
+            role_perms[role_name] = set()
+
+        # 카테고리 메뉴 자체 접근권한
+        role_perms[role_name].add(('menu_access', category_name))
+
+        # 하위 메뉴 아이템 처리
+        if hasattr(menu_item, 'childs'):
+            for child in menu_item.childs:
+                if hasattr(child, 'name') and child.name:
+                    # 메뉴 접근 권한
+                    role_perms[role_name].add(('menu_access', child.name))
+
+                    # View 및 연관 View(related_views)의 모든 권한 수집
+                    if hasattr(child, 'baseview') and child.baseview:
+                        add_perms_for_view(role_name, child.baseview)
+
+    # 2. API 기반 처리 (api_rgroup) - BaseApi 상속 클래스 동적 수집
+    if 'api_rgroup' not in role_perms:
+        role_perms['api_rgroup'] = set()
+    
+    from flask_appbuilder.api import BaseApi
+    for view in appbuilder.baseviews:
+        if isinstance(view, BaseApi):
+            api_class_name = view.__class__.__name__
+            pvm_list = db.session.query(sm.permissionview_model)\
+                .join(sm.viewmenu_model)\
+                .filter(sm.viewmenu_model.name == api_class_name).all()
+            for pvm in pvm_list:
+                if pvm.permission and pvm.view_menu:
+                    role_perms['api_rgroup'].add((pvm.permission.name, pvm.view_menu.name))
+
+    # 3. 공통 기반 role 처리 (common_rgroup) - 로그인 및 기본 UI 유지용
+    if 'common_rgroup' not in role_perms:
+        role_perms['common_rgroup'] = set()
+    
+    for v_name in COMMON_VIEWS_FOR_ALL:
+        pvm_list = db.session.query(sm.permissionview_model)\
+            .join(sm.viewmenu_model)\
+            .filter(sm.viewmenu_model.name == v_name).all()
+        for pvm in pvm_list:
+            if pvm.permission and pvm.view_menu:
+                role_perms['common_rgroup'].add((pvm.permission.name, pvm.view_menu.name))
+    
+    # MyIndexView 에 대한 menu_access 는 명시적으로 추가 (등록 안되어 있을 수 있음)
+    role_perms['common_rgroup'].add(('menu_access', 'Main'))
+    role_perms['common_rgroup'].add(('menu_access', 'MyIndexView'))
+
+    # 4. Role 생성/업데이트
+    results = []
+    for role_name, perms in role_perms.items():
+        role = sm.find_role(role_name)
+        if not role:
+            role = sm.add_role(role_name)
+            results.append(f"Created role: {role_name}")
+        else:
+            results.append(f"Updated role: {role_name}")
+
+        # 기존 권한 초기화 후 업데이트
+        role.permissions = []
+        for perm_name, view_name in perms:
+            pvm = sm.find_permission_view_menu(perm_name, view_name)
+            if pvm:
+                sm.add_permission_role(role, pvm)
+
+    summary = '; '.join(results)
+    logging.info(f"sync_role_permissions: {summary}")
+    return 1, summary
+
 
