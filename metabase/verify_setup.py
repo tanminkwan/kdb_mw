@@ -74,43 +74,53 @@ class MetabaseValidator:
                 self.log("Question", f"'{q_cfg['name']}' is correctly configured", True)
 
     def _verify_dashboard(self):
-        target_dash = self.config['dashboard']['name']
+        d_configs = self.config.get('dashboards', [])
+        if not d_configs and 'dashboard' in self.config:
+            d_configs = [self.config['dashboard']]
+
         dashes = self.client.get_dashboards()
-        dash = next((d for d in dashes if d['name'] == target_dash), None)
         
-        if not dash:
-            self.log("Dashboard", f"Dashboard '{target_dash}' is missing", False)
-            return
+        for d_cfg in d_configs:
+            target_dash = d_cfg['name']
+            dash = next((d for d in dashes if d['name'] == target_dash), None)
+            
+            if not dash:
+                self.log("Dashboard", f"Dashboard '{target_dash}' is missing", False)
+                continue
 
-        detail = self.client.get_dashboard_detail(dash['id'])
-        
-        # Verify Parameters
-        expected_params = self.config['dashboard'].get('parameters', [])
-        actual_params = detail.get('parameters', [])
-        for ep in expected_params:
-            exists = any(ap['slug'] == ep['slug'] for ap in actual_params)
-            self.log("Dashboard", f"Filter parameter '{ep['slug']}' exists", exists)
+            detail = self.client.get_dashboard_detail(dash['id'])
+            
+            # Verify Parameters
+            expected_params = d_cfg.get('parameters', [])
+            actual_params = detail.get('parameters', [])
+            for ep in expected_params:
+                exists = any(ap['slug'] == ep['slug'] for ap in actual_params)
+                self.log("Dashboard", f"[{target_dash}] Filter parameter '{ep['slug']}' exists", exists)
 
-        # Verify Card Count and Layout
-        expected_cards = self.config['dashboard']['cards']
-        actual_cards = detail.get('dashcards', [])
-        self.log("Dashboard", f"Card count (Expected: {len(expected_cards)}, Actual: {len(actual_cards)})", len(expected_cards) == len(actual_cards))
+            # Verify Card Count and Layout
+            expected_cards = d_cfg.get('cards', [])
+            actual_cards = detail.get('dashcards', [])
+            self.log("Dashboard", f"[{target_dash}] Card count (Expected: {len(expected_cards)}, Actual: {len(actual_cards)})", len(expected_cards) == len(actual_cards))
 
-        for ec in expected_cards:
-            ac = next((c for c in actual_cards if c.get('card', {}).get('name') == ec['card_name']), None)
-            if ac:
-                pos_match = (ac['row'] == ec['row'] and ac['col'] == ec['col'])
-                self.log("Dashboard", f"Card '{ec['card_name']}' position correct ({ec['row']}, {ec['col']})", pos_match)
-                
-                # Check mapping
-                mappings = ac.get('parameter_mappings', [])
-                has_mapping = len(mappings) > 0
-                needs_mapping = len(ec.get('parameter_mappings', [])) > 0
-                if needs_mapping:
-                    print(f"DEBUG: Mapping for {ec['card_name']}: {mappings}")
-                    self.log("Dashboard", f"Card '{ec['card_name']}' filter mapping active", has_mapping)
-            else:
-                self.log("Dashboard", f"Card '{ec['card_name']}' is missing from dashboard", False)
+            for ec in expected_cards:
+                ac = next((c for c in actual_cards if c.get('card', {}).get('name') == ec['card_name']), None)
+                if ac:
+                    pos_match = (ac['row'] == ec['row'] and ac['col'] == ec['col'])
+                    self.log("Dashboard", f"[{target_dash}] Card '{ec['card_name']}' position correct ({ec['row']}, {ec['col']})", pos_match)
+                    
+                    # Check mapping
+                    mappings = ac.get('parameter_mappings', [])
+                    has_mapping = len(mappings) > 0
+                    needs_mapping = len(ec.get('parameter_mappings', [])) > 0
+                    if needs_mapping:
+                        self.log("Dashboard", f"[{target_dash}] Card '{ec['card_name']}' filter mapping active", has_mapping)
+                    
+                    # Check visualization settings (Colors)
+                    viz = ac.get('visualization_settings', {})
+                    has_colors = "column_settings" in viz or "stackable.colors" in viz
+                    self.log("Dashboard", f"[{target_dash}] Card '{ec['card_name']}' visual settings (colors) applied", has_colors)
+                else:
+                    self.log("Dashboard", f"[{target_dash}] Card '{ec['card_name']}' is missing from dashboard", False)
 
 if __name__ == "__main__":
     prov_file = os.path.join(os.path.dirname(__file__), "provisioning.json")
