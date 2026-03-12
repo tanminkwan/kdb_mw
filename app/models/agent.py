@@ -165,7 +165,7 @@ class AgCommandMaster(Model):
     command_sender   = Column(Enum(TargetToSendEnum), info={'enum_class':TargetToSendEnum}, server_default=("SERVER"), nullable=False)
     result_receiver  = Column(Enum(TargetToSendEnum), info={'enum_class':TargetToSendEnum}, server_default=("SERVER"), nullable=False)
     target_object    = Column(String(50))
-    broadcast_yn     = Column(Enum(YnEnum), info={'enum_class':YnEnum}, default="NO", server_default=("NO"), nullable=False)
+    broadcast_callback = Column(String(100), comment='Broadcast Callback 함수명')
     user_id          = Column(String(50), default=get_user, nullable=False)
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     UniqueConstraint(command_id)

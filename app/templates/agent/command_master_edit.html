@@ -4,13 +4,24 @@
 {{ super() }}
 <script type="text/javascript">
     $(document).ready(function () {
+        var callbackField = $('#broadcast_callback');
+
+        // broadcast_callback 필드 아래에 안내 문구 삽입
+        if (callbackField.length) {
+            var helpHtml = '<p class="help-block" style="color:#2980b9;">' +
+                '<b>사용 가능:</b> {{ broadcast_callbacks | join(", ") }}' +
+                '</p>' +
+                '<p class="help-block" style="color:#e74c3c;">' +
+                '※ Broadcast Callback, 대상 Agent, 대상 Agent 그룹 중 적어도 하나는 선택해야 합니다.' +
+                '</p>';
+            callbackField.after(helpHtml);
+        }
+
         function handleBroadcastChange() {
-            var broadcast_yn = $('#broadcast_yn').val();
-            if (broadcast_yn == 'YES') {
-                // Disable and clear Agent/Group fields
+            var broadcast_callback = callbackField.val();
+            if (broadcast_callback && broadcast_callback.trim() !== '') {
                 $('#ag_agent').prop('disabled', true);
                 $('#ag_agent_group').prop('disabled', true);
-                // Clear selections (Select2 usually needs a trigger or setting val to null)
                 $('#ag_agent').val(null).trigger('change');
                 $('#ag_agent_group').val(null).trigger('change');
             } else {
@@ -18,17 +29,8 @@
                 $('#ag_agent_group').prop('disabled', false);
             }
         }
-
-        // Detect broadcast_yn change
-        $('#broadcast_yn').on('change', function () {
-            handleBroadcastChange();
-        });
-
-        // Initialize on page load
+        callbackField.on('change keyup', handleBroadcastChange);
         handleBroadcastChange();
-
-        // Ensure disabled fields are re-enabled on form submit so they are posted if needed
-        // But for broadcast, we actually want them to be empty anyway.
     });
 </script>
 {% endblock %}

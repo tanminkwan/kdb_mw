@@ -16,7 +16,7 @@ from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
 from .common import FilterStartsWithFunction, get_mw_user\
     , ReadOnlyField, RequiredOnContidion, ValidateBatchFunctionName
 from app.sqls.agent import cancel_commands, create_command_detail\
-    , update_result_status
+    , update_result_status, broadcast_callback_registry
 from sqlalchemy import event
 
 from wtforms import Form, StringField
@@ -318,7 +318,7 @@ class CommandMasterModelView(ModelView):
     list_title    = "Command 목록"    
 
     list_columns  = ['command_id', 'ag_command_type', 'periodic_type', 'ag_agent', 'ag_agent_group'\
-                    , 'time_to_exe', 'interval_type', 'cycle_to_exe', 'time_to_stop', 'broadcast_yn', 'create_on']
+                    , 'time_to_exe', 'interval_type', 'cycle_to_exe', 'time_to_stop', 'broadcast_callback', 'create_on']
     label_columns = {'command_id':'Command ID'
                     ,'ag_command_type':'Command Type ID'
                     ,'periodic_type':'실행 구분'
@@ -332,14 +332,14 @@ class CommandMasterModelView(ModelView):
                     ,'command_sender':'Command를 보내는 곳'
                     ,'result_receiver':'Result 받는 곳'
                     ,'target_object':'Target Object'
-                    ,'broadcast_yn':'전체 대상(Broadcast)'
+                    ,'broadcast_callback':'Broadcast Callback'
                      }
 
-    add_columns  = ['command_id', 'ag_command_type', 'broadcast_yn', 'ag_agent', 'ag_agent_group', 'periodic_type'\
+    add_columns  = ['command_id', 'ag_command_type', 'broadcast_callback', 'ag_agent', 'ag_agent_group', 'periodic_type'\
                     , 'command_sender', 'time_to_exe', 'interval_type', 'cycle_to_exe', 'time_to_stop'\
                     , 'additional_params', 'result_receiver','target_object']
 
-    edit_columns  = ['command_id', 'ag_command_type', 'broadcast_yn', 'ag_agent', 'ag_agent_group', 'periodic_type'\
+    edit_columns  = ['command_id', 'ag_command_type', 'broadcast_callback', 'ag_agent', 'ag_agent_group', 'periodic_type'\
                     , 'command_sender', 'time_to_exe', 'interval_type', 'cycle_to_exe', 'time_to_stop'\
                     , 'additional_params', 'cancel_yn']
 
@@ -347,12 +347,13 @@ class CommandMasterModelView(ModelView):
     edit_template = 'agent/command_master_edit.html'
 
     base_order   = ('create_on', 'desc')
+    extra_args   = {'broadcast_callbacks': list(broadcast_callback_registry.keys())}
 
     validators_columns = {
                     'cycle_to_exe':[RequiredOnContidion('periodic_type', 'PERIODIC', message='주기작업의 경우 필수입력항목입니다.')]
                   , 'time_to_exe':[RequiredOnContidion('periodic_type', 'ONETIME', message='1회성작업의 경우 필수입력항목입니다.')]
                   , 'target_object':[RequiredOnContidion('result_receiver', ['KAFKA','SERVER_N_KAFKA'], message='Result를 KAFKA로 선택한 경우 Target Object에 topic이름을 입력하세요.')]
-                  , 'ag_agent':[RequiredOnContidion(['ag_agent_group', 'broadcast_yn'], [[], 'NO'], message='Agent, 그룹 또는 전체 대상을 선택하세요.')]
+                  , 'ag_agent':[RequiredOnContidion(['ag_agent_group', 'broadcast_callback'], [[], [None, '']], message='Agent, 그룹 또는 Broadcast Callback을 선택하세요.')]
                 }
 
 
@@ -454,6 +455,8 @@ class AjaxView(BaseView):
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 		
         return self.render_template("ajax1.html",name='hennry', time=time)
+
+
 
 #appbuilder.add_view(AjaxView, "ajax test", category="ajax")
 #appbuilder.add_link("ajax test", href="/ajax/ajax1", category="ajax")
