@@ -2,7 +2,7 @@ import logging
 from app import appbuilder, db, kafka_producer
 from flask import g
 from sqlalchemy.sql import select, update, func
-from sqlalchemy import null, text, or_, not_, case
+from sqlalchemy import null, text, or_, and_, not_, case
 from datetime import datetime, timedelta
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import insert, JSON
@@ -172,23 +172,27 @@ def get_agents():
         return None 
 
 def get_agent_stat():
+    now = datetime.now()
+    gap_online = now - timedelta(minutes=3)
+    gap_long_term = now - timedelta(hours=24)
 
-    gap = datetime.now() - timedelta(minutes=3)
-
-    results = db.session.query(\
-                AgAgent.landscape, 
-                func.sum(1).label('total'), 
-                func.sum(case([(AgAgent.last_checked_date<=gap,1)], else_=0)).label('offline')
-                )\
-                .filter(AgAgent.approved_yn=='YES')\
-                .group_by(AgAgent.landscape).all()
+    results = db.session.query(
+                AgAgent.landscape,
+                func.sum(1).label('total'),
+                func.sum(case([(AgAgent.last_checked_date > gap_online, 1)], else_=0)).label('online'),
+                func.sum(case([(and_(AgAgent.last_checked_date <= gap_online, AgAgent.last_checked_date > gap_long_term), 1)], else_=0)).label('offline'),
+                func.sum(case([(or_(AgAgent.last_checked_date <= gap_long_term, AgAgent.last_checked_date == None), 1)], else_=0)).label('long_term_unused')
+            )\
+            .filter(AgAgent.approved_yn == 'YES')\
+            .group_by(AgAgent.landscape).all()
     
-    recs = db.session.query(AgAgent)\
-            .filter(AgAgent.last_checked_date<=gap,AgAgent.approved_yn=='YES')\
+    offline_recs = db.session.query(AgAgent)\
+            .filter(AgAgent.last_checked_date <= gap_online, AgAgent.approved_yn == 'YES')\
+            .order_by(AgAgent.last_checked_date.desc())\
             .all()
 
     if results:
-        return results, recs
+        return results, offline_recs
     else:
         return None, None
 

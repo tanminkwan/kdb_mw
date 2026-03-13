@@ -362,9 +362,13 @@ class MonitorApi(BaseApi):
 
         agent_stat_list = []
         if agent_stat_recs:
-            [ agent_stat_list.append({'landscape':'NON' if r.landscape==None\
-                 else r.landscape.name,'total':r.total, 'offline':r.offline})\
-             for r in agent_stat_recs ]
+            [ agent_stat_list.append({
+                'landscape':'NON' if r.landscape==None else r.landscape.name,
+                'total':int(r.total), 
+                'online':int(r.online),
+                'offline':int(r.offline),
+                'long_term_unused':int(r.long_term_unused)
+             }) for r in agent_stat_recs ]
 
         offline_list = []
         if offline_recs:
@@ -377,7 +381,7 @@ class MonitorApi(BaseApi):
 
         return jsonify({'agent_stat':agent_stat_list, 'offline_agents':offline_list})
 
-    @expose('/getErrorResults', methods=['GET'])
+    @expose('/get_error_results', methods=['GET'])
     @has_access
     def get_error_results(self):
 
