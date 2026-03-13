@@ -415,7 +415,11 @@
     $.ajax({
         url: "/monitor/agent_stat",
         success: function (data) {
-            var stats = data.agent_stat || [];
+            if (!data || !data.agent_stat) {
+                console.log("No agent_stat data found (Auth error or empty)");
+                return;
+            }
+            var stats = data.agent_stat;
             var offlines = data.offline_agents || [];
             
             // Build the Agent Stat Table
@@ -467,7 +471,11 @@
     $.ajax({
         url: "/monitor/cert_expiry_stat",
         success: function (data) {
-            var stats = data.cert_expiry_stat || [];
+            if (!data || !data.cert_expiry_stat) {
+                console.log("No cert_expiry_stat data found");
+                return;
+            }
+            var stats = data.cert_expiry_stat;
             
             var landscapes = ['PROD', 'TEST', 'DEV'];
             var statuses = ['정상', '주의', '임박', '만료', '미확인', '전체'];
@@ -504,6 +512,9 @@
     $.ajax({
         url: "/monitor/get_not_running_was_list",
         success: function (data) {
+            if (!data || (!data.uncheckedWas && !data.notRunningWas)) {
+                return;
+            }
             var obj1 = data.uncheckedWas || [];
             var obj2 = data.notRunningWas || [];
             $(obj1).each(function (key, item) {
@@ -530,6 +541,9 @@
     $.ajax({
         url: "/monitor/get_error_results",
         success: function (data) {
+            if (!data || (!data.configFilesList && !data.erroWasList)) {
+                return;
+            }
             var obj1 = data.configFilesList || [];
             var obj2 = data.erroWasList || [];
             $(obj1).each(function (key, item) {
@@ -556,6 +570,9 @@
     $.ajax({
         url: "/monitor/get_changed_configs",
         success: function (data) {
+            if (!data || (!data.changedWASList && !data.changedWEBList)) {
+                return;
+            }
             var obj1 = data.changedWASList || [];
             var obj2 = data.changedWEBList || [];
             $(obj1).each(function (key, item) {
@@ -582,7 +599,10 @@
     $.ajax({
         url: "/monitor/recent_knowledge_list",
         success: function (data) {
-            var obj1 = data.recent_knowledge_list || [];
+            if (!data || !data.recent_knowledge_list) {
+                return;
+            }
+            var obj1 = data.recent_knowledge_list;
             $(obj1).each(function (key, item) {
                 if (key == 0) {
                     $('#recent_knowledge_list').append("<tr><th>분류</th><th>Title</th><th>작성일시</th><th>최초작성일시</th><th>작성자ID</th></tr>");
