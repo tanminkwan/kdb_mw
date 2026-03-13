@@ -667,7 +667,7 @@ def get_cert_expiry_stat():
     results = query.all()
     
     stats_dict = {}
-    statuses = ['만료', '임박', '주의', '정상', '미확인']
+    statuses = ['정상', '주의', '임박', '만료', '미확인']
     landscapes = ['PROD', 'TEST', 'DEV']
     
     for status in statuses:

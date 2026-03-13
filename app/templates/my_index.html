@@ -22,32 +22,33 @@
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         margin: 0;
         padding: 0;
-        line-height: 1.5;
+        line-height: 1.6;
+        font-size: 18px;
     }
 
     .container {
         max-width: 1400px;
         margin: 0 auto;
-        padding: 2rem;
+        padding: 3rem;
     }
 
     header {
-        margin-bottom: 2rem;
+        margin-bottom: 3.5rem;
         text-align: center;
     }
 
     #main-title {
-        font-size: 2.5rem;
+        font-size: 3.8rem;
         font-weight: 800;
         color: var(--text-main);
         letter-spacing: -0.025em;
-        margin-bottom: 0.5rem;
+        margin-bottom: 1rem;
     }
 
     .dashboard-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 1.5rem;
+        gap: 2.5rem;
     }
 
     .full-width {
@@ -58,7 +59,7 @@
         background: var(--card-bg);
         border-radius: var(--radius);
         box-shadow: var(--shadow);
-        padding: 1.5rem;
+        padding: 2.5rem;
         border: 1px solid var(--border-color);
         transition: transform 0.2s ease;
     }
@@ -71,23 +72,23 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 1.25rem;
+        margin-bottom: 2rem;
         border-bottom: 2px solid var(--bg-color);
-        padding-bottom: 0.75rem;
+        padding-bottom: 1.25rem;
     }
 
     .card-title h3 {
         margin: 0;
-        font-size: 1.25rem;
-        font-weight: 700;
+        font-size: 2.2rem;
+        font-weight: 800;
         color: var(--secondary-color);
     }
 
     h4 {
-        font-size: 0.95rem;
+        font-size: 1.6rem;
         color: var(--text-muted);
-        margin: 1.25rem 0 0.75rem;
-        font-weight: 600;
+        margin: 2.5rem 0 1.5rem;
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
@@ -96,7 +97,7 @@
         width: 100%;
         border-collapse: separate;
         border-spacing: 0;
-        font-size: 0.9rem;
+        font-size: 18px;
     }
 
     th {
@@ -104,12 +105,12 @@
         color: var(--text-muted);
         font-weight: 600;
         text-align: left;
-        padding: 12px;
+        padding: 16px;
         border-bottom: 1px solid var(--border-color);
     }
 
     td {
-        padding: 12px;
+        padding: 16px;
         border-bottom: 1px solid var(--border-color);
         color: var(--text-main);
     }
@@ -221,6 +222,13 @@
     a:hover {
         text-decoration: underline;
     }
+
+    .total-row td {
+        font-weight: 800 !important;
+        background-color: #f9fafb !important;
+        border-top: 2px solid var(--secondary-color) !important;
+        color: var(--secondary-color) !important;
+    }
 </style>
 
 <div class="container">
@@ -230,33 +238,37 @@
     </header>
 
     <div class="dashboard-grid">
-        <!-- Agent Section -->
-        <div class="card" id="agent-card">
+        <!-- Agent Stat Section (Col 1, Top) -->
+        <div class="card" id="agent-stat-card">
             <div class="card-title">
-                <h3>[Agent 상태]</h3>
+                <h3>[Agent 상태 현황]</h3>
             </div>
-            <h4>1) Agent 상태 현황</h4>
             <div class="table-wrapper">
                 <table id="agentStat"></table>
             </div>
-            <h4>2) Offline Agent 목록</h4>
-            <div class="table-wrapper">
-                <table id="offline"></table>
-            </div>
         </div>
 
-        <!-- SSL Section -->
+        <!-- SSL Section (Col 2, Top) -->
         <div class="card" id="ssl-card">
             <div class="card-title">
                 <h3>[SSL인증서 만료 현황]</h3>
             </div>
-            <h4>1) SSL 인증서 만료 현황</h4>
             <div class="table-wrapper">
                 <table id="certStat"></table>
             </div>
         </div>
 
-        <!-- WAS Section -->
+        <!-- Offline Agent Section (Col 1, Bottom) -->
+        <div class="card" id="offline-agent-card">
+            <div class="card-title">
+                <h3>[미접속/장기미사용 Agent 목록]</h3>
+            </div>
+            <div class="table-wrapper">
+                <table id="offline"></table>
+            </div>
+        </div>
+
+        <!-- WAS Section (Col 2, Bottom) -->
         <div class="card" id="was-card">
             <div class="card-title">
                 <h3>[WAS 상태]</h3>
@@ -394,38 +406,87 @@
     $.ajax({
         url: "/monitor/agent_stat",
         success: function (data) {
-            var obj1 = data.agent_stat
-            var obj2 = data.offline_agents
-            $(obj1).each(function (key, item) {
-                if (key == 0) {
-                    $('#agentStat').append("<tr><th>Landscape</th><th>offline개수</th><th>total개수</th></tr>");
-                }
-                $('#agentStat').append("<tr><td>" + item.landscape + "</td><td>" + item.offline + "</td><td>" + item.total + "</td></tr>");
+            var stats = data.agent_stat;
+            var offlines = data.offline_agents;
+            
+            // Build the Agent Stat Table
+            // Statuses: online, offline, long_term_unused, total
+            // Columns: PROD, TEST, DEV, Total
+            var landscapes = ['PROD', 'TEST', 'DEV'];
+            var rows = [
+                { id: 'online', label: 'online' },
+                { id: 'offline', label: 'Offline' },
+                { id: 'long_term_unused', label: '장기미사용' },
+                { id: 'total', label: '전체' }
+            ];
+
+            var header = "<tr><th>상태</th>" + landscapes.map(l => "<th style='text-align:right;'>" + l + "</th>").join('') + "<th style='text-align:right;'>전체</th></tr>";
+            $('#agentStat').append(header);
+
+            rows.forEach(row => {
+                var tr = $("<tr><td>" + row.label + "</td></tr>");
+                var rowTotal = 0;
+                
+                landscapes.forEach(l => {
+                    var val = 0;
+                    var found = stats.find(s => s.landscape === l);
+                    if (found) val = found[row.id] || 0;
+                    tr.append("<td style='text-align:right;'>" + val + "</td>");
+                    rowTotal += val;
+                });
+                tr.append("<td style='text-align:right; font-weight:bold;'>" + rowTotal + "</td>");
+                
+                if (row.id === 'total') tr.addClass('total-row');
+                $('#agentStat').append(tr);
             });
-            $(obj2).each(function (key, item) {
+
+            $(offlines).each(function (key, item) {
                 if (key == 0) {
                     $('#offline').append("<tr><th>Landscape</th><th>Agent ID</th><th>Agent 이름</th><th>최종통신일시</th></tr>");
                 }
                 $('#offline').append("<tr><td>" + item.landscape + "</td><td>" + item.agent_id + "</td><td>" + item.agent_name + "</td><td>" + item.last_checked_date + "</td></tr>");
             });
-            // Agent card should always be shown, so no check here.
+            
+            checkTableAndHide('offline', 'offline-agent-card');
         }
     });
+
+    // certStat table after call (already increased size)
+    // Update the SSL card to remove the h4 since we have it in the card title now
+    $('#ssl-card h4').remove();
 
     $.ajax({
         url: "/monitor/cert_expiry_stat",
         success: function (data) {
-            var obj = data.cert_expiry_stat;
-            $(obj).each(function (key, item) {
-                if (key == 0) {
-                    $('#certStat').append("<tr><th>상태</th><th style='text-align:right;'>PROD</th><th style='text-align:right;'>TEST</th><th style='text-align:right;'>DEV</th><th style='text-align:right;'>전체</th></tr>");
+            var stats = data.cert_expiry_stat;
+            
+            var landscapes = ['PROD', 'TEST', 'DEV'];
+            var statuses = ['정상', '주의', '임박', '만료', '미확인', '전체'];
+            
+            var header = "<tr><th>상태</th>" + landscapes.map(l => "<th style='text-align:right;'>" + l + "</th>").join('') + "<th style='text-align:right;'>전체</th></tr>";
+            $('#certStat').append(header);
+
+            statuses.forEach(status => {
+                var item = stats.find(s => s.status === status);
+                if (!item) return;
+
+                // '정상'과 '전체'는 항상 표시, 그 외(주의, 임박, 만료, 미확인)는 건수가 있을 때만 표시
+                if (status !== '정상' && status !== '전체' && item.total <= 0) {
+                    return;
                 }
-                if (item.total > 0) {
-                    var row = $("<tr style='cursor:pointer;'><td>" + item.status + "</td><td style='text-align:right;'>" + item.PROD + "</td><td style='text-align:right;'>" + item.TEST + "</td><td style='text-align:right;'>" + item.DEV + "</td><td style='text-align:right;'>" + item.total + "</td></tr>");
-                    row.click(function() { gotoSSLList(item.status); });
-                    $('#certStat').append(row);
+
+                var isTotal = (status === '전체');
+                var rowClass = isTotal ? "class='total-row'" : "";
+                var rowStyle = isTotal ? "" : "style='cursor:pointer;'";
+                
+                var row = $("<tr " + rowClass + " " + rowStyle + "><td>" + status + "</td><td style='text-align:right;'>" + item.PROD + "</td><td style='text-align:right;'>" + item.TEST + "</td><td style='text-align:right;'>" + item.DEV + "</td><td style='text-align:right;'>" + item.total + "</td></tr>");
+                
+                if (!isTotal) {
+                    row.click(function() { gotoSSLList(status); });
                 }
+                $('#certStat').append(row);
             });
+            
             $('#certStat').after("<div style='font-size:12px;color:gray;margin-top:5px;'>* 임박: 만료 7일 이내, 주의: 만료 30일 이내</div>");
             checkTableAndHide('certStat', 'ssl-card');
         }
@@ -458,7 +519,7 @@
     });
 
     $.ajax({
-        url: "/monitor/getErrorResults",
+        url: "/monitor/get_error_results",
         success: function (data) {
             var obj1 = data.configFilesList
             var obj2 = data.erroWasList
