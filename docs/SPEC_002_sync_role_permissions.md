@@ -1,8 +1,8 @@
 # Role/Permission 자동 동기화 (sync_role_permissions)
 
-> **날짜**: 2026-03-12  
-> **버전**: `리발소(VER:20260312.010)`  
-> **변경 요약**: 메뉴 카테고리 기반 Role 자동 생성 및 `common_rgroup` (공통 권한) 추가.
+> **날짜**: 2026-03-16  
+> **버전**: `리발소(VER:20260316.003)`  
+> **변경 요약**: BaseApi 상속 클래스 네이밍 규칙 정립 (CommonView -> CommonApi 등) 및 Role 자동 생성 로직 개선.
 
 ---
 
@@ -100,8 +100,22 @@ curl -X POST http://localhost:8000/api/v1/batch/run/sync_role_permissions \
 | `UserDBModelView` | 내 정보 조회/수정 |
 | `ResetPasswordView` | 비밀번호 재설정 |
 | `UserInfoEditView` | 사용자 정보 편집 |
-| `CommonView` | 공통 파일 다운로드 등 |
+| `CommonApi` | 공통 파일 다운로드 등 (BaseApi) |
 | `Main` (Menu) | 기본 메뉴 구조 접근 |
+| `UtKmGroup` (Menu) | 지식관리 그룹 관리 (가시성 필터용) |
+
+### 4-5. Role 세분화 (Variant Roles)
+
+기본 생성되는 각 `{카테고리}_rgroup`에 대해 접근 수준에 따른 변형 Role을 자동 생성함.
+
+| Role 접미사 | 설명 | 제외되는 권한 (Filter) |
+|---|---|---|
+| `_rgroup` | 기본 (Full) | (모든 권한 포함) |
+| `_read_rgroup` | 읽기 전용 | `can_add`, `can_edit`, `can_delete`, `muldelete` |
+| `_edit_rgroup` | 수정 가능 | `can_delete`, `muldelete` |
+
+- 예: `server_rgroup` 기반으로 `server_read_rgroup`, `server_edit_rgroup`이 자동 생성/업데이트됨.
+- `api_rgroup` 및 `common_rgroup` 에 대해서도 동일한 규칙으로 변형 Role이 생성됨.
 
 ---
 
@@ -191,8 +205,8 @@ MENU_CATEGORY_TO_ROLE = {
 }
 
 API_CLASSES_FOR_ROLE = [
-    'CommandApi', 'AgentApi', 'MwServerApi', 'MWConfiguration', 'MwDiff',
-    'BatchApi', 'GridView', 'ModelSpecView', 'ItamCompareApi', 'CommonView',
+    'CommandApi', 'AgentApi', 'MwServerApi', 'MWConfigurationApi', 'MwDiffApi',
+    'BatchApi', 'GridApi', 'ModelSpecApi', 'ItamCompareApi', 'CommonApi',
     'ExampleApi', 'DailyReportApi', 'ShortQueries', 'JsonView', 'MonitorApi',
     'GitView', 'UtApi',
 ]

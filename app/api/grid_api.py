@@ -10,7 +10,7 @@ import json
 import re
 import logging
 
-class GridView(BaseApi):
+class GridApi(BaseApi):
 
     #route_base = '/grid'
     resource_name = 'grid'
@@ -249,4 +249,4 @@ class GridView(BaseApi):
 
         return jsonify({'list':grid_list, 'columns':columns, 'labels':header, 'widths':widths, 'title':title, 'file_name':file_name, 'rows_per_page':rows_per_page, 'page_dblclick':page_dblclick}), 200
 
-appbuilder.add_api(GridView)
+appbuilder.add_api(GridApi)

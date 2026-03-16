@@ -85,7 +85,7 @@ class MwServerApi(BaseApi):
             'use_yn': server.use_yn.name if server.use_yn else None
         }
 
-class MWConfiguration(BaseApi):
+class MWConfigurationApi(BaseApi):
 
     resource_name = 'config'
 
@@ -171,7 +171,7 @@ class MWConfiguration(BaseApi):
 
         return jsonify({'return_code':rtn, 'msg':msg}), 201
 
-class MwDiff(BaseApi):
+class MwDiffApi(BaseApi):
 
     route_base = '/diff'
 
@@ -210,5 +210,5 @@ class MwDiff(BaseApi):
             )
 
 appbuilder.add_api(MwServerApi)
-appbuilder.add_api(MWConfiguration)
-appbuilder.add_api(MwDiff)
+appbuilder.add_api(MWConfigurationApi)
+appbuilder.add_api(MwDiffApi)

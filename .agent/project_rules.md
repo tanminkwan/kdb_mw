@@ -23,10 +23,12 @@
 
 ## 4. Documentation Policy
 - **Location**: `docs/` 디렉토리
-- **Naming Format**: `{SEQ}_SPEC_{기능명}.md` (e.g., `001_SPEC_broadcast_callback.md`)
-- **SEQ**: 3자리 순번. 기능 추가/변경 시마다 순번을 증가시킴.
-- **Content**: 변경 배경, DB Migration SQL, 수정 파일 목록, 기술 spec, 사용법 등을 포함.
-- **Rule**: 기능 추가/변경 작업 시 반드시 해당 SPEC 문서를 작성해야 함.
+- **Naming Format**: 
+  - 기능 명세: `SPEC_{SEQ}_{기능명}.md` (e.g., `SPEC_001_broadcast_callback.md`)
+  - 운영 가이드: `HOWTO_{SEQ}_{작업명}.md` (e.g., `HOWTO_001_create_docker_image.md`)
+- **SEQ**: 3자리 순번. 각 카테고리별로 별도의 순번을 유지하거나 전체 문서의 흐름에 따라 증가시킴.
+- **Content**: 변경 배경, DB Migration SQL, 수정 파일 목록, 기술 spec, 사용법, 또는 운영 절차 등을 포함.
+- **Rule**: 기능 추가/변경 또는 중요한 운영 절차 수립 시 반드시 해당 문서를 작성해야 함.
 
 ## 5. Communication Policy
 - **Rule**: 작업 시작 전에는 반드시 수행할 작업 내용에 대해 간략하게 설명(Plan)을 하고 진행한다.

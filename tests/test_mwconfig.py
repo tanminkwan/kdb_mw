@@ -1,7 +1,7 @@
 import pytest
 import json
 from app.dmlsForAgent import AutorunResult  # Assuming AutorunResult is a model in your application
-from app.views.was import MWConfiguration
+from app.api.was_api import MWConfigurationApi
 
 @pytest.fixture
 def mock_protect(monkeypatch):
@@ -9,7 +9,7 @@ def mock_protect(monkeypatch):
 
 @pytest.fixture
 def mw_config(app):
-    return MWConfiguration()
+    return MWConfigurationApi()
 
 def test_httpm_config_missing_content(client, mock_protect):
     #monkeypatch.setattr(mw_config, 'protect', lambda: lambda x: x)
