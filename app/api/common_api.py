@@ -6,7 +6,7 @@ from app.file_manager.s3.filemanager import S3FileManager
 from app.file_manager.s3.s3 import S3Client
 from io import BytesIO
 
-class CommonView(BaseApi):
+class CommonApi(BaseApi):
 
     route_base = '/common'
 
@@ -30,4 +30,4 @@ class CommonView(BaseApi):
         download_url = file_manager.generate_presigned_url(filename, expiration=300)
         return {"download_url":download_url}
 
-appbuilder.add_api(CommonView)
+appbuilder.add_api(CommonApi)

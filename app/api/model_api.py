@@ -4,7 +4,7 @@ from flask_appbuilder.api import BaseApi, expose, protect
 from app.sqls.monitor import select_rows2, get_model_info, get_all_tables
 import json
 
-class ModelSpecView(BaseApi):
+class ModelSpecApi(BaseApi):
 
     resource_name = 'model'
 
@@ -60,4 +60,4 @@ class ModelSpecView(BaseApi):
 
         return jsonify({'list':tables})
 
-appbuilder.add_api(ModelSpecView)
+appbuilder.add_api(ModelSpecApi)

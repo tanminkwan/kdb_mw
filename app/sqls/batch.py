@@ -482,7 +482,7 @@ MENU_CATEGORY_TO_ROLE = {
 # 모든 유저가 기본적으로 가져야 할 공통 권한 (Home, 프로필 등)
 COMMON_VIEWS_FOR_ALL = [
     'MyIndexView', 'UserDBModelView', 'ResetPasswordView', 
-    'UserInfoEditView', 'CommonView'
+    'UserInfoEditView', 'CommonApi'
 ]
 
 @batch_function
@@ -554,6 +554,9 @@ def sync_role_permissions():
     for view in appbuilder.baseviews:
         if isinstance(view, BaseApi):
             api_class_name = view.__class__.__name__
+            # 공통 권한에 포함된 Api는 api_rgroup 수집에서 제외 (중복 방지)
+            if api_class_name in COMMON_VIEWS_FOR_ALL:
+                continue
             pvm_list = db.session.query(sm.permissionview_model)\
                 .join(sm.viewmenu_model)\
                 .filter(sm.viewmenu_model.name == api_class_name).all()
@@ -577,7 +580,26 @@ def sync_role_permissions():
     role_perms['common_rgroup'].add(('menu_access', 'Main'))
     role_perms['common_rgroup'].add(('menu_access', 'MyIndexView'))
 
-    # 4. Role 생성/업데이트
+    # 4. Variant Roles (_read_rgroup, _edit_rgroup) 생성
+    # 각 base _rgroup 에 대해 읽기전용 및 수정전용(삭제제외) Role을 추가로 생성합니다.
+    variant_role_perms = {}
+    for role_name, perms in role_perms.items():
+        if not role_name.endswith('_rgroup'):
+            continue
+        
+        # _read_rgroup: delete/add/edit 권한 제거
+        read_role_name = role_name.replace('_rgroup', '_read_rgroup')
+        read_perms = { (p, v) for p, v in perms if p not in ['can_add', 'can_edit', 'can_delete', 'muldelete'] }
+        variant_role_perms[read_role_name] = read_perms
+        
+        # _edit_rgroup: delete 권한 제거
+        edit_role_name = role_name.replace('_rgroup', '_edit_rgroup')
+        edit_perms = { (p, v) for p, v in perms if p not in ['can_delete', 'muldelete'] }
+        variant_role_perms[edit_role_name] = edit_perms
+        
+    role_perms.update(variant_role_perms)
+
+    # 5. Role 생성/업데이트
     results = []
     for role_name, perms in role_perms.items():
         role = sm.find_role(role_name)
