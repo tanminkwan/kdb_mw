@@ -403,7 +403,7 @@
         var d30 = new Date(); d30.setDate(now.getDate() + 30);
         
         if (status == '만료') {
-            url += "&_flt_1_notafter=" + formatDate(now);
+            url += "&_flt_2_notafter=" + formatDate(now);
         } else if (status == '임박') {
             url += "&_flt_1_notafter=" + formatDate(now) + "&_flt_2_notafter=" + formatDate(d7);
         } else if (status == '주의') {
