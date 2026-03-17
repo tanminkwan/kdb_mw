@@ -6,7 +6,7 @@ from flask_appbuilder import expose, has_access
 from flask_appbuilder.actions import action
 from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, protect
 from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
-    , FilterEqualFunction, FilterNotEqual, FilterInFunction, FilterStartsWith, FilterEqual
+    , FilterEqualFunction, FilterNotEqual, FilterInFunction, FilterStartsWith, FilterEqual, FilterGreater, FilterSmaller
 from app import appbuilder, db #, mongoClient, dbMongo, footprint, vv_P_secs
 #from .models import Server, JeusContainer, Host
 from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
@@ -613,8 +613,8 @@ class WebDomainModelView(ModelView):
     search_form_query_rel_fields = {}
     
     search_filters = {
-        'notafter': [FilterIsNull],
-        'update_dt': [FilterIsNull]
+        'notafter': [FilterIsNull, FilterGreater, FilterSmaller],
+        'update_dt': [FilterIsNull, FilterGreater, FilterSmaller]
     }
     
     extra_args = {
