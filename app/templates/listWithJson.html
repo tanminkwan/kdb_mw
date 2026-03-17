@@ -89,6 +89,13 @@
             multipleLinksOnOutput: true
         });
         $('#diagram-renderer').flowchart('setData', jdata);
+        
+        // [Hennry] 'NO' 상태 인스턴스 색상 변경 (라이브러리 수정 방지용)
+        $('.flowchart-operator-connector-label').each(function() {
+            if ($(this).text().indexOf('\u200D') !== -1) {
+                $(this).css('color', 'gray');
+            }
+        });
     };
     function deleteObject() {
         $('#diagram-renderer').flowchart('deleteSelected');

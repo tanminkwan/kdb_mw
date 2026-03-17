@@ -4,6 +4,10 @@ import re
 from app.models.was import MwWas, MwWasInstance, MwWeb, MwWasWebtobConnector, MwWebServer\
             , MwDatasource, MwApplication, MwWasHttpListener, MwWebReverseproxy, MwServer, MwWebVhost
 from .monitor import select_row
+import re
+
+def strike(text):
+    return ''.join([u'\u0336' + char for char in text]) + u'\u0336'
 
 def get_host_id(ip_address):
     server_rec = db.session.query(MwServer)\
@@ -342,7 +346,7 @@ def get_was_relationship(was_id):
         return None 
     
     was_instance_recs = db.session.query(MwWasInstance)\
-                    .filter(MwWasInstance.was_id==was_id,MwWasInstance.use_yn=='YES')\
+                    .filter(MwWasInstance.was_id==was_id)\
                     .order_by(MwWasInstance.host_id.asc()).order_by(MwWasInstance.was_instance_id.asc()).all()
 
     operators = dict()
@@ -430,10 +434,12 @@ def get_was_relationship(was_id):
                             ,MwWasHttpListener.was_instance_id==r.was_instance_id\
                             ,MwWasHttpListener.webconnection_id!='ADMIN-HTTP')\
                     .first()
-
         if was_httpListener_rec:
             protocol = 'https' if was_httpListener_rec.ssl_yn and was_httpListener_rec.ssl_yn.name == 'YES' else 'http'
             label = '['+protocol+':'+str(was_httpListener_rec.listen_port)+'('+str(was_httpListener_rec.max_thread_pool_count)+')]'+r.was_instance_id
+
+            if r.use_yn.name == 'NO':
+                label = strike(label) + u'\u200D'
 
             rproxy_recs = get_rproxy_servers(host_id, was_httpListener_rec.listen_port)
             if rproxy_recs:
@@ -454,6 +460,8 @@ def get_was_relationship(was_id):
                     webs.add((real_host_id, port))
         else:
             label = r.was_instance_id
+            if r.use_yn.name == 'NO':
+                label = strike(label) + u'\u200D'
 
         operators[operator_key]["properties"]["outputs"].update({idx_name:{"label":label}})
         operators[operator_key]["properties"]["inputs"].update({idx_name+'_':{"label":'>'}})

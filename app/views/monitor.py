@@ -146,10 +146,10 @@ class MonitorApi(BaseApi):
         return jsonify({'return_code':rtn, 'message':'OK'}), 200
     """
 
-    @expose('/test', methods=['GET'])
-    @expose('/test/<param>', methods=['GET'])
+    @expose('/gridView', methods=['GET'])
+    @expose('/gridView/<param>', methods=['GET'])
     @has_access
-    def test(self, param=None):
+    def gridView(self, param=None):
 
         cond_list = []
         if param:
@@ -185,7 +185,7 @@ class MonitorApi(BaseApi):
         return render_template('list_jqgrid.html'\
             , param=param
             , condition=cond_list
-            , url='/monitor/test'
+            , url='/monitor/gridView'
             , base_template=appbuilder.base_template
             , appbuilder=appbuilder
             )
@@ -513,6 +513,7 @@ appbuilder.add_view(
     category="Monitor",
     category_icon="fa-envelope"
 )
+appbuilder.add_separator("Monitor")
 appbuilder.add_view(
     MoGridConfigModelView,
     "Table 목록 조회 설정",
@@ -522,7 +523,7 @@ appbuilder.add_view(
 )
 appbuilder.add_link(
     name='TABLE.INFO',
-    href='/monitor/test',
+    href='/monitor/gridView',
     label="Table 정보 조회",
     icon="fa-envelope",
     category="Monitor"

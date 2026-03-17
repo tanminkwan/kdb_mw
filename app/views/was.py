@@ -155,7 +155,7 @@ class WasInstanceModelView(ModelView):
     datamodel = SQLAInterface(MwWasInstance)
 
     list_title   = "WAS Instance 목록"    
-    list_columns = ['was_id', 'was_instance_id', 'landscape', 'newgeneration_yn', 'was_instance_port'\
+    list_columns = ['was_id', 'was_instance_id', 'landscape', 'was_instance_port'\
                     , 'host_id', 'c_os_type', 'c_ip_address','min_heap_size', 'max_heap_size', 'clustered_yn'\
                     , 'colored_apm_type', 'use_yn', 'mw_datasource', 'mw_application']
     label_columns = {'was_id':'WAS Domain'
@@ -205,7 +205,7 @@ class WasCommonView(ModelView):
         ]
         }
 
-    list_columns = ['c_was_id', 'newgeneration_yn', 'was_name', 'colored_landscape'\
+    list_columns = ['c_was_id', 'was_name', 'colored_landscape'\
                     , 'sys_user', 'located_host_id', 'c_os_type', 'link_ip_address', 'running_type', 'standby_host_id'\
                     , 'view_domaininfo','view_relationship']
     label_columns = {'c_was_id':'WAS Domain'

@@ -95,8 +95,8 @@ class AgentModelView(ModelView):
         ,{'text':'OffLine','id':'toggle_bt3','bt_group':'1','onclick':'_flt_2_last_checked_date='+(datetime.now() - timedelta(minutes=4)).strftime("%Y-%m-%d+%H:%M:%S")}
         ,{'text':'Not Approved','id':'toggle_bt4','bt_group':'1','onclick':'_flt_0_approved_yn=NO'}
         ],
-        'selectList':[
-         {'text':'Hostname','id':'host-selector','combind':'0','type':'child'}
+        'inputList':[
+         {'text':'Hostname','id':'host-id','combind':'1','condition':'_flt_2_host_id=','size':20}
         ]
         }
     page_size = 100
