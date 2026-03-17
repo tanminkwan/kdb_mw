@@ -10,8 +10,8 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute, ScalarAttributeImpl
 from app.models.agent import AgResult
 from app.models.monitor import MoWasInstanceStatus, MoWasStatusTemplate, MoWasStatusReport\
     , MoGridConfig
-from app.models.was import MwWeb, MwWebVhost, MwWebDomain
-from app.models.common import YnEnum
+from app.models.was import MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWebDomain
+from app.models.common import YnEnum, LocationEnum
 import re
 from croniter import croniter
 import types
@@ -426,49 +426,52 @@ def get_not_running_was_list():
     current_date = datetime.now()
     _threshold = timedelta(hours=1)
 
-    wit_recs = db.session.query(MoWasStatusTemplate).all()
+    # 변경: MwWas(landscape=PROD, use_yn=YES) 이고 MwWasInstance(use_yn=YES) 인 대상 조회
+    instances = db.session.query(MwWasInstance).join(MwWas).filter(
+        MwWas.landscape == LocationEnum.PROD,
+        MwWas.use_yn == YnEnum.YES,
+        MwWasInstance.use_yn == YnEnum.YES
+    ).all()
 
-    for wit_rec in wit_recs:
+    # Domain별 Blackout 정보 캐시 (여러 인스턴스가 동일 도메인에 속하므로 중복 체크 방지)
+    blackout_cache = {}
 
-        dict_rec = wit_rec.__dict__
-
-        blackout_info, _ = select_item('mw_was', 'blackout_info', {'was_id':wit_rec.was_id})
-
-        is_blacked_out = _is_now_in_any_cron_range(blackout_info[0])
+    for instance in instances:
+        was_id = instance.was_id
+        
+        if was_id not in blackout_cache:
+            blackout_cache[was_id] = _is_now_in_any_cron_range(instance.mw_was.blackout_info)
+        
+        is_blacked_out = blackout_cache[was_id]
 
         if is_blacked_out:
-            logging.debug(f"## was_id : {wit_rec.was_id}  blackout_info : {blackout_info} is_blacked_out : {is_blacked_out}")
+            logging.debug(f"## was_id : {was_id} is_blacked_out : {is_blacked_out}")
 
-        for i in range(1, 16):
+        was_instance_id = instance.was_instance_id
 
-            was_instance_id = dict_rec['wi_'+str(i).zfill(2)]
+        wis_rec = db.session.query(MoWasInstanceStatus)\
+            .filter(MoWasInstanceStatus.update_on > current_date - _threshold\
+                    , MoWasInstanceStatus.was_id==was_id\
+                    , MoWasInstanceStatus.was_instance_id==was_instance_id).first()
 
-            if not was_instance_id:
+        if wis_rec:
+            if  wis_rec.was_instance_status.name == 'RUNNING':
                 continue
-
-            wis_rec = db.session.query(MoWasInstanceStatus)\
-                .filter(MoWasInstanceStatus.update_on > current_date - _threshold\
-                        , MoWasInstanceStatus.was_id==wit_rec.was_id\
-                        , MoWasInstanceStatus.was_instance_id==was_instance_id).first()
-
-            if wis_rec:
-                if  wis_rec.was_instance_status.name == 'RUNNING':
-                    continue
-                else:
-
-                    if not is_blacked_out:
-                        results2.append(dict(
-                            domain_id=wit_rec.was_id,
-                            was_instance_group=wit_rec.was_instance_group,
-                            was_instance_id=was_instance_id,
-                            was_instance_stat=wis_rec.was_instance_status.name,
-                            host_id=wis_rec.host_id,
-                        ))
-
-                    results3.add((wit_rec.was_id,wit_rec.mw_was.agent_id))
             else:
-                uncheckedDomains.add(wit_rec.was_id)
-                results3.add((wit_rec.was_id,wit_rec.mw_was.agent_id))
+
+                if not is_blacked_out:
+                    results2.append(dict(
+                        domain_id=was_id,
+                        was_instance_group='Instance',
+                        was_instance_id=was_instance_id,
+                        was_instance_stat=wis_rec.was_instance_status.name,
+                        host_id=wis_rec.host_id,
+                    ))
+
+                results3.add((was_id, instance.mw_was.agent_id))
+        else:
+            uncheckedDomains.add(was_id)
+            results3.add((was_id, instance.mw_was.agent_id))
 
     for domain_id in uncheckedDomains:
 
