@@ -1,5 +1,5 @@
 from app import db
-from sqlalchemy import text
+from sqlalchemy import text, and_
 import re
 from app.models.was import MwWas, MwWasInstance, MwWeb, MwWasWebtobConnector, MwWebServer\
             , MwDatasource, MwApplication, MwWasHttpListener, MwWebReverseproxy, MwServer, MwWebVhost
@@ -8,6 +8,30 @@ import re
 
 def strike(text):
     return ''.join([u'\u0336' + char for char in text]) + u'\u0336'
+
+def get_dependent_was_id(web_rec=None, host_id=None, web_home=None):
+    # 내장 Web의 부모 WAS 를 찾는 로직
+    # 내장 web의 web home 과 host_id , mw_was 에 연결된 mw_was_webtob_connector 중에 
+    # webtob home 과 해당 mw_was_instance의 host_id 가 동일한 첫 번째 것을 찾음
+    
+    h_id = web_rec.host_id if web_rec else host_id
+    w_home = web_rec.web_home if web_rec else web_home
+    
+    if not h_id or not w_home:
+        return None
+
+    connector_rec = db.session.query(MwWasWebtobConnector)\
+        .join(MwWasInstance, and_(
+            MwWasInstance.was_id == MwWasWebtobConnector.was_id,
+            MwWasInstance.was_instance_id == MwWasWebtobConnector.was_instance_id
+        ))\
+        .filter(MwWasInstance.host_id == h_id, MwWasWebtobConnector.web_home == w_home)\
+        .first()
+
+    if connector_rec:
+        return connector_rec.mw_was_instance.mw_was
+    
+    return None
 
 def get_host_id(ip_address):
     server_rec = db.session.query(MwServer)\
@@ -328,7 +352,7 @@ def get_web_servers(webconn_rec):
                     .filter( MwWebServer.svr_id==webconn_rec.jsv_id)\
                     .join(MwWeb)\
                     .filter(MwWeb.host_id==real_host_id
-                            ,MwWeb.dependent_was_id==webconn_rec.was_id).all()
+                            ,MwWeb.mw_was.any(was_id=webconn_rec.was_id)).all()
     else:
         web_recs = db.session.query(MwWebServer)\
                     .filter( MwWebServer.svr_id==webconn_rec.jsv_id)\

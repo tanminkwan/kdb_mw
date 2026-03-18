@@ -1,12 +1,13 @@
 import logging
 from app import db
-from .dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
-from .dmlsForWebtob import WebtobHttpm, WebtobHttpmFactory, NewHttpm, httpmToDict
-from app.sqls.was import get_domain_id_as_pk, get_was_instance_id
+from .jeus_dml import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
+from .webtob_dml import WebtobHttpm, WebtobHttpmFactory, NewHttpm, httpm_to_dict
+from app.sqls.was import get_was_instance_id
 from app.sqls.agent import update_result_status, update_was_status, get_result, get_autorun_func\
     , send_command_immediately, get_or_insert_command_type, insert_command_master\
     , get_command_master
 from app.sqls.monitor import update_rows, insert_row, select_row, select_rows
+from app.sqls.relationship import get_dependent_was_id
 from app.models.common import get_date
 from datetime import datetime, timedelta
 from deepdiff import DeepDiff
@@ -142,6 +143,7 @@ class AutorunResult:
 
             #Not changed
             if not diff:
+                update_rows('mw_was', {'create_on': datetime.now()}, {'was_id': domain_info['domain_id']})
                 return 0, 'Not changed'
 
             insert_dict = dict(
@@ -429,17 +431,7 @@ class AutorunResult:
         content   = result.result_text
         host_id   = result.host_id.lower()
 
-        #내장 WEB서버 식별
-        if 'webserver/config' in file_path:
-            fpl = file_path.split('/')
-            real_domain_id = fpl[fpl.index('webserver')-1]
-
-            domain_id = get_domain_id_as_pk(host_id, real_domain_id)
-            # 예외로직 : utc10t 두번째 jeusok 의 domain id를 jeusok2_dev로 고정
-            if host_id == 'uok01a' and 'usropt01/jeus60/jeusok' in file_path:
-                domain_id = 'jeusok2_dev'
-        else:
-            domain_id = ''
+        domain_id = ""
 
         agent_id = result.agent_id
 
@@ -453,7 +445,7 @@ class AutorunResult:
 
     def _update_httpm(self, host_id, content, sys_user='', domain_id='', agent_id=''):
 
-        httpm = httpmToDict(content)
+        httpm = httpm_to_dict(content)
 
         if not httpm['NODE'][0].get('JSVPORT'):
             httpm['NODE'][0]['JSVPORT'] = 0
@@ -472,6 +464,7 @@ class AutorunResult:
 
             #Not changed
             if not diff:
+                update_rows('mw_web', {'create_on': datetime.now()}, {'host_id': host_id, 'port': port})
                 return 0, 'Not changed'
 
             insert_dict = dict(

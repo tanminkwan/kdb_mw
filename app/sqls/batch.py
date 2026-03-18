@@ -9,6 +9,7 @@ from .agent import finish_commands, get_agent
 from .monitor import update_rows, insert_row, select_rows, select_row, get_was_status_template, \
     get_not_running_was_list
 from sqlalchemy.dialects.postgresql import insert
+from . import webtob_dml, agent_dml
 #from app.auto_report.auto_report import run_auto_report
 from datetime import datetime, timedelta
 #from app.kafka.kafka_customer import Consumer4Kafka
@@ -128,24 +129,6 @@ def update_was_status():
             {'GROUPS':groups}
             )
 
-    # 모니터링 정보 update (on going)
-    '''
-    global consumer4WasMonitoring
-    #consumer4WasMonitoring = Consumer4Kafka(['10.6.16.102:9092'], 'S_PROD_JMX_RESULT_BY_SERVER', KAFKA_CONSUMER_4_WAS_MONITORING)
-    consumer4WasMonitoring = Consumer4Kafka(KAFKA_BROKERS, 'S_PROD_JMX_RESULT_BY_SERVER', KAFKA_CONSUMER_4_WAS_MONITORING)
-    
-    consumer4WasMonitoring.seekToEnd()
-
-    for _, val in consumer4WasMonitoring.getMessage():
-
-        key = val['DOMAIN_ID']+'.'+val['SERVER_NAME']
-        if WAS_STATUS.get(key):
-            val.update(dict(
-                UPDATE_DATE        = datetime.now().strftime("%Y/%m/%d %H:%M:%S"),
-                WAS_INSTANCE_GROUP = WAS_STATUS[key]['WAS_INSTANCE_GROUP']
-                ))
-            WAS_STATUS[key] = val
-    '''
     return 1, ''
 
 @batch_function
@@ -248,108 +231,53 @@ def update_url_rewrite_info():
 
             update_rows('mw_web_vhost',update_dict, filter_dict)
 
+
 @batch_function
-def create_domain_name_info(webInfo):
-    return _create_domain_name_info(webInfo)
-
-def _create_domain_name_info(webInfo):
-
-    if not webInfo:
-        return 0, 'Parameters don\'t exist'
-
-    if isinstance(webInfo, str):
-        wi = eval(webInfo)
-    else:
-        wi = webInfo
-
-    web_rec = db.session.query(MwWeb)\
-                .filter(MwWeb.host_id==wi['host_id'], MwWeb.port==wi['port'])\
-                .first()
-
+def re_register_web_from_text(web_id):
+    web_rec = db.session.query(MwWeb).filter(MwWeb.id == web_id).first()
     if not web_rec:
-        return 0, ''
+        return 0, 'No web data found'
 
-    httpm = web_rec.httpm_object
-    ssls  = web_rec.ssl_object
+    # 텍스트가 없더라도 재등록 시도는 한 것이므로 날짜 갱신
+    web_rec.create_on = datetime.now()
+    
+    if not web_rec.web_text:
+        return 0, 'No web text found'
 
-    vhost_recs = db.session.query(MwWebVhost)\
-                .filter(MwWebVhost.mw_web_id==web_rec.id).all()
+    httpm_dict = webtob_dml.httpm_to_dict(web_rec.web_text)
+    
+    # newgeneration_yn 에 따라 적절한 클래스 사용
+    if web_rec.newgeneration_yn.name == 'YES':
+        h = webtob_dml.NewHttpm(web_rec.host_id, httpm_dict, web_rec.web_text, sys_user=web_rec.sys_user, domain_id="", agent_id=web_rec.agent_id)
+    else:
+        h = webtob_dml.OldHttpm(web_rec.host_id, httpm_dict, web_rec.web_text, sys_user=web_rec.sys_user, domain_id="", agent_id=web_rec.agent_id)
+    
+    return h.upsertWebtobHttpm()
 
-    if not vhost_recs:
-        return 0, ''
+@batch_function
+def re_register_was_from_text(was_id):
+    was_rec = db.session.query(MwWas).filter(MwWas.id == was_id).first()
+    if not was_rec:
+        return 0, 'No was data found'
 
-    domain_name_list = []
-    domain_name_dict = {}
+    # 텍스트가 없더라도 재등록 시도는 한 것이므로 날짜 갱신
+    was_rec.create_on = datetime.now()
 
-    for v in vhost_recs:
+    if not was_rec.was_text:
+        return 0, 'No was text found'
 
-        domains = []
-        if v.domain_name:
-            domains += v.domain_name.split(',')
-        if v.host_alias:
-            domains += v.host_alias.split(',')
+    domain_info = dict(
+        domain_id = was_rec.was_id,
+        host_id   = was_rec.located_host_id,
+        content   = was_rec.was_text,
+        sys_user  = was_rec.sys_user,
+        agent_id  = was_rec.agent_id or '',
+    )
 
-        domains = list(set(domains))
-        ports = v.web_ports.replace(' ','').split(',')
-
-        ssl_yn = 'NO'
-        ssl_certiFile    = ''
-        ssl_certiKeyFile = ''
-        ssl_CACertiFile  = ''
-
-        ssl_recs = None
-
-        if v.ssl_yn.name == 'YES':
-            ssl_yn = 'YES'
-
-            ssl_rec = db.session.query(MwWebSsl)\
-                .filter(MwWebSsl.mw_web_id==web_rec.id\
-                      , MwWebSsl.ssl_name==v.ssl_name\
-                      ).first()
-
-        for domain in domains:
-
-            if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", domain):
-                continue
-
-            for port in ports:
-
-                update_dict = dict( ssl_yn      = ssl_yn
-                                  , user_id     = 'scheduler'
-                                  , create_on   = datetime.now()
-                )
-
-                insert_dict = update_dict.copy()
-                insert_dict.update( host_id     = wi['host_id']
-                                  , mw_web_vhost_id = v.id
-                                  , domain_name = domain
-                                  , port        = port
-                )
-
-            stmt = insert(MwWebDomain).values(insert_dict)    
-            do_update_stmt = stmt.on_conflict_do_update(
-                index_elements=['mw_web_vhost_id', 'domain_name', 'port'],
-                set_=update_dict
-            ).returning(MwWebDomain.id)
-            rtn = db.session.execute(do_update_stmt)
-
-            if ssl_yn == 'YES' and ssl_rec:
-
-                domain_id = None
-                for rec in rtn:
-                    domain_id = rec[0]
-
-                domain_rec = db.session.query(MwWebDomain)\
-                    .filter(MwWebDomain.id==domain_id).first()
-
-                domain_rec.mw_web_ssl = [ssl_rec]
-
-    return 1, 'OK'
+    return agent_dml.AutorunResult.update_domain(domain_info)
 
 @batch_function
 def create_webtob_conn(domain_id=''):
-
-    #print('HHH 14 :', createWebtobConn)    
 
     query = db.session.query(MwWasWebtobConnector)
 
@@ -370,72 +298,7 @@ def create_webtob_conn(domain_id=''):
 
 @batch_function
 def create_ssl_info(webInfo):
-    return _create_ssl_info(webInfo)
-
-def _create_ssl_info(webInfo):
-
-    if not webInfo:
-        return 0, ''
-
-    if isinstance(webInfo, str):
-        wi = eval(webInfo)
-    else:
-        wi = webInfo
-
-    web_rec = db.session.query(MwWeb)\
-                .filter(MwWeb.host_id==wi['host_id'], MwWeb.port==wi['port'])\
-                .first()
-
-    if not web_rec:
-        return 0, ''
-
-    ssls  = web_rec.ssl_object
-
-    ssl_name      = ''
-    ssl_certi     = ''
-    ssl_certikey  = ''
-    ssl_cacerti   = ''
-    ssl_protocols = ''
-    ssl_ciphers   = ''
-
-    for ssl in ssls:
-
-        ssl_name     = ssl['NAME']\
-                        if ssl.get('NAME') else ''
-        ssl_certi    = ssl['CERTIFICATEFILE']\
-                        if ssl.get('CERTIFICATEFILE') else ''
-        ssl_certikey = ssl['CERTIFICATEKEYFILE']\
-                        if ssl.get('CERTIFICATEKEYFILE') else ''
-        ssl_cacerti  = ssl['CACERTIFICATEFILE']\
-                        if ssl.get('CACERTIFICATEFILE') else ''
-        ssl_protocols= ssl['PROTOCOLS']\
-                        if ssl.get('PROTOCOLS') else ''
-        ssl_ciphers  = ssl['REQUIREDCIPHERS']\
-                        if ssl.get('REQUIREDCIPHERS') else ''
-
-        update_dict = dict( ssl_certi     = ssl_certi
-                          , ssl_certikey  = ssl_certikey
-                          , ssl_cacerti   = ssl_cacerti
-                          , ssl_protocols = ssl_protocols
-                          , ssl_ciphers   = ssl_ciphers
-                          , user_id       = 'scheduler'
-                          , create_on     = datetime.now()
-            )
-
-        insert_dict = update_dict.copy()
-        insert_dict.update( host_id  = wi['host_id']
-                          , mw_web_id = web_rec.id
-                          , ssl_name  = ssl_name
-                )
-
-        stmt = insert(MwWebSsl).values(insert_dict)    
-        do_update_stmt = stmt.on_conflict_do_update(
-            index_elements=['mw_web_id', 'ssl_name'],
-            set_=update_dict
-        )
-        db.session.execute(do_update_stmt)
-
-    return 1, 'OK'
+    return webtob_dml._create_ssl_info(webInfo)
 
 updateResourceTag = update_resource_tag
 updateWasStatus = update_was_status
@@ -444,7 +307,6 @@ updateAgentIdInfoInWas = update_agent_id_info_in_was
 updateUrlRewriteInfo = update_url_rewrite_info
 stopUpdateWasStatus = stop_update_was_status
 deleteKafkaTopic = delete_kafka_topic
-createDomainNameInfo = create_domain_name_info
 createSslInfo = create_ssl_info
 createWebtobConn = create_webtob_conn
 produceRepeatedMessage = produce_repeated_message
@@ -457,7 +319,6 @@ for old_name, new_func in [
     ('updateUrlRewriteInfo', update_url_rewrite_info),
     ('stopUpdateWasStatus', stop_update_was_status),
     ('deleteKafkaTopic', delete_kafka_topic),
-    ('createDomainNameInfo', create_domain_name_info),
     ('createSslInfo', create_ssl_info),
     ('createWebtobConn', create_webtob_conn),
     ('produceRepeatedMessage', produce_repeated_message),
@@ -581,7 +442,6 @@ def sync_role_permissions():
     role_perms['common_rgroup'].add(('menu_access', 'MyIndexView'))
 
     # 4. Variant Roles (_read_rgroup, _edit_rgroup) 생성
-    # 각 base _rgroup 에 대해 읽기전용 및 수정전용(삭제제외) Role을 추가로 생성합니다.
     variant_role_perms = {}
     for role_name, perms in role_perms.items():
         if not role_name.endswith('_rgroup'):
@@ -609,7 +469,6 @@ def sync_role_permissions():
         else:
             results.append(f"Updated role: {role_name}")
 
-        # 기존 권한 초기화 후 업데이트
         role.permissions = []
         for perm_name, view_name in perms:
             pvm = sm.find_permission_view_menu(perm_name, view_name)
@@ -619,5 +478,3 @@ def sync_role_permissions():
     summary = '; '.join(results)
     logging.info(f"sync_role_permissions: {summary}")
     return 1, summary
-
-

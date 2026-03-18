@@ -258,16 +258,16 @@ def compare_itam_embed_web(config_id=None):
 
     for rec in records:
         # 1) 내장 WEB 미등록 (host_id + domain_name으로 매핑, 포트 비교 제외)
-        mw_web_rec = db.session.query(MwWeb).filter(
+        mw_web_rec = db.session.query(MwWeb).join(MwWeb.mw_was).filter(
             MwWeb.host_id == (str(rec.host_id).lower() if rec.host_id else None),
             MwWeb.built_type == BuiltEnum.Internal,
             or_(
-                MwWeb.dependent_was_id == rec.domain_name,
-                MwWeb.dependent_was_id == rec.domain_name + '_dev',
-                MwWeb.dependent_was_id == rec.domain_name + '_test',
-                MwWeb.dependent_was_id == rec.domain_name + '_A',
-                MwWeb.dependent_was_id == rec.domain_name + '_L',
-                MwWeb.dependent_was_id == rec.domain_name + '_N'
+                MwWas.was_id == rec.domain_name,
+                MwWas.was_id == rec.domain_name + '_dev',
+                MwWas.was_id == rec.domain_name + '_test',
+                MwWas.was_id == rec.domain_name + '_A',
+                MwWas.was_id == rec.domain_name + '_L',
+                MwWas.was_id == rec.domain_name + '_N'
             )
         ).first()
 
@@ -309,11 +309,13 @@ def compare_itam_embed_web(config_id=None):
             ))
 
         # 5) WAS Domain 이상
-        if rec.domain_name != _get_cleaned_was_id(mw_web_rec.dependent_was_id):
+        # 5) WAS Domain 이상
+        parent_was_id = mw_web_rec.mw_was[0].was_id if mw_web_rec.mw_was else ""
+        if rec.domain_name != _get_cleaned_was_id(parent_was_id):
             results.append(ItItamWasCompare(
                 config_id=rec.config_id,
                 error_type='WAS Domain 이상',
-                error_content=f'ITAM domain_name={rec.domain_name}, 리발소 dependent_was_id={mw_web_rec.dependent_was_id} (cleaned={_get_cleaned_was_id(mw_web_rec.dependent_was_id)})'
+                error_content=f'ITAM domain_name={rec.domain_name}, 리발소 WAS={parent_was_id}'
             ))
 
     return results
@@ -506,9 +508,10 @@ def compare_leebalso_embed_web(web_id=None):
 
     for rec in records:
         # ITAM 미등록 체크 (host_id + cleaned was_id 비교, 포트/불용 제외)
+        parent_was_id = rec.mw_was[0].was_id if rec.mw_was else ""
         itam_exists = db.session.query(ItWas).filter(
             func.lower(ItWas.host_id) == str(rec.host_id).lower(), 
-            ItWas.domain_name == _get_cleaned_was_id(rec.dependent_was_id),
+            ItWas.domain_name == _get_cleaned_was_id(parent_was_id),
             ItWas.embed_web_yn == 'Y',
             ItWas.config_status != '불용'
         ).first()
@@ -517,7 +520,7 @@ def compare_leebalso_embed_web(web_id=None):
             results.append(ItLeebalsoWebCompare(
                 leebalso_id=rec.id,
                 error_type='ITAM 미등록',
-                error_content=f'host_id={rec.host_id}, was_id={rec.dependent_was_id} (cleaned={_get_cleaned_was_id(rec.dependent_was_id)})가 it_was(embed_web)에 미등록 또는 불용 상태'
+                error_content=f'host_id={rec.host_id}, 리발소 WAS={parent_was_id} 가 it_was(embed_web)에 미등록 또는 불용 상태'
             ))
 
     return results
