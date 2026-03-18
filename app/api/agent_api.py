@@ -8,7 +8,7 @@ from flask_appbuilder.api import BaseApi, expose, protect
 from flask_jwt_extended import create_refresh_token
 
 from app import appbuilder, db, KAFKA_BROKERS
-from app.dmlsForAgent import AutorunResult
+from app.sqls.agent_dml import AutorunResult
 from app.file_manager.s3.filemanager import S3FileManager
 from app.sqls.agent import (
     check_agent_approved,

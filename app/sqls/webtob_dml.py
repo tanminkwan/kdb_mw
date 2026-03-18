@@ -2,14 +2,15 @@ from abc import ABC, abstractmethod
 import logging
 import re
 from flask import g
-from . import appbuilder, db
+from app import appbuilder, db
 from datetime import datetime
 from sqlalchemy import select, delete, null, text, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
-    , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, MwWebUri, MwWebServer
+    , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, MwWebUri, MwWebServer\
+    , MwWebDomain, MwWebSsl
 from app.sqls.was import get_landscape
-from app.sqls.batch import create_domain_name_info, create_ssl_info
+from .relationship import get_dependent_was_id, get_web_servers
 
 class WebtobHttpm(ABC):
 
@@ -41,7 +42,7 @@ class WebtobHttpm(ABC):
     @abstractmethod
     def _setSubGroup(self):
         
-        self.node      = self.httpm['NODE'][0]
+        self.node = self.httpm['NODE'][0] if self.httpm.get('NODE') and len(self.httpm['NODE']) > 0 else {}
         self.ssl       = self.httpm['SSL'] if self.httpm.get('SSL') else []
         self.proxy_ssl = self.httpm['PROXY_SSL'] if self.httpm.get('PROXY_SSL') else []
         self.vhosts    = self.httpm['VHOST'] if self.httpm.get('VHOST') else []
@@ -59,6 +60,9 @@ class WebtobHttpm(ABC):
 
     def upsertWebtobHttpm(self):
 
+        if not self.node:
+             return -1, "Invalid configuration: NODE section not found in http.m text."
+
         # 
         self.landscape = get_landscape(self.host_id)
 
@@ -71,6 +75,28 @@ class WebtobHttpm(ABC):
             # Upsert mw_web
             _, insert_dict, update_dict = self.__getDictOfWeb()
 
+            # Protection for Isolated status
+            rec = db.session.query(MwWeb).filter(MwWeb.host_id == self.host_id, MwWeb.port == self.port).first()
+            if rec and rec.built_type and rec.built_type.name == 'Isolated' and update_dict.get('built_type') == 'External':
+                del update_dict['built_type']
+
+            # ALWAYS set dependent_was_id via the common function
+            # 내장 WEB인 경우 web_home 정보를 기반으로 부모 WAS를 찾음
+            web_home_tmp = update_dict.get('web_home', '')
+            parent_was_rec = get_dependent_was_id(rec, host_id=self.host_id, web_home=web_home_tmp)
+            
+            # Built Type 결정 로직 (web_home에 'webserver' 포함 여부)
+            if web_home_tmp and 'webserver' in web_home_tmp:
+                update_dict['built_type'] = 'Internal'
+                insert_dict['built_type'] = 'Internal'
+            else:
+                update_dict['built_type'] = 'External'
+                insert_dict['built_type'] = 'External'
+
+            # Protection for Isolated status
+            if rec and rec.built_type and rec.built_type.name == 'Isolated' and update_dict.get('built_type') == 'External':
+                del update_dict['built_type']
+
             stmt = insert(MwWeb).values(insert_dict)    
             do_update_stmt = stmt.on_conflict_do_update(
                 index_elements=['host_id', 'port'],
@@ -79,6 +105,12 @@ class WebtobHttpm(ABC):
             rtn = db.session.execute(do_update_stmt)
 
             self.mw_web_id = next(rec[0] for rec in rtn)
+
+            # 부모 WAS 관계 등록 (Association Table: MwWeb <-> MwWas)
+            if parent_was_rec:
+                web_obj = db.session.query(MwWeb).get(self.mw_web_id)
+                if web_obj and parent_was_rec not in web_obj.mw_was:
+                    web_obj.mw_was.append(parent_was_rec)
             
             # Upsert mw_web_server
             _, insert_array, update_array \
@@ -92,6 +124,19 @@ class WebtobHttpm(ABC):
                     set_=update_dict
                 )
                 db.session.execute(do_update_stmt)
+
+            # WAS 커넥터 물리 연결 갱신 (MwWasWebtobConnector <-> MwWebServer)
+            if parent_was_rec:
+                connectors = db.session.query(MwWasWebtobConnector).filter(MwWasWebtobConnector.was_id == parent_was_rec.was_id).all()
+                for conn in connectors:
+                    conn.mw_web_server = get_web_servers(conn)
+            else:
+                # 외장 Web인 경우 해당 호스트와 관련된 커넥터 갱신
+                affected_conns = db.session.query(MwWasWebtobConnector)\
+                    .join(MwWasInstance)\
+                    .filter(MwWasInstance.host_id == self.host_id).all()
+                for conn in affected_conns:
+                    conn.mw_web_server = get_web_servers(conn)
 
             # Upsert mw_web_uri
             _, insert_array, update_array \
@@ -221,20 +266,14 @@ class WebtobHttpm(ABC):
         if self.sys_user:
             update_dict['sys_user'] = self.sys_user
 
-        if self.dependent_was_id:
-            update_dict['dependent_was_id'] = self.dependent_was_id
+        web_home = update_dict.get('web_home', '')
+        if web_home and 'webserver' in web_home:
             update_dict['built_type'] = 'Internal'
+        else:
+            update_dict['built_type'] = 'External'
 
         return update_dict, self.port
 
-    """
-    def __getTag(self):
-
-        tag = 'WEB-' + self.host_id + '-' + str(self.port) + '-'\
-             + (self.sys_user if self.sys_user else 'NOUSERID')
-        tag_id = insertResourceTag('mw_web', tag)
-        return tag_id
-    """
     def __getArrayDictOfWebServer(self):
 
         update_array = []
@@ -299,7 +338,7 @@ class WebtobHttpm(ABC):
                         )
 
             update_array.append(update_dict)
-            insert_array.append(insert_dict)        
+            insert_array.append(insert_array)        
 
         return 1, insert_array, update_array
 
@@ -423,9 +462,6 @@ class WebtobHttpm(ABC):
         else:
             acc_dir = null()
 
-        #uri_object = []
-        #[ uri_object.append(u) for u in self.uris if vhost_id in u['VHOSTNAME']]
-
         update_dict = dict(
             web_ports    = vhost['PORT'] if vhost.get('PORT') else null(),
             domain_name = ','.join(vhost['HOSTNAME']) if vhost.get('HOSTNAME') else null(),
@@ -436,7 +472,6 @@ class WebtobHttpm(ABC):
             ssl_name    = ssl_name,
             urlrewrite_yn = urlrewrite_yn,
             urlrewrite_config = urlrewrite_config,
-            #uri_object  = uri_object,
             user_id     = g.user.username,
             create_on   = datetime.now()
         )
@@ -551,24 +586,6 @@ class WebtobHttpm(ABC):
 
         return uri_ids, vhost_id
 
-    def __updateSslInfo(self):
-
-        webInfo = {'host_id':self.host_id, 'port':self.port}
-
-        create_ssl_info(webInfo)
-
-        return 1
-
-
-    def __updateDomainNameInfo(self):
-
-        webInfo = {'host_id':self.host_id, 'port':self.port}
-
-        create_domain_name_info(webInfo)
-
-        return 1
-
-
     def __updateWebreverseproxy_Vhost(self):
 
         for vhost in self.vhosts:
@@ -598,6 +615,154 @@ class WebtobHttpm(ABC):
         reverseproxy_ids = [ u['NAME'] for u in self.reverse_proxy if vhost_id in u['VHOSTNAME']]
 
         return reverseproxy_ids, vhost_id
+
+    def __updateSslInfo(self):
+
+        webInfo = {'host_id':self.host_id, 'port':self.port}
+
+        _create_ssl_info(webInfo)
+
+        return 1
+
+
+    def __updateDomainNameInfo(self):
+
+        webInfo = {'host_id':self.host_id, 'port':self.port}
+
+        _create_domain_name_info(webInfo)
+
+        return 1
+
+def _create_domain_name_info(webInfo):
+
+    if not webInfo:
+        return 0, 'Parameters don\'t exist'
+
+    if isinstance(webInfo, str):
+        wi = eval(webInfo)
+    else:
+        wi = webInfo
+
+    web_rec = db.session.query(MwWeb)\
+                .filter(MwWeb.host_id==wi['host_id'], MwWeb.port==wi['port'])\
+                .first()
+
+    if not web_rec:
+        return 0, ''
+
+    vhost_recs = db.session.query(MwWebVhost)\
+                .filter(MwWebVhost.mw_web_id==web_rec.id).all()
+
+    if not vhost_recs:
+        return 0, ''
+
+    for v in vhost_recs:
+
+        domains = []
+        if v.domain_name:
+            domains += v.domain_name.split(',')
+        if v.host_alias:
+            domains += v.host_alias.split(',')
+
+        domains = list(set(domains))
+        ports = v.web_ports.replace(' ','').split(',')
+
+        ssl_yn = 'NO'
+        ssl_rec = None
+
+        if v.ssl_yn.name == 'YES':
+            ssl_yn = 'YES'
+
+            ssl_rec = db.session.query(MwWebSsl)\
+                .filter(MwWebSsl.mw_web_id==web_rec.id\
+                      , MwWebSsl.ssl_name==v.ssl_name\
+                      ).first()
+
+        for domain in domains:
+
+            if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", domain):
+                continue
+
+            for port in ports:
+
+                update_dict = dict( ssl_yn      = ssl_yn
+                                  , user_id     = 'scheduler'
+                                  , create_on   = datetime.now()
+                )
+
+                insert_dict = update_dict.copy()
+                insert_dict.update( host_id     = wi['host_id']
+                                  , mw_web_vhost_id = v.id
+                                  , domain_name = domain
+                                  , port        = port
+                )
+
+                stmt = insert(MwWebDomain).values(insert_dict)    
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['mw_web_vhost_id', 'domain_name', 'port'],
+                    set_=update_dict
+                ).returning(MwWebDomain.id)
+                rtn = db.session.execute(do_update_stmt)
+
+                if ssl_yn == 'YES' and ssl_rec:
+                    domain_id = next(rec[0] for rec in rtn)
+                    domain_rec = db.session.query(MwWebDomain)\
+                        .filter(MwWebDomain.id==domain_id).first()
+                    domain_rec.mw_web_ssl = [ssl_rec]
+
+    return 1, 'OK'
+
+def _create_ssl_info(webInfo):
+
+    if not webInfo:
+        return 0, ''
+
+    if isinstance(webInfo, str):
+        wi = eval(webInfo)
+    else:
+        wi = webInfo
+
+    web_rec = db.session.query(MwWeb)\
+                .filter(MwWeb.host_id==wi['host_id'], MwWeb.port==wi['port'])\
+                .first()
+
+    if not web_rec:
+        return 0, ''
+
+    ssls  = web_rec.ssl_object
+
+    for ssl in ssls:
+
+        ssl_name     = ssl['NAME'] if ssl.get('NAME') else ''
+        ssl_certi    = ssl['CERTIFICATEFILE'] if ssl.get('CERTIFICATEFILE') else ''
+        ssl_certikey = ssl['CERTIFICATEKEYFILE'] if ssl.get('CERTIFICATEKEYFILE') else ''
+        ssl_cacerti  = ssl['CACERTIFICATEFILE'] if ssl.get('CACERTIFICATEFILE') else ''
+        ssl_protocols= ssl['PROTOCOLS'] if ssl.get('PROTOCOLS') else ''
+        ssl_ciphers  = ssl['REQUIREDCIPHERS'] if ssl.get('REQUIREDCIPHERS') else ''
+
+        update_dict = dict( ssl_certi     = ssl_certi
+                          , ssl_certikey  = ssl_certikey
+                          , ssl_cacerti   = ssl_cacerti
+                          , ssl_protocols = ssl_protocols
+                          , ssl_ciphers   = ssl_ciphers
+                          , user_id       = 'scheduler'
+                          , create_on     = datetime.now()
+            )
+
+        insert_dict = update_dict.copy()
+        insert_dict.update( host_id  = wi['host_id']
+                          , mw_web_id = web_rec.id
+                          , ssl_name  = ssl_name
+                )
+
+        stmt = insert(MwWebSsl).values(insert_dict)    
+        do_update_stmt = stmt.on_conflict_do_update(
+            index_elements=['mw_web_id', 'ssl_name'],
+            set_=update_dict
+        )
+        db.session.execute(do_update_stmt)
+
+    return 1, 'OK'
 
 #차세대 Jeus Domain Configuration
 class NewHttpm(WebtobHttpm):
@@ -681,7 +846,7 @@ class WebtobHttpmFactory:
     def webtobHttpm(self, h):
         return h.upsertWebtobHttpm()
 
-def httpmToDict(content):
+def httpm_to_dict(content):
 
     category = ''
     category_new = ''
@@ -738,7 +903,11 @@ def httpmToDict(content):
         dic = dict()
         for ll in linelist:
             ll = ll.strip()
+            if '=' not in ll:
+                continue
             lld = ll.split('=')
+            if len(lld) < 2:
+                continue
             value = lld[1].replace('#','=').replace('^',',').replace('\t','').strip()
             value_l = value.split(',')
             value_l = [ v.strip() for v in value_l]

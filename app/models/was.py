@@ -232,6 +232,12 @@ assoc_tag_server_bizdep = Table('ut_tag_server_bizdep', Model.metadata,
                                   Column('id_of_server', Integer, ForeignKey('mw_server.id', ondelete='CASCADE'))
 )    
 
+assoc_was_web = Table('mw_was_web', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_was', Integer, ForeignKey('mw_was.id', ondelete='CASCADE')),
+                                  Column('id_of_web', Integer, ForeignKey('mw_web.id', ondelete='CASCADE'))
+)
+
 class MwWas(Model):
     __tablename__ = "mw_was"
     t__table_comment = {"comment":"WAS domain"}
@@ -295,6 +301,7 @@ class MwWas(Model):
     mw_was_change_history = relationship('MwWaschangeHistory', back_populates='mw_was', cascade='all,delete', passive_deletes=True)
     mw_server        = relationship('MwServer') 
     ut_tag = relationship('UtTag', secondary=assoc_tag_was, backref='mw_was')
+    mw_web = relationship('MwWeb', secondary=assoc_was_web, back_populates='mw_was')
 
     def __repr__(self):
         return self.was_id
@@ -539,7 +546,6 @@ class MwWeb(Model):
     port             = Column(Integer, nullable=False, comment='Port') # port (auto)
     jsv_port         = Column(Integer, nullable=False, comment='JSV Port') # JSV port (auto)
     built_type       = Column(Enum(BuiltEnum), info={'enum_class':BuiltEnum}, comment='Built Type') #외장형/내장형 구분 (manual)
-    dependent_was_id = Column(String(30), comment='Built type이 내장인 경우 종속된 WAS domain id')
     landscape        = Column(Enum(LocationEnum), info={'enum_class':LocationEnum}, comment='Landscape') #운영/이관/개발/DR 구분 (manual)
     newgeneration_yn = Column(Enum(YnEnum), info={'enum_class':YnEnum}, comment='차세대여부') #차세대 구분 (manual)
     hth_count        = Column(Integer, comment='hth count') # hth count (auto)
@@ -607,6 +613,7 @@ class MwWeb(Model):
     mw_web_reverseproxy = relationship('MwWebReverseproxy', back_populates='mw_web', cascade='all,delete', passive_deletes=True)
     mw_web_vhost     = relationship('MwWebVhost', back_populates='mw_web', cascade='all,delete', passive_deletes=True)
     mw_web_ssl       = relationship('MwWebSsl', back_populates='mw_web', cascade='all,delete', passive_deletes=True)
+    mw_was           = relationship('MwWas', secondary=assoc_was_web, back_populates='mw_web')
     
     def __repr__(self):
         return self.host_id+'['+ str(self.port) +']'

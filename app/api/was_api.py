@@ -7,7 +7,7 @@ from app.sqls.server import get_servers, add_server, update_server, delete_serve
 from app.sqls.was import get_next_old_was_text, get_next_old_web_text
 from app.sqls.monitor import select_row
 from app.models.was import MwServer
-from app.dmlsForAgent import AutorunResult
+from app.sqls.agent_dml import AutorunResult
 import json
 
 class MwServerApi(BaseApi):

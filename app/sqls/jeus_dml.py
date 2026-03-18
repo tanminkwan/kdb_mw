@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import logging
 from flask import g
-from . import appbuilder, db
+from app import appbuilder, db
 from datetime import datetime
 from sqlalchemy import null, text, delete
 from sqlalchemy.dialects.postgresql import insert, JSON

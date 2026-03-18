@@ -11,7 +11,7 @@ from app import appbuilder, db, scheduler
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgAgentGroup, AgAgent, AgResult, AgFile, AgCommandHelper, AgAutorunResult
 import logging
-from app.dmlsForAgent import AutorunResult
+from app.sqls.agent_dml import AutorunResult
 from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
 from .common import FilterStartsWithFunction, get_mw_user\
     , ReadOnlyField, RequiredOnContidion, ValidateBatchFunctionName

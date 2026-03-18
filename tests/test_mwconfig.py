@@ -1,6 +1,6 @@
 import pytest
 import json
-from app.dmlsForAgent import AutorunResult  # Assuming AutorunResult is a model in your application
+from app.sqls.agent_dml import AutorunResult
 from app.api.was_api import MWConfigurationApi
 
 @pytest.fixture

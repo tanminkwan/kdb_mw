@@ -1,5 +1,5 @@
 from flask import g, render_template, Flask, request, jsonify\
-     , send_file, redirect, url_for, render_template_string
+     , send_file, redirect, url_for, render_template_string, flash
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder import BaseView, ModelView, ModelRestApi, MultipleView, MasterDetailView
 from flask_appbuilder import expose, has_access
@@ -17,7 +17,7 @@ from app.models.knowledge import UtTag
 from app.sqls.was import get_was_instance_id, get_landscape
 from app.sqls.relationship import get_was_relationship, get_web_relationship
 from app.sqls.agent import create_connect_ssl, create_file_ssl, insert_command_master, get_agent
-from app.sqls.batch import create_domain_name_info, create_ssl_info
+from app.sqls.batch import create_ssl_info, re_register_web_from_text, re_register_was_from_text
 from app.sqls.monitor import select_row, select_item, select_items
 from .common import FilterStartsWithFunction, FilterNotNull, FilterIsNull, \
     get_mw_user, get_userid, ShowWithIds, ListAdvanced
@@ -227,6 +227,7 @@ class WasCommonView(ModelView):
     edit_exclude_columns = ['cluster_object','was_object','license_update_date','jeus_properties_update_date','create_on']
     add_exclude_columns = ['cluster_object','was_object','license_update_date','jeus_properties_update_date','create_on']
     search_exclude_columns = ['cluster_object','was_object']
+    show_exclude_columns = ['cluster_object', 'was_object']
     base_order = ('c_was_id', 'asc')
 
 class WasModelView(WasCommonView):
@@ -265,6 +266,18 @@ class WasModelView(WasCommonView):
                     insert_command_master('EXE.FILTER', [agent_rec.agent_id], addparam)
 
         db.session.commit()
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+    @action("re_register","Was Text 기반 재등록","진짜로?","fa-rocket",single=False)
+    def re_register(self, items):
+        for item in items:
+            rtn, msg = re_register_was_from_text('UI_ACTION', item.id)
+            if rtn > 0:
+                flash(f"WAS '{item.was_id}' re-registered successfully.", "success")
+            else:
+                flash(f"WAS '{item.was_id}' re-registration failed: {msg}", "danger")
+            db.session.commit()
         self.update_redirect()
         return redirect(self.get_redirect())
 
@@ -772,8 +785,8 @@ class WebCommonView(ModelView):
         }
 
     list_columns = ['c_host_id', 'c_ip_address', 'jsv_port', 'colored_landscape','newgeneration_yn'\
-                    , 'web_name','colored_built_type', 'sys_user', 'c_ssl_yn', 'dependent_was_id'\
-                    , 'service_port', 'c_domainInfo_yn', 'view_relationship', 'view_webinfo']
+                    , 'web_name','colored_built_type', 'sys_user', 'c_ssl_yn' \
+                    , 'service_port', 'view_relationship', 'view_webinfo']
     label_columns = {'c_host_id':'Host ID'
                     ,'jsv_port':'JSV Port'
                     ,'newgeneration_yn':'차세대여부'
@@ -784,9 +797,8 @@ class WebCommonView(ModelView):
                     ,'c_ip_address':'IP'
                     ,'colored_built_type':'내장/외장'
                     ,'c_ssl_yn':'SSL설치여부'
-                    ,'c_domainInfo_yn':'Domain정보생성'
                     ,'sys_user':'서버계정'
-                    ,'dependent_was_id':'WAS Domain'
+                    ,'mw_was':'부모 WAS'
                     ,'view_relationship':'구성도'
                     ,'view_webinfo':'http.m' }
 
@@ -795,6 +807,8 @@ class WebCommonView(ModelView):
     add_exclude_columns = ['ssl_object', 'logging_object', 'errordocument_object'\
             , 'proxy_ssl_object', 'tcpgw_object', 'httpm_object', 'ext_object', 'license_object', 'create_on']
     search_exclude_columns = ['ssl_object', 'logging_object', 'errordocument_object'\
+            , 'proxy_ssl_object', 'tcpgw_object', 'httpm_object', 'ext_object', 'license_object']
+    show_exclude_columns = ['ssl_object', 'logging_object', 'errordocument_object'\
             , 'proxy_ssl_object', 'tcpgw_object', 'httpm_object', 'ext_object', 'license_object']
 
     base_order = ('host_id', 'asc')
@@ -837,14 +851,15 @@ class WebModelView(WebCommonView):
         output.seek(0)
         return send_file(output, download_name='mw_web.xlsx', as_attachment=True)
 
-    @action("create_domain","Create Domain Info","","fa-rocket",single=False)
-    def createDomainNameInfo(self, items):
+
+    @action("re_register","Web Text 기반 재등록","진짜로?","fa-rocket",single=False)
+    def re_register(self, items):
         for item in items:
-            host_id = item.host_id
-            port    = item.port
-            webInfo = {'host_id':host_id, 'port':port}
-            create_ssl_info(webInfo)
-            create_domain_name_info(webInfo)
+            rtn, msg = re_register_web_from_text('UI_ACTION', item.id)
+            if rtn > 0:
+                flash(f"Web '{item.host_id}' re-registered successfully.", "success")
+            else:
+                flash(f"Web '{item.host_id}' re-registration failed: {msg}", "danger")
             db.session.commit()
         self.update_redirect()
         return redirect(self.get_redirect())
