@@ -12,41 +12,48 @@
 
 ## 2. Migration & Sync Strategy (이관 및 동기화 전략)
 - **기존 방식 폐기**: `dependent_was_id` 문자열 기반의 SQL Migration을 수행하지 않음.
-- **서버 내부 기능 (`sync_was_web_relationship`) 도입**:
-    - 모든 `MwWeb` (BuiltType='Internal') 레코드를 루프 돌며, 동일 서버(`host_id`) 내의 `MwWasInstance` 및 그에 연결된 `MwWasWebtobConnector` 정보를 조회함.
-    - `jsv_port` 또는 `web_home` 설정이 일치하는 경우 `assoc_was_web` 테이블에 관계 정보를 일괄 생성/갱신함.
-- **실행 방식**: UI의 `Command Master` (서버내부기능)를 통해 호출 가능하도록 구현함.
+- **서버 내부 기능 (`update_was_web_relation`) 도입**:
+    - 모든 `MwWeb` 레코드를 루프 돌며, 해당 WEB을 바라보고 있는 `MwWasWebtobConnector` 정보를 조회함.
+    - 물리적 설정값이 일치하는 경우 `mw_was_web` 테이블에 모든 매칭되는 WAS 관계 정보를 일괄 생성/갱신함.
+- **실행 방식**: 
+    - **WEB 등록/재등록 시**: 자동으로 해당 WEB에 대한 관계 및 상태(BuiltType, NextGen)를 갱신함.
+    - **WAS 등록 시**: 성능 및 복잡도 관리를 위해 자동 관계 업데이트를 수행하지 않음 (WEB 등록 시에만 수행).
+    - **일괄 동기화**: UI의 `Command Master` (서버내부기능)에서 `sync_was_web_relationship`을 통해 호출 가능.
 - **최종 정리**: 동기화 완료 및 검증 후 `mw_web.dependent_was_id` 컬럼을 삭제함.
 
 ## 3. Modified Files (수정 파일 목록)
 - `app/models/was.py`: 
-    - `assoc_was_web` 테이블 정의 추가.
-    - `MwWeb.dependent_was_id` 컬럼 제거.
-    - `MwWas`와 `MwWeb` 클래스 간 `relationship` (secondary=assoc_was_web) 추가.
-- `app/dmlsForWebtob.py`:
-    - WEB 등록(`upsertWebtobHttpm`) 시, 자신의 `jsv_port`나 `web_home`을 기반으로 부모 WAS를 찾아 `mw_was_web`에 연결하는 로직 추가.
-    - `httpm_object` JSON 내부에 `_dependent_was_id` 힌트 기록 (지연 연결용).
-- `app/dmlsForJeus.py`:
-    - WAS 등록(`upsertJeusDomain`) 시, 신규 등록된 WAS의 커넥터(JSV Port 등)와 매칭되는 미연결 WEB들을 찾아 관계를 형성하는 로직 추가.
+    - `mw_was_web` 테이블 정의.
+    - `MwWeb.newgeneration_yn` 컬럼 정의 (차세대 여부).
+    - `MwWeb.linked_was` 속성 추가 (목록 표시용).
 - `app/sqls/relationship.py`:
-    - `get_web_servers` 함수에서 `dependent_was_id` 대신 Association Table을 통한 조인 로직으로 변경.
+    - 공통 동기화 함수 `update_was_web_relation(web_id=None, was_id=None)` 구현.
+    - `webtobconnector`와 `mw_web_server` 매칭 로직(`get_web_servers`) 고도화.
+- `app/sqls/webtob_dml.py`:
+    - WEB 등록(`upsertWebtobHttpm`) 시, `update_was_web_relation`을 호출하여 관계 및 상태 갱신.
+- `app/sqls/jeus_dml.py`:
+    - WAS 등록 시에는 관계 업데이트를 호출하지 않도록 정립.
+- `app/sqls/batch.py`:
+    - `sync_was_web_relationship` 배치 함수 추가.
 
 ## 4. Technical Spec (기술 사양)
-### 내장 WEB 식별 및 매칭 로직 (Multi-Node / HA 대응)
-1. **내장형 판단**: `http.m` 파일 경로에 `webserver/config` 포함 여부.
-2. **매칭 기준 (Match Criteria)**:
-   - **기본 원칙**: 동일 서버(`host_id`) 내에서 동작하는 **WAS Instance(MS)**의 설정을 매칭 고리로 사용.
-   - **TCP 통신 시**: `MwWeb.host_id` == `MwWasInstance.host_id` AND `MwWeb.jsv_port` == `MwWasWebtobConnector.jsv_port`.
-   - **Domain Socket 시**: `MwWeb.host_id` == `MwWasInstance.host_id` AND `MwWeb.web_home` == `MwWasWebtobConnector.web_home`.
-   - **이점**: WAS 도메인이 여러 대의 서버에 걸쳐 있더라도, 각 서버에 설치된 내장 WEB이 해당 서버에서 도는 MS 인스턴스를 통해 정확한 부모 `MwWas` 도메인을 찾아갈 수 있음.
-3. **지연된 연결 (Delayed Linking)**:
-   - 부모 WAS(또는 해당 노드의 MS)가 없는 상태로 WEB이 먼저 등록되면 `Internal` 타입으로만 저장.
-   - 추후 WAS가 등록될 때, 해당 WAS의 인스턴스(MS) 및 커넥터 설정을 사용하는 WEB을 역으로 추적하여 Association Table에 데이터 삽입.
-4. **구성도 쿼리 최적화**:
-   - `get_web_servers` 시 `MwWeb.mw_was` 관계를 조인하여 명시적인 PK 매칭 기반으로 데이터 추출.
-5. **코드 재사용 원칙 (Implementation Principle)**:
-   - 특정 WEB/WAS 등록 시 수행되는 관계 형성 로직과 `Command Master`에서 실행되는 일괄 동기화 로직은 핵심 매칭 로직을 공유해야 함.
-   - 가급적 별도의 공통 함수(예: `update_was_web_relation(web_id=None, was_id=None)`)로 분리하여 코드 중복을 최소화하고 유지보수성을 높임.
+### 1) 내장 WEB 식별 및 매칭 로직 (Multi-Node / HA 대응)
+1. **내장형(Internal) 판단 기준**:
+   - `web_home` 경로에 `webserver` 문자열이 포함되어 있음.
+   - **OR** `mw_was_web`에 연결된 WAS 중 `was_id`가 `jeus`로 시작하는 것이 존재함.
+   - **예외**: 사용자가 명시적으로 `분리(Isolated)` 타입을 선택한 경우, 위 기준에 부합하더라도 업데이트하지 않음.
+2. **차세대(NextGen) 판단 기준**:
+   - `mw_was_web`에 연결된 WAS 중 `was_id`가 `jeus`로 시작하는 것이 존재하면 **NO**.
+   - 존재하지 않으면 **YES**.
+
+### 2) 서비스 매칭 상세 로직 (`get_web_servers`)
+1. **기본 원칙**: 별도의 식별자 없이 순수하게 물리적 설정값(Port/Path)을 기반으로 `webtobconnector`와 `mw_web_server`를 연결함.
+2. **단계별 매칭 기준**:
+   - **호스트**: 커넥터의 `web_host_id` (localhost 등 치환 포함) == `MwWeb.host_id`.
+   - **서비스 식별**:
+      - **도메인 소켓 또는 파이프 방식** (`disable_pipe`=NO): `svr_id` AND `web_home` 경로 일치 여부로 매칭.
+      - **그 외 일반 방식**: `svr_id` AND `jsv_port` 번호 일치 여부로 매칭.
+3. **결과 반영**: 위 매칭이 성립된 모든 부모 WAS를 `mw_was_web` 테이블에 등록함. (이전 방식의 순환 참조 문제 해결)
 
 ## 5. Potential Impacts (기타 영향 파악)
 

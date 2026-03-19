@@ -10,6 +10,7 @@
 - `httpmToDict` 함수를 사용하여 텍스트를 구조화된 JSON(Dict)으로 변환.
 - `newgeneration_yn` (차세대 여부)에 따라 `NewHttpm` 또는 `OldHttpm` 객체를 생성.
 - `upsertWebtobHttpm()` 메서드를 호출하여 관련 모든 테이블 정보를 동기화(Upsert).
+- **관계 동기화**: `upsertWebtobHttpm` 내부에서 `update_was_web_relation`을 호출하여 WAS와의 연계 정보를 즉시 갱신함.
 
 ### WAS(JEUS) 재등록
 - `MwWas` 테이블의 `was_text` 컬럼에 저장된 `domain.xml` 또는 `JEUSMain.xml` 원본 데이터를 읽어옴.

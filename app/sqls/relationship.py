@@ -1,8 +1,11 @@
 from app import db
-from sqlalchemy import text, and_
+from sqlalchemy import text, and_, or_
+import logging
 import re
 from app.models.was import MwWas, MwWasInstance, MwWeb, MwWasWebtobConnector, MwWebServer\
-            , MwDatasource, MwApplication, MwWasHttpListener, MwWebReverseproxy, MwServer, MwWebVhost
+            , MwDatasource, MwApplication, MwWasHttpListener, MwWebReverseproxy, MwServer, MwWebVhost\
+            , assoc_was_web
+from app.models.common import BuiltEnum, YnEnum
 from .monitor import select_row
 import re
 
@@ -339,28 +342,113 @@ def get_rproxy_servers(host_id, port):
     return rp_recs
 
 def get_web_servers(webconn_rec):
-    real_host_id = get_real_web_host_id(webconn_rec.web_host_id, webconn_rec.mw_was_instance.host_id)
+    target_host = webconn_rec.web_host_id.strip() if webconn_rec.web_host_id else ""
+    real_host_id = get_real_web_host_id(target_host, webconn_rec.mw_was_instance.host_id)
     
-    if webconn_rec.web_host_id == '<domain-socket>':
-        web_recs = db.session.query(MwWebServer)\
-                    .filter( MwWebServer.svr_id==webconn_rec.jsv_id)\
-                    .join(MwWeb)\
-                    .filter(MwWeb.host_id==real_host_id
-                            ,MwWeb.web_home==webconn_rec.web_home).all()
-    elif webconn_rec.disable_pipe!=None and webconn_rec.disable_pipe.name == 'NO':
-        web_recs = db.session.query(MwWebServer)\
-                    .filter( MwWebServer.svr_id==webconn_rec.jsv_id)\
-                    .join(MwWeb)\
-                    .filter(MwWeb.host_id==real_host_id
-                            ,MwWeb.mw_was.any(was_id=webconn_rec.was_id)).all()
+    query = db.session.query(MwWebServer)\
+                .filter(MwWebServer.svr_id == webconn_rec.jsv_id)\
+                .join(MwWeb)\
+                .join(MwServer, MwWeb.host_id == MwServer.host_id)
+    
+    # Match by host_id OR IP address OR VIP address
+    host_match = or_(
+        MwWeb.host_id == real_host_id,
+        MwServer.ip_address == target_host,
+        MwServer.vip_address.like('%'+target_host+'%')
+    )
+    query = query.filter(host_match)
+    
+    if webconn_rec.web_host_id == '<domain-socket>' or (webconn_rec.disable_pipe and webconn_rec.disable_pipe.name == 'NO'):
+        # Internal / Socket match by web_home
+        return query.filter(MwWeb.web_home == webconn_rec.web_home).all()
     else:
-        web_recs = db.session.query(MwWebServer)\
-                    .filter( MwWebServer.svr_id==webconn_rec.jsv_id)\
-                    .join(MwWeb)\
-                    .filter(MwWeb.host_id==real_host_id
-                            ,MwWeb.jsv_port==webconn_rec.jsv_port).all()
+        # Normal match by jsv_port
+        return query.filter(MwWeb.jsv_port == webconn_rec.jsv_port).all()
 
-    return web_recs
+def update_was_web_relation(web_id=None, was_id=None):
+    # Step 1: Update webtobconnector & mw_web_server relationship
+    conn_q = db.session.query(MwWasWebtobConnector)
+    if was_id:
+        conn_q = conn_q.filter(MwWasWebtobConnector.was_id == was_id)
+    elif web_id:
+        # WEB 업데이트 시, 해당 웹 서버를 바라볼 수 있는 모든 커넥터(Host명, IP, VIP 포함)를 추출
+        web_recs = db.session.query(MwWeb).join(MwServer, MwWeb.host_id == MwServer.host_id).filter(MwWeb.id == web_id).all()
+        
+        target_match_list = []
+        for w in web_recs:
+            target_match_list.append(w.host_id)
+            if w.mw_server:
+                if w.mw_server.ip_address:
+                    target_match_list.append(w.mw_server.ip_address)
+                if w.mw_server.vip_address:
+                    vips = [v.strip() for v in w.mw_server.vip_address.split(',') if v.strip()]
+                    target_match_list.extend(vips)
+
+        logging.info(f"Hennry: update_was_web_relation starting for web_id={web_id}, target_match_list={target_match_list}")
+
+        conn_q = conn_q.filter(
+            or_(
+                MwWasWebtobConnector.web_host_id.in_(target_match_list),
+                MwWasWebtobConnector.web_host_id.in_(['<domain-socket>', 'localhost', '127.0.0.1'])
+            )
+        )
+    
+    connectors = conn_q.all()
+    logging.info(f"Hennry: Found {len(connectors)} connectors to refresh for web_id={web_id}")
+
+    for conn in connectors:
+        conn.mw_web_server = get_web_servers(conn)
+    
+    db.session.flush()
+
+    # Step 2: Determine which webs need their assocations and flags updated
+    if web_id:
+        webs_to_update = db.session.query(MwWeb).filter(MwWeb.id == web_id).all()
+    elif was_id:
+        # Webs linked to this WAS
+        webs_to_update = db.session.query(MwWeb)\
+            .join(MwWebServer)\
+            .join(MwWasWebtobConnector, MwWebServer.mw_was_webtobconnector)\
+            .filter(MwWasWebtobConnector.was_id == was_id)\
+            .distinct().all()
+    else:
+        # Update ALL webs (heavy operation)
+        webs_to_update = db.session.query(MwWeb).all()
+
+    # Step 3 & 4: Align mw_was_web and update flags
+    for web in webs_to_update:
+        # Find all WAS connected via ANY of this web's servers
+        linked_was = db.session.query(MwWas)\
+            .join(MwWasInstance)\
+            .join(MwWasWebtobConnector)\
+            .join(MwWasWebtobConnector.mw_web_server)\
+            .filter(MwWebServer.mw_web_id == web.id)\
+            .distinct().all()
+        
+        web.mw_was = linked_was
+        logging.info(f"Hennry: web_id={web.id}, host={web.host_id}, linked_was_ids={[w.was_id for w in linked_was]}")
+        
+        # Internal/External Criteria
+        # web_home contains 'webserver' OR connected WAS has was_id starting with 'jeus'
+        is_internal_path = 'webserver' in (web.web_home or '').lower()
+        has_jeus_was = any(w.was_id.lower().startswith('jeus') for w in linked_was)
+        
+        # Exception: Don't update if current is 'Isolated'
+        current_built_type = web.built_type
+        if not (current_built_type and current_built_type.name == 'Isolated'):
+            if is_internal_path or has_jeus_was:
+                web.built_type = BuiltEnum.Internal
+            else:
+                web.built_type = BuiltEnum.External
+        
+        # Next-generation Criteria
+        # NO if any connected WAS starts with 'jeus', else YES
+        if has_jeus_was:
+            web.newgeneration_yn = YnEnum.NO
+        else:
+            web.newgeneration_yn = YnEnum.YES
+
+    db.session.flush()
 
 def get_was_relationship(was_id):
     was_rec = db.session.query(MwWas)\

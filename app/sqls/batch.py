@@ -34,6 +34,8 @@ def batch_function(func):
             db.session.commit()
 
             logging.debug(f"작업 완료: {func.__name__}")
+            if isinstance(result, tuple) and len(result) >= 2:
+                return result
             return 1, 'OK'
         except Exception as e:
             logging.error(f"오류 발생: {func.__name__} - {e}")
@@ -311,6 +313,12 @@ createSslInfo = create_ssl_info
 createWebtobConn = create_webtob_conn
 produceRepeatedMessage = produce_repeated_message
 
+@batch_function
+def sync_was_web_relationship():
+    """WAS-WEB 관계 일괄 동기화 (Association Table 및 Built Type 갱신)"""
+    from .relationship import update_was_web_relation
+    return update_was_web_relation()
+
 for old_name, new_func in [
     ('updateResourceTag', update_resource_tag),
     ('updateWasStatus', update_was_status),
@@ -322,6 +330,7 @@ for old_name, new_func in [
     ('createSslInfo', create_ssl_info),
     ('createWebtobConn', create_webtob_conn),
     ('produceRepeatedMessage', produce_repeated_message),
+    ('sync_was_web_relationship', sync_was_web_relationship),
 ]:
     batch_function_registry[old_name] = new_func.__doc__ or old_name
 

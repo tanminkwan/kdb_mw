@@ -10,7 +10,7 @@ from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, Mw
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, MwWebUri, MwWebServer\
     , MwWebDomain, MwWebSsl
 from app.sqls.was import get_landscape
-from .relationship import get_dependent_was_id, get_web_servers
+from .relationship import update_was_web_relation, get_web_servers
 
 class WebtobHttpm(ABC):
 
@@ -80,23 +80,6 @@ class WebtobHttpm(ABC):
             if rec and rec.built_type and rec.built_type.name == 'Isolated' and update_dict.get('built_type') == 'External':
                 del update_dict['built_type']
 
-            # ALWAYS set dependent_was_id via the common function
-            # 내장 WEB인 경우 web_home 정보를 기반으로 부모 WAS를 찾음
-            web_home_tmp = update_dict.get('web_home', '')
-            parent_was_rec = get_dependent_was_id(rec, host_id=self.host_id, web_home=web_home_tmp)
-            
-            # Built Type 결정 로직 (web_home에 'webserver' 포함 여부)
-            if web_home_tmp and 'webserver' in web_home_tmp:
-                update_dict['built_type'] = 'Internal'
-                insert_dict['built_type'] = 'Internal'
-            else:
-                update_dict['built_type'] = 'External'
-                insert_dict['built_type'] = 'External'
-
-            # Protection for Isolated status
-            if rec and rec.built_type and rec.built_type.name == 'Isolated' and update_dict.get('built_type') == 'External':
-                del update_dict['built_type']
-
             stmt = insert(MwWeb).values(insert_dict)    
             do_update_stmt = stmt.on_conflict_do_update(
                 index_elements=['host_id', 'port'],
@@ -105,12 +88,6 @@ class WebtobHttpm(ABC):
             rtn = db.session.execute(do_update_stmt)
 
             self.mw_web_id = next(rec[0] for rec in rtn)
-
-            # 부모 WAS 관계 등록 (Association Table: MwWeb <-> MwWas)
-            if parent_was_rec:
-                web_obj = db.session.query(MwWeb).get(self.mw_web_id)
-                if web_obj and parent_was_rec not in web_obj.mw_was:
-                    web_obj.mw_was.append(parent_was_rec)
             
             # Upsert mw_web_server
             _, insert_array, update_array \
@@ -124,19 +101,12 @@ class WebtobHttpm(ABC):
                     set_=update_dict
                 )
                 db.session.execute(do_update_stmt)
+            
+            db.session.flush()
+            logging.info(f"Hennry: Upserted web servers for web_id={self.mw_web_id}. Starting relation update.")
 
-            # WAS 커넥터 물리 연결 갱신 (MwWasWebtobConnector <-> MwWebServer)
-            if parent_was_rec:
-                connectors = db.session.query(MwWasWebtobConnector).filter(MwWasWebtobConnector.was_id == parent_was_rec.was_id).all()
-                for conn in connectors:
-                    conn.mw_web_server = get_web_servers(conn)
-            else:
-                # 외장 Web인 경우 해당 호스트와 관련된 커넥터 갱신
-                affected_conns = db.session.query(MwWasWebtobConnector)\
-                    .join(MwWasInstance)\
-                    .filter(MwWasInstance.host_id == self.host_id).all()
-                for conn in affected_conns:
-                    conn.mw_web_server = get_web_servers(conn)
+            # WAS 커넥터 물리 연결 및 WAS-WEB 관계 갱신
+            update_was_web_relation(web_id=self.mw_web_id)
 
             # Upsert mw_web_uri
             _, insert_array, update_array \
@@ -338,7 +308,7 @@ class WebtobHttpm(ABC):
                         )
 
             update_array.append(update_dict)
-            insert_array.append(insert_array)        
+            insert_array.append(insert_dict)        
 
         return 1, insert_array, update_array
 
@@ -444,7 +414,7 @@ class WebtobHttpm(ABC):
             urlrewrite_config = vhost['URLREWRITECONFIG']
 
             if '${WEBTOBDIR}' in urlrewrite_config:
-                urlrewrite_config.replace('${WEBTOBDIR}', self.node['WEBTOBDIR'])
+                urlrewrite_config = urlrewrite_config.replace('${WEBTOBDIR}', self.node['WEBTOBDIR'])
     
         else:
             urlrewrite_yn = 'NO'

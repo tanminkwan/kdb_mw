@@ -618,6 +618,10 @@ class MwWeb(Model):
     def __repr__(self):
         return self.host_id+'['+ str(self.port) +']'
 
+    @renders('mw_was')
+    def linked_was(self):
+        return ", ".join([was.was_id for was in self.mw_was])
+
     @renders('landscape')
     def colored_landscape(self):
         return Markup(getColoredText(self.landscape))
