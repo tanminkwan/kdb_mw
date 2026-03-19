@@ -124,7 +124,7 @@ class AutorunResult:
         return AutorunResult.update_domain(domain_info)
 
     @classmethod
-    def update_domain(cls, domain_info):
+    def update_domain(cls, domain_info, skip_check=False):
 
         doc        = xmltodict.parse(domain_info['content'])
         json_type  = json.dumps(doc)
@@ -137,7 +137,7 @@ class AutorunResult:
 
         rec, _ = select_row('mw_was',{'was_id':domain_info['domain_id']})
         
-        if rec and rec.was_object:
+        if not skip_check and rec and rec.was_object:
 
             diff = DeepDiff(rec.was_object, domain, ignore_order=True)
 

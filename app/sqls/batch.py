@@ -276,7 +276,7 @@ def re_register_was_from_text(was_id):
         agent_id  = was_rec.agent_id or '',
     )
 
-    return agent_dml.AutorunResult.update_domain(domain_info)
+    return agent_dml.AutorunResult.update_domain(domain_info, skip_check=True)
 
 @batch_function
 def create_webtob_conn(domain_id=''):

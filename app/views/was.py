@@ -636,7 +636,7 @@ class WebDomainModelView(ModelView):
         ],
         'buttonList':[
          {'text':'SSL만 조회','id':'toggle_bt1','bt_group':'1','onclick':'_flt_0_ssl_yn=YES'},
-         {'text':'SSL만료 임박','id':'toggle_bt2','bt_group':'1','onclick':almost_expired()}
+         {'text':'SSL만료 임박','id':'toggle_bt2','bt_group':'2','onclick':almost_expired()}
         ],
         }
 
