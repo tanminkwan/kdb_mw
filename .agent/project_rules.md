@@ -33,3 +33,7 @@
 ## 5. Communication Policy
 - **Rule**: 작업 시작 전에는 반드시 수행할 작업 내용에 대해 간략하게 설명(Plan)을 하고 진행한다.
 - **Constraint**: 사용자에게 작업의 흐름을 미리 알림으로써 의도하지 않은 수정을 방지한다.
+
+## 6. DB Query
+- **Rule**: PostgreSQL(mwm-db) 조회가 필요한 경우, 다음과 같이 docker exec 명령을 사용한다.
+- **Command**: `docker exec -it mwm-db psql -U tiffanie -d mw` (기본 암호는 config.py 참조)

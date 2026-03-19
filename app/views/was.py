@@ -784,11 +784,12 @@ class WebCommonView(ModelView):
         ]
         }
 
-    list_columns = ['c_host_id', 'c_ip_address', 'jsv_port', 'colored_landscape','newgeneration_yn'\
+    list_columns = ['c_host_id', 'c_ip_address', 'jsv_port', 'colored_landscape','newgeneration_yn', 'linked_was'\
                     , 'web_name','colored_built_type', 'sys_user', 'c_ssl_yn' \
                     , 'service_port', 'view_relationship', 'view_webinfo']
     label_columns = {'c_host_id':'Host ID'
                     ,'jsv_port':'JSV Port'
+                    ,'linked_was':'연결 WAS'
                     ,'newgeneration_yn':'차세대여부'
                     ,'colored_landscape':'Landscape'
                     ,'web_name':'설명'
@@ -798,7 +799,7 @@ class WebCommonView(ModelView):
                     ,'colored_built_type':'내장/외장'
                     ,'c_ssl_yn':'SSL설치여부'
                     ,'sys_user':'서버계정'
-                    ,'mw_was':'부모 WAS'
+                    ,'mw_was':'연결 WAS'
                     ,'view_relationship':'구성도'
                     ,'view_webinfo':'http.m' }
 
