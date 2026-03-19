@@ -352,20 +352,50 @@
             e.preventDefault();
         }
     });
+    // [Hennry] Initialize input fields from URL
+    (function () {
+        var cond = "{{il['condition']}}";
+        var prefix = cond.split('=')[0];
+        var params = new URLSearchParams(window.location.search);
+        var val = params.get(prefix);
+        if (val) {
+            var el = document.getElementById("{{il['id']}}_input_i");
+            if (el) {
+                el.value = val;
+                el.setAttribute('data-value', cond + val);
+            }
+        }
+    })();
     {% endfor %}
 
 
 
 
     if (document.location.search.length) {
+        var search = document.location.search;
         $("[id^='toggle_bt']").each(function () {
             var filter = this.getAttribute('filter');
-            if (document.location.search.includes(filter)) {
-                var obj = document.getElementById(this.getAttribute('bt_group'));
-                obj.setAttribute('data-value', filter);
-                this.style.color = "blue"
+            if (filter == null || filter == "") return;
+
+            // [Hennry] Check if every part of the button's filter is present in the URL
+            var parts = filter.split('&');
+            var allMatch = true;
+            for (var i = 0; i < parts.length; i++) {
+                if (!search.includes(parts[i])) {
+                    allMatch = false;
+                    break;
+                }
+            }
+
+            if (allMatch) {
+                var groupId = this.getAttribute('bt_group');
+                var obj = document.getElementById(groupId);
+                if (obj) {
+                    obj.setAttribute('data-value', filter);
+                }
+                this.style.color = "blue";
             } else {
-                this.style.color = "red"
+                this.style.color = "red";
             }
         });
     }
