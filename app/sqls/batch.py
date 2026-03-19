@@ -279,6 +279,42 @@ def re_register_was_from_text(was_id):
     return agent_dml.AutorunResult.update_domain(domain_info, skip_check=True)
 
 @batch_function
+def re_register_all_was_from_text():
+    """모든 WAS(JEUS) 설정을 DB 텍스트 기반으로 일괄 재등록"""
+    was_recs = db.session.query(MwWas).filter(MwWas.use_yn == 'YES').all()
+    count = 0
+    errors = []
+    for rec in was_recs:
+        rtn, msg = re_register_was_from_text('BATCH', rec.id)
+        if rtn > 0:
+            count += 1
+        else:
+            errors.append(f"{rec.was_id}: {msg}")
+    
+    summary = f"Total {len(was_recs)} WAS processed. {count} succeeded."
+    if errors:
+        summary += f" Errors: {len(errors)}"
+    return count, summary
+
+@batch_function
+def re_register_all_web_from_text():
+    """모든 Web(WebToB) 설정을 DB 텍스트 기반으로 일괄 재등록"""
+    web_recs = db.session.query(MwWeb).filter(MwWeb.use_yn == 'YES').all()
+    count = 0
+    errors = []
+    for rec in web_recs:
+        rtn, msg = re_register_web_from_text('BATCH', rec.id)
+        if rtn > 0:
+            count += 1
+        else:
+            errors.append(f"{rec.host_id}:{rec.port}: {msg}")
+    
+    summary = f"Total {len(web_recs)} Web processed. {count} succeeded."
+    if errors:
+        summary += f" Errors: {len(errors)}"
+    return count, summary
+
+@batch_function
 def create_webtob_conn(domain_id=''):
 
     query = db.session.query(MwWasWebtobConnector)
@@ -331,6 +367,8 @@ for old_name, new_func in [
     ('createWebtobConn', create_webtob_conn),
     ('produceRepeatedMessage', produce_repeated_message),
     ('sync_was_web_relationship', sync_was_web_relationship),
+    ('re_register_all_was_from_text', re_register_all_was_from_text),
+    ('re_register_all_web_from_text', re_register_all_web_from_text),
 ]:
     batch_function_registry[old_name] = new_func.__doc__ or old_name
 
