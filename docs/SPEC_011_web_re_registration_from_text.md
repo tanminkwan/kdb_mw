@@ -30,6 +30,8 @@
 - `app/sqls/batch.py`:
     - `re_register_web_from_text(web_id)` 서비스 함수 구현.
     - `re_register_was_from_text(was_id)` 서비스 함수 구현.
+    - `re_register_all_was_from_text()` 서비스 함수 구현 (전체 WAS 대상 일괄 재등록).
+    - `re_register_all_web_from_text()` 서비스 함수 구현 (전체 Web 대상 일괄 재등록).
     - `sync_was_web_relationship()` 배치 함수 구현 (전체 동기화용).
 - `app/sqls/agent_dml.py`:
     - `AutorunResult.update_domain`에 `skip_check` 파라미터 추가하여 조건부 무조건 업데이트 지원.
