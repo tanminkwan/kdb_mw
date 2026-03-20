@@ -1,3 +1,4 @@
+from app.models.common import get_user
 from abc import ABC, abstractmethod
 import logging
 from flask import g
@@ -279,7 +280,7 @@ class JeusDomain(ABC):
             db_pool_max           = ds['connection-pool']['pooling']['max'],
             db_pool_step          = ds['connection-pool']['pooling']['step'],
             db_pool_period        = ds['connection-pool']['pooling']['period'],
-            user_id               = g.user.username,
+            user_id               = get_user(),
             create_on             = datetime.now()
         )
 
@@ -484,7 +485,7 @@ class JeusDomain(ABC):
                     vender_name    = db_config['vender_name'],
                     db_server_name = db_config['db_server_name'],
                     db_server_port = db_config['db_server_port'],
-                    user_id        = g.user.username,
+                    user_id        = get_user(),
                     create_on      = datetime.now()
                     )
             
@@ -513,7 +514,7 @@ class JeusDomain(ABC):
                 insert_dict = dict(
                     app_id    = app_id,
                     landscape = self.landscape,
-                    user_id   = g.user.username,
+                    user_id   = get_user(),
                     create_on = datetime.now()
                     )
             
@@ -606,7 +607,7 @@ class NewJeusDomain(JeusDomain):
                 cluster_object   = domain['clusters'] if domain.get('clusters') else null(),
                 was_object       = self.domain,
                 agent_id         = self.agent_id,
-                user_id          = g.user.username,
+                user_id          = get_user(),
                 create_on        = datetime.now()
             )
 
@@ -625,7 +626,7 @@ class NewJeusDomain(JeusDomain):
                                     if ap.get('context-path') else null(),
                 deploy_type      = ap['type'].upper() if ap['type'].upper()\
                                              in ['WAR','EAR','JAR'] else 'EXPLODED',
-                user_id          = g.user.username,
+                user_id          = get_user(),
                 create_on        = datetime.now()
             ), ap['id']
 
@@ -662,7 +663,7 @@ class NewJeusDomain(JeusDomain):
                 apm_type          = apm_type,
                 app_id            = self._getAppID(was_instance_id),
                 clustered_yn      = clustered_yn,
-                user_id          = g.user.username,
+                user_id          = get_user(),
                 create_on        = datetime.now()
         )
 
@@ -761,7 +762,7 @@ class NewJeusDomain(JeusDomain):
                     ssl_yn                = ssl_yn,
                     domain_name           = null(),
                     httplistener_object   = webconn,
-                    user_id          = g.user.username,
+                    user_id          = get_user(),
                     create_on        = datetime.now()
                 )
 
@@ -811,7 +812,7 @@ class NewJeusDomain(JeusDomain):
                                         if webconn['thread-pool'].get('number') else null(),
                     webtobconnector_object = webconn,
                     disable_pipe     = 'YES',
-                    user_id          = g.user.username,
+                    user_id          = get_user(),
                     create_on        = datetime.now()
                 )
                 insert_dict = update_dict.copy()
@@ -864,7 +865,7 @@ class OldJeusDomain(JeusDomain):
             cluster_object   = null(),
             was_object       = self.domain,
             agent_id         = self.agent_id,
-            user_id          = g.user.username,
+            user_id          = get_user(),
             create_on        = datetime.now()
         )
 
@@ -885,7 +886,7 @@ class OldJeusDomain(JeusDomain):
                 context_path     = ap['web-component']['context-root']\
                                     if ap.get('web-component') and ap['web-component'].get('context-root') else null(),
                 deploy_type      = deploy_type,
-                user_id          = g.user.username,
+                user_id          = get_user(),
                 create_on        = datetime.now()
             ), ap['name']
 
@@ -915,7 +916,7 @@ class OldJeusDomain(JeusDomain):
                 app_id            = self._getAppID(was_instance_id),
                 engine_command    = engine_command,
                 clustered_yn      = clustered_yn,
-                user_id          = g.user.username,
+                user_id          = get_user(),
                 create_on        = datetime.now()
         )
 
@@ -989,7 +990,7 @@ class OldJeusDomain(JeusDomain):
                     ssl_yn                = ssl_yn,
                     domain_name           = null(),
                     httplistener_object   = webconn,
-                    user_id          = g.user.username,
+                    user_id          = get_user(),
                     create_on        = datetime.now()
                 )
 
@@ -1022,7 +1023,7 @@ class OldJeusDomain(JeusDomain):
                                         if webconn['thread-pool'].get('max') else null(),
                     disable_pipe           = disable_pipe,
                     webtobconnector_object = webconn,
-                    user_id                = g.user.username,
+                    user_id                = get_user(),
                     create_on              = datetime.now()
                 )
                 insert_dict = update_dict.copy()
