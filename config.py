@@ -82,7 +82,7 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20260320.007)"
+APP_NAME = "리발소(VER:20260320.013)"
 
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"
@@ -186,3 +186,4 @@ KROKI_URL     = os.getenv('KROKI_URL', 'http://mwm-kroki:8000')
 
 #Added by Hennry
 SCHEDULER_API_ENABLED = True
+AGENT_OFFLINE_MINUTES = 5
