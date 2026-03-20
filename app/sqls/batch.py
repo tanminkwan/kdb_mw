@@ -26,9 +26,12 @@ def batch_function(func):
     def batch_wrapper(command_id, *args, **kwargs):
         logging.info(f"[{command_id}] 시작: {func.__name__} - {datetime.now()}")
         try:
-            # 원래 함수 실행 (command_id를 명시적으로 전달할 수 있도록 kwargs에 추가하거나 첫 번째 인자로 전달)
-            # 여기서는 func의 signature에 따라 처리하도록 설계됨
-            result = func(command_id, *args, **kwargs)
+            # Check if func accepts command_id as the first positional argument or named argument
+            sig = inspect.signature(func)
+            if 'command_id' in sig.parameters:
+                result = func(command_id, *args, **kwargs)
+            else:
+                result = func(*args, **kwargs)
             
             # run_batch_by_scheduler 기능 수행
             finish_commands([command_id])
@@ -52,16 +55,10 @@ def run_batch_by_scheduler(command_id, function_name, additional_param=''):
         # 전역 네임스페이스에서 함수 찾기
         func = globals()[function_name]
         if callable(func):
-            # Check the number of parameters the function expects
-            func_signature = inspect.signature(func)
-            param_count = len(func_signature.parameters)
-
-            if param_count == 1:
-                return func(command_id)
-            elif param_count == 2:
+            if additional_param:
                 return func(command_id, additional_param)
             else:
-                return 0, f"'{function_name}'에 허용되지 않는 인수 수입니다."
+                return func(command_id)
         else:
             return 0, f"'{function_name}'은(는) 호출 가능한 함수가 아닙니다."
     except KeyError:
@@ -235,8 +232,7 @@ def update_url_rewrite_info():
             update_rows('mw_web_vhost',update_dict, filter_dict)
 
 
-@batch_function
-def re_register_web_from_text(web_id):
+def _re_register_web_from_text(web_id):
     web_rec = db.session.query(MwWeb).filter(MwWeb.id == web_id).first()
     if not web_rec:
         return 0, 'No web data found'
@@ -258,7 +254,10 @@ def re_register_web_from_text(web_id):
     return h.upsertWebtobHttpm()
 
 @batch_function
-def re_register_was_from_text(was_id):
+def re_register_web_from_text(web_id):
+    return _re_register_web_from_text(web_id)
+
+def _re_register_was_from_text(was_id):
     was_rec = db.session.query(MwWas).filter(MwWas.id == was_id).first()
     if not was_rec:
         return 0, 'No was data found'
@@ -280,47 +279,43 @@ def re_register_was_from_text(was_id):
     return agent_dml.AutorunResult.update_domain(domain_info, skip_check=True)
 
 @batch_function
-def re_register_all_was_from_text(command_id):
+def re_register_was_from_text(was_id):
+    return _re_register_was_from_text(was_id)
+
+@batch_function
+def re_register_all_was_from_text():
     """모든 WAS(JEUS) 설정을 DB 텍스트 기반으로 일괄 재등록"""
     was_recs = db.session.query(MwWas).filter(MwWas.use_yn == 'YES').all()
-    logging.info(f"[{command_id}] re_register_all_was_from_text: Found {len(was_recs)} WAS records.")
     count = 0
     errors = []
     for rec in was_recs:
-        logging.info(f"[{command_id}] re_register_all_was_from_text: Processing WAS '{rec.was_id}' (ID: {rec.id})")
-        rtn, msg = re_register_was_from_text('BATCH', rec.id)
+        rtn, msg = _re_register_was_from_text(rec.id)
         if rtn > 0:
             count += 1
-            logging.info(f"[{command_id}] re_register_all_was_from_text: WAS '{rec.was_id}' success.")
         else:
             errors.append(f"{rec.was_id}: {msg}")
-            logging.error(f"[{command_id}] re_register_all_was_from_text: WAS '{rec.was_id}' failed: {msg}")
     
     summary = f"Total {len(was_recs)} WAS processed. {count} succeeded."
     if errors:
-        summary += f" Errors: {len(errors)}"
+        summary += f" Errors: {errors}"
     return count, summary
 
 @batch_function
-def re_register_all_web_from_text(command_id):
+def re_register_all_web_from_text():
     """모든 Web(WebToB) 설정을 DB 텍스트 기반으로 일괄 재등록"""
     web_recs = db.session.query(MwWeb).filter(MwWeb.use_yn == 'YES').all()
-    logging.info(f"[{command_id}] re_register_all_web_from_text: Found {len(web_recs)} WEB records.")
     count = 0
     errors = []
     for rec in web_recs:
-        logging.info(f"[{command_id}] re_register_all_web_from_text: Processing WEB '{rec.host_id}:{rec.port}' (ID: {rec.id})")
-        rtn, msg = re_register_web_from_text('BATCH', rec.id)
+        rtn, msg = _re_register_web_from_text(rec.id)
         if rtn > 0:
             count += 1
-            logging.info(f"[{command_id}] re_register_all_web_from_text: WEB '{rec.host_id}:{rec.port}' success.")
         else:
             errors.append(f"{rec.host_id}:{rec.port}: {msg}")
-            logging.error(f"[{command_id}] re_register_all_web_from_text: WEB '{rec.host_id}:{rec.port}' failed: {msg}")
     
     summary = f"Total {len(web_recs)} Web processed. {count} succeeded."
     if errors:
-        summary += f" Errors: {len(errors)}"
+        summary += f" Errors: {errors}"
     return count, summary
 
 @batch_function
