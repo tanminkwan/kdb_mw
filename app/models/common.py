@@ -165,13 +165,36 @@ class IntervalTypeEnum(enum.Enum):
     days       = 'days(일)'
 
 def get_user():
-    return g.user.username
+    try:
+        from flask import has_request_context, g
+        if has_request_context():
+            # Check for various app types (e.g. Superset, FAB, or plain Flask)
+            user = getattr(g, 'user', None)
+            if user and hasattr(user, 'username'):
+                return user.username
+            if user and isinstance(user, str):
+                return user
+    except Exception:
+        pass
+    return 'batch'
 
 def get_group():
-    return next((r.name for r in g.user.roles if '_role' in r.name),'')
+    try:
+        from flask import has_request_context
+        if has_request_context() and g and hasattr(g, 'user') and g.user:
+            return next((r.name for r in g.user.roles if '_role' in r.name),'')
+    except Exception:
+        pass
+    return ''
 
 def get_groups():
-    return [r.name for r in g.user.roles if '_role' in r.name]
+    try:
+        from flask import has_request_context
+        if has_request_context() and g and hasattr(g, 'user') and g.user:
+            return [r.name for r in g.user.roles if '_role' in r.name]
+    except Exception:
+        pass
+    return []
 
 def get_date():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")

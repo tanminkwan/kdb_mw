@@ -1,3 +1,5 @@
+from app.models.common import get_user
+from app.models.common import get_user
 from abc import ABC, abstractmethod
 import logging
 import re
@@ -229,7 +231,7 @@ class WebtobHttpm(ABC):
             tcpgw_object         = self.tcpgw ,
             httpm_object         = self.httpm ,
             agent_id             = self.agent_id,
-            user_id              = g.user.username,
+            user_id              = get_user(),
             create_on            = datetime.now()
         )
 
@@ -284,7 +286,7 @@ class WebtobHttpm(ABC):
             min_proc_count  = server['MINPROC'] if server.get('MINPROC') else null(),
             svr_type        = svr_type,
             request_level_ping_yn = request_level_ping_yn,
-            user_id         = g.user.username,
+            user_id         = get_user(),
             create_on       = datetime.now()
         )
 
@@ -320,7 +322,7 @@ class WebtobHttpm(ABC):
         update_dict = dict(
             svr_type        = uri['SVRTYPE'] if uri.get('SVRTYPE') else null(),
             uri             = uri['URI'],
-            user_id         = g.user.username,
+            user_id         = get_user(),
             create_on       = datetime.now()
         )
 
@@ -368,7 +370,7 @@ class WebtobHttpm(ABC):
             max_connection_count = rp['MAXWEBSOCKETCONNECTIONS']\
                              if rp.get('MAXWEBSOCKETCONNECTIONS') else null(),
             ssl_yn          = ssl_yn,
-            user_id         = g.user.username,
+            user_id         = get_user(),
             create_on       = datetime.now()
         )
 
@@ -442,7 +444,7 @@ class WebtobHttpm(ABC):
             ssl_name    = ssl_name,
             urlrewrite_yn = urlrewrite_yn,
             urlrewrite_config = urlrewrite_config,
-            user_id     = g.user.username,
+            user_id     = get_user(),
             create_on   = datetime.now()
         )
 

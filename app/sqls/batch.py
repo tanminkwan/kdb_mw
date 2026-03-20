@@ -24,21 +24,22 @@ batch_function_registry = {}
 def batch_function(func):
     @functools.wraps(func)
     def batch_wrapper(command_id, *args, **kwargs):
-        logging.debug(f"시작: {func.__name__} - {datetime.now()}")
+        logging.info(f"[{command_id}] 시작: {func.__name__} - {datetime.now()}")
         try:
-            # 원래 함수 실행
-            result = func(*args, **kwargs)
+            # 원래 함수 실행 (command_id를 명시적으로 전달할 수 있도록 kwargs에 추가하거나 첫 번째 인자로 전달)
+            # 여기서는 func의 signature에 따라 처리하도록 설계됨
+            result = func(command_id, *args, **kwargs)
             
             # run_batch_by_scheduler 기능 수행
             finish_commands([command_id])
             db.session.commit()
 
-            logging.debug(f"작업 완료: {func.__name__}")
+            logging.info(f"[{command_id}] 작업 완료: {func.__name__} - 결과: {result}")
             if isinstance(result, tuple) and len(result) >= 2:
                 return result
             return 1, 'OK'
         except Exception as e:
-            logging.error(f"오류 발생: {func.__name__} - {e}")
+            logging.error(f"[{command_id}] 오류 발생: {func.__name__} - {e}")
             return 0, str(e)
     
     # Register the function in the global registry immediately
@@ -55,9 +56,9 @@ def run_batch_by_scheduler(command_id, function_name, additional_param=''):
             func_signature = inspect.signature(func)
             param_count = len(func_signature.parameters)
 
-            if param_count == 0:
+            if param_count == 1:
                 return func(command_id)
-            elif param_count == 1:
+            elif param_count == 2:
                 return func(command_id, additional_param)
             else:
                 return 0, f"'{function_name}'에 허용되지 않는 인수 수입니다."
@@ -279,17 +280,21 @@ def re_register_was_from_text(was_id):
     return agent_dml.AutorunResult.update_domain(domain_info, skip_check=True)
 
 @batch_function
-def re_register_all_was_from_text():
+def re_register_all_was_from_text(command_id):
     """모든 WAS(JEUS) 설정을 DB 텍스트 기반으로 일괄 재등록"""
     was_recs = db.session.query(MwWas).filter(MwWas.use_yn == 'YES').all()
+    logging.info(f"[{command_id}] re_register_all_was_from_text: Found {len(was_recs)} WAS records.")
     count = 0
     errors = []
     for rec in was_recs:
+        logging.info(f"[{command_id}] re_register_all_was_from_text: Processing WAS '{rec.was_id}' (ID: {rec.id})")
         rtn, msg = re_register_was_from_text('BATCH', rec.id)
         if rtn > 0:
             count += 1
+            logging.info(f"[{command_id}] re_register_all_was_from_text: WAS '{rec.was_id}' success.")
         else:
             errors.append(f"{rec.was_id}: {msg}")
+            logging.error(f"[{command_id}] re_register_all_was_from_text: WAS '{rec.was_id}' failed: {msg}")
     
     summary = f"Total {len(was_recs)} WAS processed. {count} succeeded."
     if errors:
@@ -297,17 +302,21 @@ def re_register_all_was_from_text():
     return count, summary
 
 @batch_function
-def re_register_all_web_from_text():
+def re_register_all_web_from_text(command_id):
     """모든 Web(WebToB) 설정을 DB 텍스트 기반으로 일괄 재등록"""
     web_recs = db.session.query(MwWeb).filter(MwWeb.use_yn == 'YES').all()
+    logging.info(f"[{command_id}] re_register_all_web_from_text: Found {len(web_recs)} WEB records.")
     count = 0
     errors = []
     for rec in web_recs:
+        logging.info(f"[{command_id}] re_register_all_web_from_text: Processing WEB '{rec.host_id}:{rec.port}' (ID: {rec.id})")
         rtn, msg = re_register_web_from_text('BATCH', rec.id)
         if rtn > 0:
             count += 1
+            logging.info(f"[{command_id}] re_register_all_web_from_text: WEB '{rec.host_id}:{rec.port}' success.")
         else:
             errors.append(f"{rec.host_id}:{rec.port}: {msg}")
+            logging.error(f"[{command_id}] re_register_all_web_from_text: WEB '{rec.host_id}:{rec.port}' failed: {msg}")
     
     summary = f"Total {len(web_recs)} Web processed. {count} succeeded."
     if errors:
