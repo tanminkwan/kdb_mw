@@ -1,6 +1,6 @@
 import logging
 from app import appbuilder, db, kafka_producer
-from flask import g
+from flask import g, current_app
 from sqlalchemy.sql import select, update, func
 from sqlalchemy import null, text, or_, and_, not_, case
 from datetime import datetime, timedelta
@@ -173,7 +173,8 @@ def get_agents():
 
 def get_agent_stat():
     now = datetime.now()
-    gap_online = now - timedelta(minutes=3)
+    offline_min = current_app.config.get('AGENT_OFFLINE_MINUTES', 5)
+    gap_online = now - timedelta(minutes=offline_min)
     gap_long_term = now - timedelta(hours=24)
 
     results = db.session.query(
