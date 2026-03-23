@@ -23,6 +23,7 @@ from wtforms import Form, StringField
 
 #from wtforms.fields import TextField
 from wtforms.validators import Regexp, EqualTo
+from config import AGENT_OFFLINE_MINUTES
 from datetime import datetime, timedelta
 from app.jobs  import job_ag_create_job
 from flask_appbuilder.filemanager import get_file_original_name
@@ -92,7 +93,7 @@ class AgentModelView(ModelView):
          {'text':'PROD','id':'toggle_bt1','bt_group':'1','onclick':'_flt_0_landscape=PROD'}
         ,{'text':'DEV','id':'toggle_bt2','bt_group':'1','onclick':'_flt_0_landscape=DEV'}
         ,{'text':'TEST','id':'toggle_bt3','bt_group':'1','onclick':'_flt_0_landscape=TEST'}
-        ,{'text':'OffLine','id':'toggle_bt3','bt_group':'1','onclick':'_flt_2_last_checked_date='+(datetime.now() - timedelta(minutes=4)).strftime("%Y-%m-%d+%H:%M:%S")}
+        ,{'text':'OffLine','id':'toggle_bt3','bt_group':'1','onclick':'_flt_2_last_checked_date='+(datetime.now() - timedelta(minutes=AGENT_OFFLINE_MINUTES)).strftime("%Y-%m-%d+%H:%M:%S")}
         ,{'text':'Not Approved','id':'toggle_bt4','bt_group':'1','onclick':'_flt_0_approved_yn=NO'}
         ],
         'inputList':[

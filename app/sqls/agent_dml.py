@@ -2,7 +2,7 @@ import logging
 from app import db
 from .jeus_dml import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
 from .webtob_dml import WebtobHttpm, WebtobHttpmFactory, NewHttpm, httpm_to_dict
-from app.sqls.was import get_was_instance_id
+from app.sqls.was import get_was_instance_id, get_domain_id_as_pk
 from app.sqls.agent import update_result_status, update_was_status, get_result, get_autorun_func\
     , send_command_immediately, get_or_insert_command_type, insert_command_master\
     , get_command_master

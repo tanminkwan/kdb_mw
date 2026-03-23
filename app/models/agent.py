@@ -1,4 +1,4 @@
-from flask import g, url_for
+from flask import g, url_for, current_app
 from flask_appbuilder import Model
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import Column, Text, Integer, String, ForeignKey\
@@ -74,13 +74,15 @@ class AgAgent(Model):
         else:
             gap = 500
         
+        offline_threshold = current_app.config.get('AGENT_OFFLINE_MINUTES', 5) * 60
+        
         if self.approved_yn.name == 'NO':
             text = '<p style="color:#2B3856;text-align:center;animation:blink 1s ease-in-out infinite alternate"><b>미승인</b></p>'
         elif self.token_expiration_date and self.token_expiration_date <= datetime.now():
             text = '<p style="background-color:#2B1B17;color:#E5E4E2;text-align:center"><b>Token 만료</b></p>'
-        elif gap < 200:
+        elif gap < offline_threshold:
             text = '<p style="background-color:#5CB3FF;color:#FFFFFF;text-align:center;animation:blink 1s ease-in-out infinite alternate"><b>OnLine</b></p>'
-        elif gap >= 200 and gap <= 86400:
+        elif gap >= offline_threshold and gap <= 86400:
             text = '<p style="background-color:#C0C0C0;text-align:center;"><b>OffLine</b></p>'
         else:
             text = '<p style="background-color:#800000;color:#E5E4E2;text-align:center"><b>장기미사용</b></p>'
