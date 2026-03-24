@@ -241,8 +241,6 @@ class WebtobHttpm(ABC):
         web_home = update_dict.get('web_home', '')
         if web_home and 'webserver' in web_home:
             update_dict['built_type'] = 'Internal'
-        else:
-            update_dict['built_type'] = 'External'
 
         return update_dict, self.port
 
