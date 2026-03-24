@@ -211,7 +211,7 @@ class WebtobHttpm(ABC):
             acc_dir = null()
 
         update_dict = dict(
-            jsv_port       = self.node['JSVPORT'],
+            jsv_port       = self.node.get('JSVPORT', 0),
             node_name      = self.node['NAME'],
             web_home       = self.node['WEBTOBDIR'] \
                             if self.node.get('WEBTOBDIR') else null(),
