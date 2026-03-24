@@ -1160,6 +1160,42 @@ def page_not_found(e):
 
 db.create_all()
 
+# ---------------------------------------------------------
+# 미사용(use_yn='NO') 도메인에 속한 데이터 조회 제한 로직 (Ver 2.0)
+# ---------------------------------------------------------
+# 1-hop 관계는 점(.) 표기법 사용, 2-hop 이상은 FilterInFunction을 사용하여 조인 오류 방지
+def get_active_was_ids():
+    return [r.was_id for r in db.session.query(MwWas.was_id).filter(MwWas.use_yn == 'YES').all()]
+
+def get_active_web_ids():
+    return [r.id for r in db.session.query(MwWeb.id).filter(MwWeb.use_yn == 'YES').all()]
+
+def get_active_vhost_ids():
+    return [r.id for r in db.session.query(MwWebVhost.id).join(MwWeb).filter(MwWeb.use_yn == 'YES').all()]
+
+was_filter_targets = [
+    (WasInstanceModelView, 'mw_was.use_yn', FilterEqual, 'YES'),
+    (DatasourceModelView, 'mw_was.use_yn', FilterEqual, 'YES'),
+    (ApplicationModelView, 'mw_was.use_yn', FilterEqual, 'YES'),
+    (WasHttpListenerModelView, 'was_id', FilterInFunction, get_active_was_ids),
+    (WasWebtobConnectorModelView, 'was_id', FilterInFunction, get_active_was_ids)
+]
+
+web_filter_targets = [
+    (WebServerModelView, 'mw_web.use_yn', FilterEqual, 'YES'),
+    (WebUriModelView, 'mw_web.use_yn', FilterEqual, 'YES'),
+    (WebReverseproxyModelView, 'mw_web.use_yn', FilterEqual, 'YES'),
+    (WebVhostModelView, 'mw_web.use_yn', FilterEqual, 'YES'),
+    (WebSslModelView, 'mw_web.use_yn', FilterEqual, 'YES'),
+    (WebDomainModelView, 'mw_web_vhost_id', FilterInFunction, get_active_vhost_ids)
+]
+
+for view, path, flt, val in was_filter_targets + web_filter_targets:
+    if not hasattr(view, 'base_filters') or view.base_filters is None:
+        view.base_filters = []
+    view.base_filters.append([path, flt, val])
+
+
 appbuilder.add_view(
     ServerModelView,
     "서버 목록",
