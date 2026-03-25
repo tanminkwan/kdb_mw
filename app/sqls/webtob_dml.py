@@ -95,14 +95,22 @@ class WebtobHttpm(ABC):
             _, insert_array, update_array \
                 = self.__getArrayDictOfWebServer()
 
+            svr_id_list = []
             for insert_dict, update_dict in zip(insert_array, update_array):
-
+                svr_id_list.append(insert_dict['svr_id'])
                 stmt = insert(MwWebServer).values(insert_dict)    
                 do_update_stmt = stmt.on_conflict_do_update(
                     index_elements=['mw_web_id', 'svr_id'],
                     set_=update_dict
                 )
                 db.session.execute(do_update_stmt)
+            
+            # 현재 설정에 없는 서버 정보는 삭제 처리
+            delete_stmt = delete(MwWebServer).where(
+                    (MwWebServer.mw_web_id == self.mw_web_id),
+                    ~MwWebServer.svr_id.in_(svr_id_list)
+            )
+            db.session.execute(delete_stmt)
             
             db.session.flush()
             logging.info(f"Hennry: Upserted web servers for web_id={self.mw_web_id}. Starting relation update.")
@@ -114,8 +122,9 @@ class WebtobHttpm(ABC):
             _, insert_array, update_array \
                 = self.__getArrayDictOfWebUri()
 
+            uri_id_list = []
             for insert_dict, update_dict in zip(insert_array, update_array):
-
+                uri_id_list.append(insert_dict['uri_id'])
                 stmt = insert(MwWebUri).values(insert_dict)    
                 do_update_stmt = stmt.on_conflict_do_update(
                     index_elements=['mw_web_id', 'uri_id'],
@@ -123,18 +132,33 @@ class WebtobHttpm(ABC):
                 )
                 db.session.execute(do_update_stmt)
 
+            # 현재 설정에 없는 URI 정보는 삭제 처리
+            delete_stmt = delete(MwWebUri).where(
+                    (MwWebUri.mw_web_id == self.mw_web_id),
+                    ~MwWebUri.uri_id.in_(uri_id_list)
+            )
+            db.session.execute(delete_stmt)
+
             # Upsert mw_web_reverseproxy
             _, insert_array, update_array \
                 = self.__getArrayDictOfWebReverseproxy()
 
+            rp_id_list = []
             for insert_dict, update_dict in zip(insert_array, update_array):
-
+                rp_id_list.append(insert_dict['reverseproxy_id'])
                 stmt = insert(MwWebReverseproxy).values(insert_dict)    
                 do_update_stmt = stmt.on_conflict_do_update(
                     index_elements=['mw_web_id', 'reverseproxy_id'],
                     set_=update_dict
                 )
                 db.session.execute(do_update_stmt)
+
+            # 현재 설정에 없는 Reverse Proxy 정보는 삭제 처리
+            delete_stmt = delete(MwWebReverseproxy).where(
+                    (MwWebReverseproxy.mw_web_id == self.mw_web_id),
+                    ~MwWebReverseproxy.reverseproxy_id.in_(rp_id_list)
+            )
+            db.session.execute(delete_stmt)
 
             # Upsert mw_web_vhost
             _, insert_array, update_array \
@@ -648,37 +672,46 @@ def _create_domain_name_info(webInfo):
                       , MwWebSsl.ssl_name==v.ssl_name\
                       ).first()
 
-        for domain in domains:
+            current_domain_ports = []
+            for domain in domains:
 
-            if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", domain):
-                continue
+                if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", domain):
+                    continue
 
-            for port in ports:
+                for port in ports:
+                    current_domain_ports.append((domain, port))
 
-                update_dict = dict( ssl_yn      = ssl_yn
-                                  , user_id     = 'scheduler'
-                                  , create_on   = datetime.now()
-                )
+                    update_dict = dict( ssl_yn      = ssl_yn
+                                      , user_id     = 'scheduler'
+                                      , create_on   = datetime.now()
+                    )
 
-                insert_dict = update_dict.copy()
-                insert_dict.update( host_id     = wi['host_id']
-                                  , mw_web_vhost_id = v.id
-                                  , domain_name = domain
-                                  , port        = port
-                )
+                    insert_dict = update_dict.copy()
+                    insert_dict.update( host_id     = wi['host_id']
+                                      , mw_web_vhost_id = v.id
+                                      , domain_name = domain
+                                      , port        = port
+                    )
 
-                stmt = insert(MwWebDomain).values(insert_dict)    
-                do_update_stmt = stmt.on_conflict_do_update(
-                    index_elements=['mw_web_vhost_id', 'domain_name', 'port'],
-                    set_=update_dict
-                ).returning(MwWebDomain.id)
-                rtn = db.session.execute(do_update_stmt)
+                    stmt = insert(MwWebDomain).values(insert_dict)    
+                    do_update_stmt = stmt.on_conflict_do_update(
+                        index_elements=['mw_web_vhost_id', 'domain_name', 'port'],
+                        set_=update_dict
+                    ).returning(MwWebDomain.id)
+                    rtn = db.session.execute(do_update_stmt)
 
-                if ssl_yn == 'YES' and ssl_rec:
-                    domain_id = next(rec[0] for rec in rtn)
-                    domain_rec = db.session.query(MwWebDomain)\
-                        .filter(MwWebDomain.id==domain_id).first()
-                    domain_rec.mw_web_ssl = [ssl_rec]
+                    if ssl_yn == 'YES' and ssl_rec:
+                        domain_id = next(rec[0] for rec in rtn)
+                        domain_rec = db.session.query(MwWebDomain)\
+                            .filter(MwWebDomain.id==domain_id).first()
+                        domain_rec.mw_web_ssl = [ssl_rec]
+            
+            # 현재 설정에 없는 도메인 정보는 삭제 처리
+            delete_stmt = delete(MwWebDomain).where(
+                    (MwWebDomain.mw_web_vhost_id == v.id),
+                    ~tuple_(MwWebDomain.domain_name, MwWebDomain.port).in_(current_domain_ports)
+            )
+            db.session.execute(delete_stmt)
 
     return 1, 'OK'
 
@@ -701,9 +734,11 @@ def _create_ssl_info(webInfo):
 
     ssls  = web_rec.ssl_object
 
+    ssl_name_list = []
     for ssl in ssls:
 
         ssl_name     = ssl['NAME'] if ssl.get('NAME') else ''
+        ssl_name_list.append(ssl_name)
         ssl_certi    = ssl['CERTIFICATEFILE'] if ssl.get('CERTIFICATEFILE') else ''
         ssl_certikey = ssl['CERTIFICATEKEYFILE'] if ssl.get('CERTIFICATEKEYFILE') else ''
         ssl_cacerti  = ssl['CACERTIFICATEFILE'] if ssl.get('CACERTIFICATEFILE') else ''
@@ -731,6 +766,13 @@ def _create_ssl_info(webInfo):
             set_=update_dict
         )
         db.session.execute(do_update_stmt)
+
+    # 현재 설정에 없는 SSL 정보는 삭제 처리
+    delete_stmt = delete(MwWebSsl).where(
+            (MwWebSsl.mw_web_id == web_rec.id),
+            ~MwWebSsl.ssl_name.in_(ssl_name_list)
+    )
+    db.session.execute(delete_stmt)
 
     return 1, 'OK'
 
