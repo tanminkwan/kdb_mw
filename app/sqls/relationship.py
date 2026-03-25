@@ -72,7 +72,7 @@ def _get_web_relationship(web_rec):
     operators.update({"VHOST":{"top":20, "left":20, "properties":{"title":'VHOST 정보',"inputs": {},"outputs":{}}}})
     
     if obj['NODE'][0].get('PORT'):
-        port = int(obj['NODE'][0]['PORT'])
+        port = obj['NODE'][0]['PORT']
 
     if obj.get('VHOST'):
         vhosts = obj['VHOST']
@@ -359,10 +359,13 @@ def get_web_servers(webconn_rec):
     query = query.filter(host_match)
     
     if webconn_rec.web_host_id == '<domain-socket>' or (webconn_rec.disable_pipe and webconn_rec.disable_pipe.name == 'NO'):
-        # Internal / Socket match by web_home
-        return query.filter(MwWeb.web_home == webconn_rec.web_home).all()
+        # Match by jsv_port OR web_home
+        return query.filter(or_(
+            MwWeb.jsv_port == webconn_rec.jsv_port,
+            MwWeb.web_home == webconn_rec.web_home
+        )).all()
     else:
-        # Normal match by jsv_port
+        # Match only by jsv_port
         return query.filter(MwWeb.jsv_port == webconn_rec.jsv_port).all()
 
 def update_was_web_relation(web_id=None, was_id=None):
