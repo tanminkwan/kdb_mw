@@ -166,8 +166,10 @@ def compare_itam_was(config_id=None):
             continue
 
         # 2) WAS 미등록 (host_id + cleaned was_id 비교)
+        # 서버(host_id)를 조건에 포함하여, 서버가 다르면 조회되지 않게 함 (미등록 처리)
         mw_was_rec = db.session.query(MwWas).filter(
             MwWas.landscape == LocationEnum[location_name],
+            MwWas.located_host_id == (str(rec.host_id).lower() if rec.host_id else None),
             or_(
                 MwWas.was_id == rec.domain_name,
                 MwWas.was_id == rec.domain_name + '_dev',
@@ -182,19 +184,11 @@ def compare_itam_was(config_id=None):
             results.append(ItItamWasCompare(
                 config_id=rec.config_id,
                 error_type='WAS 미등록',
-                error_content=f'domain_name={rec.domain_name}, run_env={rec.run_env}가 mw_was에 미등록'
+                error_content=f'domain_name={rec.domain_name}, host_id={rec.host_id}, run_env={rec.run_env} 가 mw_was에 미등록'
             ))
             continue
 
-        # 3) 설치 서버 불일치
-        if rec.host_id and str(rec.host_id).lower() != mw_was_rec.located_host_id:
-            results.append(ItItamWasCompare(
-                config_id=rec.config_id,
-                error_type='설치 서버 불일치',
-                error_content=f'ITAM host_id={rec.host_id}, 리발소 located_host_id={mw_was_rec.located_host_id}'
-            ))
-
-        # 4) WAS SSL 불일치
+        # 3) WAS SSL 불일치
         has_ssl_listener = db.session.query(MwWasHttpListener).filter(
             MwWasHttpListener.was_id == mw_was_rec.was_id,
             MwWasHttpListener.ssl_yn == YnEnum.YES
@@ -209,7 +203,7 @@ def compare_itam_was(config_id=None):
                 error_content=f'ITAM was_ssl_yn={actual_ssl}, 리발소 SSL listener 존재={has_ssl_listener} (기대값={expected_ssl})'
             ))
 
-        # 5) Agent 없음
+        # 4) Agent 없음
         if not mw_was_rec.agent_id or mw_was_rec.agent_id.strip() == '':
             results.append(ItItamWasCompare(
                 config_id=rec.config_id,
@@ -217,7 +211,7 @@ def compare_itam_was(config_id=None):
                 error_content=f'mw_was.was_id={mw_was_rec.was_id}에 agent_id 미설정'
             ))
         else:
-            # 6) Agent 비활성화
+            # 5) Agent 비활성화
             if _is_agent_inactive(mw_was_rec.agent_id):
                 results.append(ItItamWasCompare(
                     config_id=rec.config_id,
