@@ -664,7 +664,7 @@ def _create_domain_name_info(webInfo):
         ssl_yn = 'NO'
         ssl_rec = None
 
-        if v.ssl_yn.name == 'YES':
+        if v.ssl_yn and v.ssl_yn.name == 'YES':
             ssl_yn = 'YES'
 
             ssl_rec = db.session.query(MwWebSsl)\
@@ -672,46 +672,46 @@ def _create_domain_name_info(webInfo):
                       , MwWebSsl.ssl_name==v.ssl_name\
                       ).first()
 
-            current_domain_ports = []
-            for domain in domains:
+        current_domain_ports = []
+        for domain in domains:
 
-                if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", domain):
-                    continue
+            if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", domain):
+                continue
 
-                for port in ports:
-                    current_domain_ports.append((domain, port))
+            for port in ports:
+                current_domain_ports.append((domain, port))
 
-                    update_dict = dict( ssl_yn      = ssl_yn
-                                      , user_id     = 'scheduler'
-                                      , create_on   = datetime.now()
-                    )
+                update_dict = dict( ssl_yn      = ssl_yn
+                                  , user_id     = 'scheduler'
+                                  , create_on   = datetime.now()
+                )
 
-                    insert_dict = update_dict.copy()
-                    insert_dict.update( host_id     = wi['host_id']
-                                      , mw_web_vhost_id = v.id
-                                      , domain_name = domain
-                                      , port        = port
-                    )
+                insert_dict = update_dict.copy()
+                insert_dict.update( host_id     = wi['host_id']
+                                  , mw_web_vhost_id = v.id
+                                  , domain_name = domain
+                                  , port        = port
+                )
 
-                    stmt = insert(MwWebDomain).values(insert_dict)    
-                    do_update_stmt = stmt.on_conflict_do_update(
-                        index_elements=['mw_web_vhost_id', 'domain_name', 'port'],
-                        set_=update_dict
-                    ).returning(MwWebDomain.id)
-                    rtn = db.session.execute(do_update_stmt)
+                stmt = insert(MwWebDomain).values(insert_dict)    
+                do_update_stmt = stmt.on_conflict_do_update(
+                    index_elements=['mw_web_vhost_id', 'domain_name', 'port'],
+                    set_=update_dict
+                ).returning(MwWebDomain.id)
+                rtn = db.session.execute(do_update_stmt)
 
-                    if ssl_yn == 'YES' and ssl_rec:
-                        domain_id = next(rec[0] for rec in rtn)
-                        domain_rec = db.session.query(MwWebDomain)\
-                            .filter(MwWebDomain.id==domain_id).first()
-                        domain_rec.mw_web_ssl = [ssl_rec]
-            
-            # 현재 설정에 없는 도메인 정보는 삭제 처리
-            delete_stmt = delete(MwWebDomain).where(
-                    (MwWebDomain.mw_web_vhost_id == v.id),
-                    ~tuple_(MwWebDomain.domain_name, MwWebDomain.port).in_(current_domain_ports)
-            )
-            db.session.execute(delete_stmt)
+                if ssl_yn == 'YES' and ssl_rec:
+                    domain_id = next(rec[0] for rec in rtn)
+                    domain_rec = db.session.query(MwWebDomain)\
+                        .filter(MwWebDomain.id==domain_id).first()
+                    domain_rec.mw_web_ssl = [ssl_rec]
+        
+        # 현재 설정에 없는 도메인 정보는 삭제 처리
+        delete_stmt = delete(MwWebDomain).where(
+                (MwWebDomain.mw_web_vhost_id == v.id),
+                ~tuple_(MwWebDomain.domain_name, MwWebDomain.port).in_(current_domain_ports)
+        )
+        db.session.execute(delete_stmt)
 
     return 1, 'OK'
 
