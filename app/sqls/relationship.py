@@ -1,5 +1,5 @@
 from app import db
-from sqlalchemy import text, and_, or_
+from sqlalchemy import text, and_, or_, func
 import logging
 import re
 from app.models.was import MwWas, MwWasInstance, MwWeb, MwWasWebtobConnector, MwWebServer\
@@ -19,8 +19,9 @@ def get_dependent_was_id(web_rec=None, host_id=None, web_home=None):
     
     h_id = web_rec.host_id if web_rec else host_id
     w_home = web_rec.web_home if web_rec else web_home
+    w_home_normalized = w_home.replace('\\', '/') if w_home else None
     
-    if not h_id or not w_home:
+    if not h_id or not w_home_normalized:
         return None
 
     connector_rec = db.session.query(MwWasWebtobConnector)\
@@ -29,7 +30,7 @@ def get_dependent_was_id(web_rec=None, host_id=None, web_home=None):
             MwWasInstance.was_instance_id == MwWasWebtobConnector.was_instance_id
         ))\
         .join(MwWas, MwWas.was_id == MwWasInstance.was_id)\
-        .filter(MwWasInstance.host_id == h_id, MwWasWebtobConnector.web_home == w_home\
+        .filter(MwWasInstance.host_id == h_id, func.replace(MwWasWebtobConnector.web_home, '\\', '/') == w_home_normalized\
                 ,MwWas.use_yn == YnEnum.YES).first()
 
     if connector_rec:
@@ -370,9 +371,10 @@ def get_web_servers(webconn_rec):
     
     if webconn_rec.web_host_id == '<domain-socket>' or (webconn_rec.disable_pipe and webconn_rec.disable_pipe.name == 'NO'):
         # Match by jsv_port OR web_home
+        normalized_web_home = webconn_rec.web_home.replace('\\', '/') if webconn_rec.web_home else None
         return query.filter(or_(
             MwWeb.jsv_port == webconn_rec.jsv_port,
-            MwWeb.web_home == webconn_rec.web_home
+            func.replace(MwWeb.web_home, '\\', '/') == normalized_web_home
         )).all()
     else:
         # Match only by jsv_port
