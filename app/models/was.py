@@ -188,7 +188,7 @@ class MwWaschangeHistory(Model):
         t__table_comment,
     )
 
-    mw_was        = relationship('MwWas')
+    mw_was        = relationship('MwWas', back_populates='mw_was_change_history')
 
     def show_diff(self):
         return Markup('<a href="/diff/was/'+str(self.id)+'" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 보기"><i class="fa fa-search"></i></a>')
@@ -614,6 +614,7 @@ class MwWeb(Model):
     mw_web_vhost     = relationship('MwWebVhost', back_populates='mw_web', cascade='all,delete', passive_deletes=True)
     mw_web_ssl       = relationship('MwWebSsl', back_populates='mw_web', cascade='all,delete', passive_deletes=True)
     mw_was           = relationship('MwWas', secondary=assoc_was_web, back_populates='mw_web')
+    mw_web_change_history = relationship('MwWebchangeHistory', back_populates='mw_web', cascade='all,delete', passive_deletes=True)
     
     def __repr__(self):
         return self.host_id+'['+ str(self.port) +']'
@@ -791,7 +792,7 @@ class MwWebchangeHistory(Model):
         t__table_comment,
     )
 
-    mw_web           = relationship('MwWeb')
+    mw_web           = relationship('MwWeb', back_populates='mw_web_change_history')
 
     def show_diff(self):
         return Markup('<a href="/diff/web/'+str(self.id)+'" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 보기"><i class="fa fa-search"></i></a>')

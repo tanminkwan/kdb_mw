@@ -28,8 +28,9 @@ def get_dependent_was_id(web_rec=None, host_id=None, web_home=None):
             MwWasInstance.was_id == MwWasWebtobConnector.was_id,
             MwWasInstance.was_instance_id == MwWasWebtobConnector.was_instance_id
         ))\
-        .filter(MwWasInstance.host_id == h_id, MwWasWebtobConnector.web_home == w_home)\
-        .first()
+        .join(MwWas, MwWas.was_id == MwWasInstance.was_id)\
+        .filter(MwWasInstance.host_id == h_id, MwWasWebtobConnector.web_home == w_home\
+                ,MwWas.use_yn == YnEnum.YES).first()
 
     if connector_rec:
         return connector_rec.mw_was_instance.mw_was
@@ -52,7 +53,7 @@ def get_host_id(ip_address):
 
 def get_web_relationship(host_id, port):
     web_rec = db.session.query(MwWeb)\
-                    .filter(MwWeb.host_id==host_id, MwWeb.port==port).first()
+                    .filter(MwWeb.host_id==host_id, MwWeb.port==port, MwWeb.use_yn==YnEnum.YES).first()
 
     if not web_rec or not web_rec.httpm_object:
         return None
@@ -336,19 +337,28 @@ def get_rproxy_servers(host_id, port):
         ips = ips + [ x.strip() for x in row.vip_address.split(',')]
 
     rp_recs = db.session.query(MwWebReverseproxy)\
+             .join(MwWeb)\
              .filter(MwWebReverseproxy.target_ip_address.in_(ips)
-                    ,MwWebReverseproxy.target_port==port).all()
+                    ,MwWebReverseproxy.target_port==port
+                    ,MwWeb.use_yn == YnEnum.YES).all()
                     
     return rp_recs
 
 def get_web_servers(webconn_rec):
+    # WAS 측 use_yn 체크 (Domain이 NO이면 관계생성 안함)
+    if not webconn_rec.mw_was_instance or \
+       not webconn_rec.mw_was_instance.mw_was or \
+       webconn_rec.mw_was_instance.mw_was.use_yn == YnEnum.NO:
+        return []
+
     target_host = webconn_rec.web_host_id.strip() if webconn_rec.web_host_id else ""
     real_host_id = get_real_web_host_id(target_host, webconn_rec.mw_was_instance.host_id)
     
     query = db.session.query(MwWebServer)\
                 .filter(MwWebServer.svr_id == webconn_rec.jsv_id)\
                 .join(MwWeb)\
-                .join(MwServer, MwWeb.host_id == MwServer.host_id)
+                .join(MwServer, MwWeb.host_id == MwServer.host_id)\
+                .filter(MwWeb.use_yn == YnEnum.YES) # WEB측 use_yn 체크
     
     # Match by host_id OR IP address OR VIP address
     host_match = or_(
@@ -420,12 +430,21 @@ def update_was_web_relation(web_id=None, was_id=None):
 
     # Step 3 & 4: Align mw_was_web and update flags
     for web in webs_to_update:
+        # WEB이 사용안함(NO)이면 관계를 제거하고 스킵
+        if web.use_yn == YnEnum.NO:
+            web.mw_was = []
+            logging.info(f"Hennry: web_id={web.id} is NO, clearing mw_was")
+            continue
+
         # Find all WAS connected via ANY of this web's servers
         linked_was = db.session.query(MwWas)\
             .join(MwWasInstance)\
             .join(MwWasWebtobConnector)\
             .join(MwWasWebtobConnector.mw_web_server)\
-            .filter(MwWebServer.mw_web_id == web.id)\
+            .filter(
+                MwWebServer.mw_web_id == web.id,
+                MwWas.use_yn == YnEnum.YES        # 사용중인 WAS만
+            )\
             .distinct().all()
         
         web.mw_was = linked_was
