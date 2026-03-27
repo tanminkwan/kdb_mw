@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ app_title }} - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #f8fafc;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .user-avatar {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #38bdf8, #228be6);
+            border-radius: 50%;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: white;
+            font-weight: bold;
+        }
+        h1 { font-size: 24px; margin-bottom: 8px; }
+        p { color: #94a3b8; margin-bottom: 32px; }
+        .meta { 
+            background: rgba(0, 0, 0, 0.2);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 32px;
+            text-align: left;
+            font-size: 14px;
+        }
+        .meta-item { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .meta-item:last-child { margin-bottom: 0; }
+        .label { color: #64748b; }
+        .btn-logout {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: #f8fafc;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-logout:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="user-avatar">{{ user.username[0] | upper }}</div>
+        <h1>안녕하세요, {{ user.username }}님!</h1>
+        <p>IDP 서비스에 안전하게 로그인되어 있습니다.</p>
+        
+        <div class="meta">
+            <div class="meta-item">
+                <span class="label">이메일</span>
+                <span>{{ user.email }}</span>
+            </div>
+            <div class="meta-item">
+                <span class="label">상태</span>
+                <span style="color: #10b981;">● Active</span>
+            </div>
+        </div>
+        
+        <a href="{{ url_for('auth.logout') }}" class="btn-logout">로그아웃</a>
+    </div>
+</body>
+</html>

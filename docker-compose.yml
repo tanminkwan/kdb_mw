@@ -19,7 +19,8 @@ services:
       - '5433:5432'
     volumes:
       - /home/hennry/data1:/var/lib/postgresql/data
-      - ./create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
+      - ./create_db.sql:/docker-entrypoint-initdb.d/01_create_db.sql
+      - ./create_idp_db.sql:/docker-entrypoint-initdb.d/02_create_idp_db.sql
   mwm-minio:
     container_name: mwm-minio
     image: minio/minio
@@ -51,6 +52,27 @@ services:
   #      - mwm-db
   #    command: prefect server start
   #    profiles: ["server"]
+  mwm-idp:
+    container_name: mwm-idp
+    image: mwm-idp
+    build:
+      context: .
+      dockerfile: Dockerfile.idp
+    depends_on:
+      - mwm-db
+    ports:
+      - "5000:5000"
+    environment:
+      TZ: Asia/Seoul
+      IDP_DATABASE_URI: "postgresql://tiffanie:1q2w3e4r!!@mwm-db:5432/idp"
+      IDP_SECRET_KEY: "idp-secret-key-change-me"
+      IDP_MWM_CLIENT_ID: "mwm-client"
+      IDP_MWM_CLIENT_SECRET: "mwm-secret"
+      IDP_MWM_REDIRECT_URI: "http://localhost:8000/idp/callback"
+      SYNC_MWM_DB_URI: "postgresql://tiffanie:1q2w3e4r!!@mwm-db:5432/mw"
+    links:
+      - mwm-db
+
   mwm-app:
     container_name: mwm-app
     image: mwm-app

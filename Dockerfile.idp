@@ -1,0 +1,17 @@
+FROM python:3.12.4-slim-bookworm
+
+WORKDIR /workspace
+
+COPY idp/requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# idp 패키지를 /workspace/idp/ 로 복사 (패키지 구조 유지)
+COPY idp/ /workspace/idp/
+COPY tests/test_idp/ /workspace/tests/test_idp/
+
+# PYTHONPATH에 workspace 추가하여 `from idp import ...` 가능하게
+ENV PYTHONPATH=/workspace
+
+EXPOSE 5000
+
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "2", "idp.run:app"]
