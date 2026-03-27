@@ -82,7 +82,7 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20260327.001)"
+APP_NAME = "리발소(VER:20260327.005)"
 
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"
@@ -96,7 +96,6 @@ APP_NAME = "리발소(VER:20260327.001)"
 # AUTH_LDAP : Is for LDAP
 # AUTH_REMOTE_USER : Is for using REMOTE_USER from web server
 AUTH_TYPE = AUTH_DB
-
 # Uncomment to setup Full admin role name
 # AUTH_ROLE_ADMIN = 'Admin'
 
@@ -187,3 +186,9 @@ KROKI_URL     = os.getenv('KROKI_URL', 'http://mwm-kroki:8000')
 #Added by Hennry
 SCHEDULER_API_ENABLED = True
 AGENT_OFFLINE_MINUTES = 5
+
+# IDP Configuration
+IDP_INTERNAL_SERVER_URL = os.getenv('IDP_INTERNAL_SERVER_URL', 'http://mwm-idp:5000')
+IDP_EXTERNAL_SERVER_URL = os.getenv('IDP_EXTERNAL_SERVER_URL', 'http://localhost:5000')
+IDP_CLIENT_ID = os.getenv('IDP_CLIENT_ID', 'mwm-client')
+IDP_CLIENT_SECRET = os.getenv('IDP_CLIENT_SECRET', 'mwm-secret')

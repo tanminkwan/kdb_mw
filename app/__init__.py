@@ -37,7 +37,6 @@ db = SQLA(app)
 migrate = Migrate(app, db)
 
 appbuilder = AppBuilder(app, db.session, indexview=MyIndexView)
-
 #Kafka
 kafka_producer =None
 kafka_admin=None
@@ -116,6 +115,10 @@ from . import jobs
 
 scheduler.init_app(app)
 scheduler.start()
+
+from app.idp_auth import idp_auth_bp, init_oauth
+init_oauth(app)
+app.register_blueprint(idp_auth_bp, url_prefix='/idp')
 
 # with app.app_context():
 #     db.create_all()
