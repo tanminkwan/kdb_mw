@@ -17,11 +17,15 @@ auth_bp = Blueprint("auth", __name__)
 
 
 def _get_services():
+    from app.services.oidc_service import OIDCService
+    from app.services.sync_service import SyncService
     user_repo = UserRepository()
     oauth_repo = OAuthRepository()
+    oidc_service = OIDCService()
     user_service = UserService(user_repo)
-    oauth_service = OAuthService(oauth_repo, user_repo)
-    return user_service, oauth_service
+    oauth_service = OAuthService(oauth_repo, user_repo, oidc_service)
+    sync_service = SyncService(user_repo)
+    return user_service, oauth_service, sync_service, oidc_service
 
 
 @auth_bp.route("/")
@@ -39,7 +43,7 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("auth.index"))
 
-    user_service, _ = _get_services()
+    user_service, _, _, _ = _get_services()
     next_url = request.args.get("next") or url_for("auth.index")
 
     if request.method == "POST":
@@ -62,7 +66,7 @@ def login():
 
 @auth_bp.route("/oauth/authorize", methods=["GET", "POST"])
 def authorize():
-    user_service, oauth_service = _get_services()
+    user_service, oauth_service, _, _ = _get_services()
 
     current_app.logger.info(f"Authorize request ({request.method}) from {request.remote_addr}")
 
@@ -72,6 +76,7 @@ def authorize():
     response_type = request.args.get("response_type") or request.form.get("response_type", "")
     scope = request.args.get("scope") or request.form.get("scope", "openid profile email")
     state = request.args.get("state") or request.form.get("state", "")
+    nonce = request.args.get("nonce") or request.form.get("nonce", "")
 
     if request.method == "GET":
         if current_user.is_authenticated:
@@ -85,6 +90,7 @@ def authorize():
                     redirect_uri=redirect_uri,
                     scope=scope,
                     user_id=current_user.id,
+                    nonce=nonce,
                 )
                 params = {"code": code.code}
                 if state:
@@ -120,10 +126,11 @@ def authorize():
             response_type=response_type,
             scope=scope,
             state=state,
+            nonce=nonce,
             app_title=current_app.config.get("APP_TITLE", "MWM IDP"),
             action_url=url_for("auth.authorize", client_id=client_id, 
                                redirect_uri=redirect_uri, response_type=response_type, 
-                               scope=scope, state=state)
+                               scope=scope, state=state, nonce=nonce)
         )
 
     # POST: 로그인 처리
@@ -157,6 +164,7 @@ def authorize():
             redirect_uri=redirect_uri,
             scope=scope,
             user_id=user.id,
+            nonce=nonce,
         )
     except Exception as e:
         return render_template("login.html", error=str(e),
@@ -165,7 +173,7 @@ def authorize():
                                app_title=current_app.config.get("APP_TITLE", "MWM IDP"),
                                action_url=url_for("auth.authorize", client_id=client_id, 
                                                   redirect_uri=redirect_uri, response_type=response_type, 
-                                                  scope=scope, state=state)), 500
+                                                  scope=scope, state=state, nonce=nonce)), 500
 
     # Redirect (POST 성공 시에도 1초 대기 랜딩 페이지 노출)
     params = {"code": code.code}
@@ -185,7 +193,7 @@ def authorize():
 
 @auth_bp.route("/oauth/token", methods=["POST"])
 def token():
-    _, oauth_service = _get_services()
+    _, oauth_service, _, _ = _get_services()
 
     current_app.logger.info(f"Token request from {request.remote_addr}: form={request.form}")
 
@@ -202,7 +210,7 @@ def token():
         if grant_type == "authorization_code":
             code = request.form.get("code", "")
             redirect_uri = request.form.get("redirect_uri", "")
-            token_obj = oauth_service.exchange_code_for_token(
+            token_data = oauth_service.exchange_code_for_token(
                 code_value=code,
                 client_id=client_id,
                 client_secret=client_secret,
@@ -210,7 +218,7 @@ def token():
             )
         elif grant_type == "refresh_token":
             refresh_token = request.form.get("refresh_token", "")
-            token_obj = oauth_service.refresh_access_token(
+            token_data = oauth_service.refresh_access_token(
                 refresh_token_value=refresh_token,
                 client_id=client_id,
                 client_secret=client_secret,
@@ -218,7 +226,7 @@ def token():
         else:
             return {"error": f"unsupported_grant_type: {grant_type}"}, 400
 
-        return token_obj.to_dict(), 200
+        return token_data, 200
 
     except ValueError as e:
         return {"error": str(e)}, 400
@@ -244,13 +252,18 @@ def client_add():
     """OAuth2 클라이언트 신규 등록 화면"""
     if request.method == "POST":
         try:
+            import json
+            mapping_str = request.form.get("policy_mapping", "{}")
+            policy_mapping = json.loads(mapping_str) if mapping_str.strip() else {}
+            
             client = OAuth2Client(
                 client_id=request.form["client_id"],
                 client_secret=request.form["client_secret"],
                 client_name=request.form["client_name"],
                 redirect_uris=request.form["redirect_uris"],
                 grant_types=request.form.get("grant_types", "authorization_code refresh_token"),
-                scope=request.form.get("scope", "openid profile email")
+                scope=request.form.get("scope", "openid profile email"),
+                policy_mapping=policy_mapping
             )
             db.session.add(client)
             db.session.commit()
@@ -279,6 +292,11 @@ def client_edit(id):
             client.redirect_uris = request.form["redirect_uris"]
             client.grant_types = request.form.get("grant_types", "authorization_code refresh_token")
             client.scope = request.form.get("scope", "openid profile email")
+            
+            import json
+            mapping_str = request.form.get("policy_mapping", "{}")
+            client.policy_mapping = json.loads(mapping_str) if mapping_str.strip() else {}
+            
             db.session.commit()
             flash(f"Client '{client.client_id}' updated successfully.", "success")
             return redirect(url_for("auth.client_list"))
@@ -312,3 +330,87 @@ def logout():
     logout_user()
     flash("Successfully logged out.", "success")
     return redirect(url_for("auth.index"))
+
+
+@auth_bp.route("/api-key/rotate", methods=["POST"])
+@login_required
+def rotate_api_key():
+    """API Key 생성 및 재발급"""
+    if 'Admin' not in current_user.roles and 'PowerUser' not in current_user.roles:
+        flash("You do not have permission to manage API keys.", "danger")
+        return redirect(url_for("auth.index"))
+    
+    import secrets
+    # mwm_sk_ (secret key) 접두사를 붙여 식별 용이하게 함
+    new_key = f"mwm_sk_{secrets.token_urlsafe(32)}"
+    current_user.api_key = new_key
+    db.session.commit()
+    
+    flash("New API Key has been generated. Please keep it secure!", "success")
+    return redirect(url_for("auth.index"))
+
+
+@auth_bp.route("/admin/settings")
+@login_required
+def admin_settings():
+    """관리자 전용 설정 페이지"""
+    if 'Admin' not in current_user.roles and 'PowerUser' not in current_user.roles:
+        flash("관리자 권한이 필요합니다.", "danger")
+        return redirect(url_for("auth.index"))
+    
+    user_service, _, _, _ = _get_services()
+    users = user_service.user_repo.get_all()
+    return render_template("admin_settings.html", user=current_user, users=users)
+
+
+@auth_bp.route("/sync-users", methods=["POST"])
+@login_required
+def sync_users_ui():
+    """UI에서 수동으로 mwm-app 사용자를 동기화"""
+    if 'Admin' not in current_user.roles and 'PowerUser' not in current_user.roles:
+        flash("동기화 권한이 없습니다.", "danger")
+        return redirect(url_for("auth.index"))
+    
+    _, _, sync_service, _ = _get_services()
+    try:
+        result = sync_service.sync_users("mwm_app")
+        flash(
+            f"동기화 완료: 신규 {result['created']}명, 수정 {result['updated']}명, "
+            f"비활성 {result['deactivated']}명 (오류: {len(result['errors'])}건)",
+            "success"
+        )
+    except Exception as e:
+        flash(f"동기화 중 오류 발생: {str(e)}", "danger")
+        
+    return redirect(url_for("auth.index"))
+
+# ── OIDC Discovery & JWKS ──
+
+@auth_bp.route("/.well-known/openid-configuration")
+def openid_configuration():
+    """OIDC Discovery 엔드포인트"""
+    issuer = current_app.config.get("OIDC_ISSUER", "http://localhost:5000")
+    base_url = issuer.rstrip("/")
+    return {
+        "issuer": issuer,
+        "authorization_endpoint": f"{base_url}/oauth/authorize",
+        "token_endpoint": f"{base_url}/oauth/token",
+        "userinfo_endpoint": f"{base_url}/api/userinfo",
+        "jwks_uri": f"{base_url}/oauth/jwks",
+        "response_types_supported": ["code"],
+        "subject_types_supported": ["public"],
+        "id_token_signing_alg_values_supported": ["RS256"],
+        "scopes_supported": ["openid", "profile", "email", "groups"],
+        "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
+        "claims_supported": [
+            "iss", "sub", "aud", "exp", "iat", "nonce", 
+            "preferred_username", "email", "given_name", "family_name", "groups", "policy"
+        ]
+    }
+
+
+@auth_bp.route("/oauth/jwks")
+def jwks():
+    """OIDC JWKS 엔드포인트"""
+    _, _, _, oidc_service = _get_services()
+    return oidc_service.get_jwks()

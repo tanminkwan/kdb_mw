@@ -16,7 +16,10 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 class MyIndexView(IndexView):
     index_template = 'my_index.html'
 
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.config.from_object("config")
 app.config['SCHEDULER_JOBSTORES'] = {
     'default': SQLAlchemyJobStore(url=app.config['SQLALCHEMY_DATABASE_URI'])

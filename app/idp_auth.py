@@ -3,7 +3,6 @@ from flask import Blueprint, redirect, url_for, session, current_app, request, f
 from authlib.integrations.flask_client import OAuth
 from flask_appbuilder.security.sqla.models import User
 from flask_login import login_user
-from app import db, appbuilder
 
 idp_auth_bp = Blueprint('idp_auth', __name__)
 oauth = OAuth()
@@ -21,13 +20,13 @@ def init_oauth(app):
         name='mwm_idp',
         client_id=app.config.get('IDP_CLIENT_ID'),
         client_secret=app.config.get('IDP_CLIENT_SECRET'),
-        server_metadata_url=None,
+        server_metadata_url=f"{internal_url}/.well-known/openid-configuration",
         access_token_url=f"{internal_url}/oauth/token",
         access_token_params=None,
         authorize_url=f"{external_url}/oauth/authorize",
         authorize_params=None,
         api_base_url=f"{internal_url}/api/",
-        client_kwargs={'scope': 'openid profile email'},
+        client_kwargs={'scope': 'openid profile email', 'verify': False},
     )
 
 @idp_auth_bp.route('/login')
@@ -43,6 +42,7 @@ def login():
 
 @idp_auth_bp.route('/callback')
 def auth_callback():
+    from app import appbuilder
     if not current_app.config.get('IDP_INTERNAL_SERVER_URL'):
         return redirect(url_for("AuthDBView.login"))
         

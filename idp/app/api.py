@@ -1,6 +1,6 @@
-"""REST API 엔드포인트. SOLID-SRP: HTTP 요청/응답 처리만 담당."""
+from functools import wraps
 from flask import Blueprint, request, jsonify
-
+from app.models import db, IdpUser
 from app.repositories.user_repo import UserRepository
 from app.repositories.oauth_repo import OAuthRepository
 from app.services.user_service import UserService
@@ -8,6 +8,31 @@ from app.services.oauth_service import OAuthService
 from app.services.sync_service import SyncService
 
 api_bp = Blueprint("api", __name__)
+
+
+def require_api_key(f):
+    """API Key 및 권한(Admin/PowerUser) 검증 데코레이터"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing or invalid API Key in Authorization header"}), 401
+        
+        api_key = auth_header[len("Bearer "):]
+        if not api_key:
+            return jsonify({"error": "API Key is required"}), 401
+            
+        user = IdpUser.query.filter_by(api_key=api_key).first()
+        if not user:
+            return jsonify({"error": "Invalid API Key"}), 401
+            
+        # 권한 체크: Admin 또는 PowerUser만 허용
+        user_roles = user.roles or []
+        if 'Admin' not in user_roles and 'PowerUser' not in user_roles:
+            return jsonify({"error": "Forbidden: Insufficient permissions (Admin or PowerUser required)"}), 403
+            
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 def _get_user_service():
@@ -26,6 +51,7 @@ def _get_sync_service():
 # ── User CRUD ──
 
 @api_bp.route("/users", methods=["GET"])
+@require_api_key
 def list_users():
     service = _get_user_service()
     users = service.list_users()
@@ -33,6 +59,7 @@ def list_users():
 
 
 @api_bp.route("/users", methods=["POST"])
+@require_api_key
 def create_user():
     service = _get_user_service()
     data = request.get_json(silent=True) or {}
@@ -57,6 +84,7 @@ def create_user():
 
 
 @api_bp.route("/users/<int:user_id>", methods=["GET"])
+@require_api_key
 def get_user(user_id):
     service = _get_user_service()
     try:
@@ -67,6 +95,7 @@ def get_user(user_id):
 
 
 @api_bp.route("/users/<int:user_id>", methods=["PUT"])
+@require_api_key
 def update_user(user_id):
     service = _get_user_service()
     data = request.get_json(silent=True) or {}
@@ -82,6 +111,7 @@ def update_user(user_id):
 
 
 @api_bp.route("/users/<int:user_id>", methods=["DELETE"])
+@require_api_key
 def delete_user(user_id):
     service = _get_user_service()
     try:
@@ -113,6 +143,7 @@ def userinfo():
 # ── Sync ──
 
 @api_bp.route("/sync/<source_name>", methods=["POST"])
+@require_api_key
 def sync(source_name):
     service = _get_sync_service()
     try:
@@ -125,6 +156,7 @@ def sync(source_name):
 
 
 @api_bp.route("/sync/status", methods=["GET"])
+@require_api_key
 def sync_status():
     service = _get_sync_service()
     sources = service.get_sync_sources()
@@ -137,6 +169,7 @@ def sync_status():
 # ── OAuth2 Client CRUD ──
 
 @api_bp.route("/clients", methods=["GET"])
+@require_api_key
 def list_clients():
     service = _get_oauth_service()
     clients = service.list_clients()
@@ -144,6 +177,7 @@ def list_clients():
 
 
 @api_bp.route("/clients", methods=["POST"])
+@require_api_key
 def create_client():
     service = _get_oauth_service()
     data = request.get_json(silent=True) or {}
@@ -161,6 +195,7 @@ def create_client():
 
 
 @api_bp.route("/clients/<int:client_id_pk>", methods=["GET"])
+@require_api_key
 def get_client(client_id_pk):
     service = _get_oauth_service()
     try:
@@ -171,6 +206,7 @@ def get_client(client_id_pk):
 
 
 @api_bp.route("/clients/<int:client_id_pk>", methods=["PUT"])
+@require_api_key
 def update_client(client_id_pk):
     service = _get_oauth_service()
     data = request.get_json(silent=True) or {}
@@ -185,6 +221,7 @@ def update_client(client_id_pk):
 
 
 @api_bp.route("/clients/<int:client_id_pk>", methods=["DELETE"])
+@require_api_key
 def delete_client(client_id_pk):
     service = _get_oauth_service()
     try:
