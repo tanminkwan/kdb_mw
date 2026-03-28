@@ -1,11 +1,11 @@
 """REST API 엔드포인트. SOLID-SRP: HTTP 요청/응답 처리만 담당."""
 from flask import Blueprint, request, jsonify
 
-from idp.repositories.user_repo import UserRepository
-from idp.repositories.oauth_repo import OAuthRepository
-from idp.services.user_service import UserService
-from idp.services.oauth_service import OAuthService
-from idp.services.sync_service import SyncService
+from app.repositories.user_repo import UserRepository
+from app.repositories.oauth_repo import OAuthRepository
+from app.services.user_service import UserService
+from app.services.oauth_service import OAuthService
+from app.services.sync_service import SyncService
 
 api_bp = Blueprint("api", __name__)
 

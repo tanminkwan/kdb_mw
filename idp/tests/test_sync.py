@@ -5,12 +5,12 @@ import pytest
 from unittest.mock import patch, MagicMock
 from sqlalchemy import create_engine, text
 
-from idp.services.sync_service import (
+from app.services.sync_service import (
     SyncService, JoinRoleSyncStrategy, ColumnRoleSyncStrategy,
     StaticRoleSyncStrategy, get_role_strategy,
 )
-from idp.repositories.user_repo import UserRepository
-from idp.models import db as _db, IdpUser
+from app.repositories.user_repo import UserRepository
+from app.models import db as _db, IdpUser
 
 
 # ── Strategy 단위 테스트 ──

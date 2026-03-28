@@ -3,12 +3,12 @@ import pytest
 import sys
 import os
 
-# idp 모듈을 import 할 수 있도록 경로 추가
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# idp/app 모듈을 import 할 수 있도록 경로 추가 (현재 tests/ 의 상위인 idp/ 를 추가)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from idp import create_app
-from idp.config import TestConfig
-from idp.models import db as _db
+from app import create_app
+from app.config import TestConfig
+from app.models import db as _db
 
 
 @pytest.fixture(scope="session")
@@ -37,7 +37,7 @@ def client(app):
 @pytest.fixture
 def sample_user(db):
     """테스트용 사용자 생성"""
-    from idp.models import IdpUser
+    from app.models import IdpUser
     user = IdpUser(
         username="testuser",
         email="test@example.com",
@@ -55,7 +55,7 @@ def sample_user(db):
 @pytest.fixture
 def sample_oauth_client(db):
     """테스트용 OAuth2 Client 생성"""
-    from idp.models import OAuth2Client
+    from app.models import OAuth2Client
     oauth_client = OAuth2Client(
         client_id="test-client",
         client_secret="test-secret",
@@ -72,7 +72,7 @@ def sample_oauth_client(db):
 @pytest.fixture
 def auth_code(db, sample_user, sample_oauth_client):
     """테스트용 Authorization Code 생성"""
-    from idp.repositories.oauth_repo import OAuthRepository
+    from app.repositories.oauth_repo import OAuthRepository
     repo = OAuthRepository()
     code = repo.create_authorization_code(
         client_id=sample_oauth_client.client_id,
@@ -87,7 +87,7 @@ def auth_code(db, sample_user, sample_oauth_client):
 @pytest.fixture
 def access_token(db, sample_user, sample_oauth_client):
     """테스트용 Access Token 생성"""
-    from idp.repositories.oauth_repo import OAuthRepository
+    from app.repositories.oauth_repo import OAuthRepository
     repo = OAuthRepository()
     token = repo.create_token(
         user_id=sample_user.id,

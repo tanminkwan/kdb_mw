@@ -5,13 +5,13 @@ import pytest
 from unittest.mock import patch
 from sqlalchemy import create_engine
 
-from idp.services.sync_service import (
+from app.services.sync_service import (
     SyncService, JoinRoleSyncStrategy, ColumnRoleSyncStrategy,
 )
-from idp.repositories.user_repo import UserRepository
-from idp.repositories.oauth_repo import OAuthRepository
-from idp.services.oauth_service import OAuthService
-from idp.models import db as _db, IdpUser
+from app.repositories.user_repo import UserRepository
+from app.repositories.oauth_repo import OAuthRepository
+from app.services.oauth_service import OAuthService
+from app.models import db as _db, IdpUser
 
 
 class TestJoinRoleSyncStrategy:
@@ -256,7 +256,7 @@ class TestSyncNoFilter:
 class TestOAuthServiceExpiredCode:
     def test_exchange_expired_code(self, app, db, sample_user, sample_oauth_client):
         import time
-        from idp.models import OAuth2AuthorizationCode
+        from app.models import OAuth2AuthorizationCode
         with app.app_context():
             code = OAuth2AuthorizationCode(
                 code="expired_test_code",
@@ -279,7 +279,7 @@ class TestOAuthServiceExpiredCode:
     def test_exchange_code_client_mismatch(self, app, db, sample_user,
                                             sample_oauth_client):
         import time
-        from idp.models import OAuth2AuthorizationCode
+        from app.models import OAuth2AuthorizationCode
         with app.app_context():
             code = OAuth2AuthorizationCode(
                 code="mismatch_test_code",
@@ -301,7 +301,7 @@ class TestOAuthServiceExpiredCode:
 
     def test_userinfo_expired_token(self, app, db, sample_user, sample_oauth_client):
         import time
-        from idp.models import OAuth2Token
+        from app.models import OAuth2Token
         with app.app_context():
             token = OAuth2Token(
                 access_token="expired_access",

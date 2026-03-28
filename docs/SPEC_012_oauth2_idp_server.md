@@ -91,41 +91,25 @@
 ```
 mw_app/
 ├── idp/
-│   ├── __init__.py          # Flask app factory
-│   ├── config.py            # IDP 설정 (DB URI, SECRET_KEY, SYNC_SOURCES 등)
-│   ├── repositories/        # OAuthRepository, UserRepository (DB 조작)
-│   ├── services/            # OAuthService, UserService (비즈니스 로직)
-│   ├── routes.py            # 인증 엔드포인트 (/oauth/authorize, /oauth/token 등)
-│   ├── api.py               # REST API (/api/userinfo, /api/sync 등)
-│   ├── sync.py              # 범용 외부 DB 동기화 엔진
-│   ├── services/            # 비즈니스 로직 계층 (SOLID: SRP 분리)
-│   │   ├── __init__.py
-│   │   ├── user_service.py  # 사용자 CRUD 비즈니스 로직
-│   │   ├── oauth_service.py # OAuth2 토큰/인가 비즈니스 로직
-│   │   └── sync_service.py  # 동기화 비즈니스 로직
-│   ├── repositories/        # 데이터 접근 계층 (SOLID: DIP)
-│   │   ├── __init__.py
-│   │   ├── user_repo.py     # IdpUser 데이터 접근
-│   │   └── oauth_repo.py    # OAuth2 관련 데이터 접근
-│   ├── templates/
-│   │   ├── base.html        # 공통 레이아웃
-│   │   ├── login.html       # IDP 로그인 페이지
-│   │   ├── users.html       # 사용자 관리 UI
-│   │   └── authorize.html   # OAuth2 동의 페이지
+│   ├── app/                 # IDP 서비스 코어 (Flask app)
+│   │   ├── __init__.py      # Flask app factory
+│   │   ├── config.py        # IDP 설정 (DB URI, SECRET_KEY, SYNC_SOURCES 등)
+│   │   ├── run.py           # IDP 서버 진입점
+│   │   ├── routes.py        # 인증 엔드포인트 (/oauth/authorize, /oauth/token 등)
+│   │   ├── api.py           # REST API (/api/userinfo, /api/sync 등)
+│   │   ├── models.py        # DB 모델 (IdpUser, OAuth2Client 등)
+│   │   ├── services/        # 비즈니스 로직 계층 (SOLID: SRP)
+│   │   ├── repositories/    # 데이터 접근 계층 (SOLID: DIP)
+│   │   └── templates/       # UI 템플릿
+│   ├── tests/               # IDP 전용 테스트 (pytest)
+│   │   ├── conftest.py      # 공통 Fixture
+│   │   ├── test_models.py
+│   │   ├── test_oauth2.py
+│   │   └── ...
 │   ├── requirements.txt     # IDP 전용 의존성
-│   └── run.py               # IDP 서버 진입점
-├── tests/
-│   └── idp/                 # IDP 테스트 (pytest)
-│       ├── __init__.py
-│       ├── conftest.py      # 공통 Fixture (test app, test client, test DB, mock 등)
-│       ├── test_models.py   # 모델 단위 테스트
-│       ├── test_api.py      # 사용자 CRUD API 테스트
-│       ├── test_oauth2.py   # OAuth2 Flow 통합 테스트
-│       ├── test_sync.py     # 외부 DB 동기화 테스트
-│       ├── test_services.py # 서비스 계층 단위 테스트
-│       └── test_routes.py   # 라우트/뷰 테스트
-├── Dockerfile.idp           # IDP Docker 이미지
-└── docker-compose.yml       # mwm-idp 서비스 추가
+│   ├── Dockerfile.idp       # IDP Docker 이미지 (Context: ./idp/)
+│   └── create_idp_db.sql    # IDP 전용 DB 초기화 SQL
+└── docker-compose.yml       # mwm-idp 서비스 정의 (Context: ./idp/)
 ```
 
 ### 3-2. 독립 DB 구성

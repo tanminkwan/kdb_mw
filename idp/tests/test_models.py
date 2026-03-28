@@ -2,7 +2,7 @@
 import time
 import pytest
 from sqlalchemy.exc import IntegrityError
-from idp.models import IdpUser, OAuth2Client, OAuth2AuthorizationCode, OAuth2Token
+from app.models import IdpUser, OAuth2Client, OAuth2AuthorizationCode, OAuth2Token
 
 
 class TestIdpUser:

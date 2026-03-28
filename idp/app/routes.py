@@ -5,13 +5,13 @@ from flask import (
     Blueprint, render_template, request, redirect, session, url_for, flash,
     current_app
 )
-from flask_login import current_user, login_user, logout_user
+from flask_login import current_user, login_user, logout_user, login_required
 
-from idp.models import db, OAuth2Client
-from idp.repositories.user_repo import UserRepository
-from idp.repositories.oauth_repo import OAuthRepository
-from idp.services.user_service import UserService
-from idp.services.oauth_service import OAuthService
+from app.models import db, OAuth2Client
+from app.repositories.user_repo import UserRepository
+from app.repositories.oauth_repo import OAuthRepository
+from app.services.user_service import UserService
+from app.services.oauth_service import OAuthService
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -25,16 +25,38 @@ def _get_services():
 
 
 @auth_bp.route("/")
+@login_required
 def index():
+    return render_template(
+        "index.html",
+        user=current_user,
+        app_title=current_app.config.get("APP_TITLE", "MWM IDP")
+    )
+
+
+@auth_bp.route("/login", methods=["GET", "POST"])
+def login():
     if current_user.is_authenticated:
-        return render_template(
-            "index.html",
-            user=current_user,
-            app_title=current_app.config["APP_TITLE"]
-        )
+        return redirect(url_for("auth.index"))
+
+    user_service, _ = _get_services()
+    next_url = request.args.get("next") or url_for("auth.index")
+
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        user = user_service.authenticate(username, password)
+        if user:
+            login_user(user)
+            flash(f"Welcome back, {user.username}!", "success")
+            return redirect(next_url)
+        else:
+            flash("Invalid username or password", "danger")
+
     return render_template(
         "login.html",
-        app_title=current_app.config["APP_TITLE"],
+        app_title=current_app.config.get("APP_TITLE", "MWM IDP"),
+        action_url=url_for("auth.login", next=request.args.get("next"))
     )
 
 
@@ -98,7 +120,10 @@ def authorize():
             response_type=response_type,
             scope=scope,
             state=state,
-            app_title=current_app.config["APP_TITLE"],
+            app_title=current_app.config.get("APP_TITLE", "MWM IDP"),
+            action_url=url_for("auth.authorize", client_id=client_id, 
+                               redirect_uri=redirect_uri, response_type=response_type, 
+                               scope=scope, state=state)
         )
 
     # POST: 로그인 처리
@@ -120,6 +145,11 @@ def authorize():
 
     # 로그인 세션 생성 및 Authorization Code 발급
     login_user(user)
+
+    if not client_id:
+        # OAuth 파라미터가 없으면 대시보드로 이동
+        return redirect(url_for("auth.index"))
+
     try:
         oauth_service.validate_authorize_request(client_id, redirect_uri, response_type)
         code = oauth_service.create_authorization_code(
@@ -132,7 +162,10 @@ def authorize():
         return render_template("login.html", error=str(e),
                                client_id=client_id,
                                redirect_uri=redirect_uri,
-                               app_title=current_app.config["APP_TITLE"]), 500
+                               app_title=current_app.config.get("APP_TITLE", "MWM IDP"),
+                               action_url=url_for("auth.authorize", client_id=client_id, 
+                                                  redirect_uri=redirect_uri, response_type=response_type, 
+                                                  scope=scope, state=state)), 500
 
     # Redirect (POST 성공 시에도 1초 대기 랜딩 페이지 노출)
     params = {"code": code.code}
@@ -146,7 +179,7 @@ def authorize():
         "sso_landing.html",
         target_url=target_url,
         username=user.username,
-        app_title=current_app.config["APP_TITLE"]
+        app_title=current_app.config.get("APP_TITLE", "MWM IDP")
     )
 
 
@@ -194,6 +227,7 @@ def token():
 # ── Client CRUD UI ──
 
 @auth_bp.route("/clients")
+@login_required
 def client_list():
     """OAuth2 클라이언트 목록 조회 화면"""
     clients = OAuth2Client.query.order_by(OAuth2Client.id.desc()).all()
@@ -205,6 +239,7 @@ def client_list():
 
 
 @auth_bp.route("/clients/add", methods=["GET", "POST"])
+@login_required
 def client_add():
     """OAuth2 클라이언트 신규 등록 화면"""
     if request.method == "POST":
@@ -232,6 +267,7 @@ def client_add():
 
 
 @auth_bp.route("/clients/edit/<int:id>", methods=["GET", "POST"])
+@login_required
 def client_edit(id):
     """OAuth2 클라이언트 정보 수정 화면"""
     client = OAuth2Client.query.get_or_404(id)
@@ -258,6 +294,7 @@ def client_edit(id):
 
 
 @auth_bp.route("/clients/delete/<int:id>", methods=["POST"])
+@login_required
 def client_delete(id):
     """OAuth2 클라이언트 삭제"""
     client = OAuth2Client.query.get_or_404(id)

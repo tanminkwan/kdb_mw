@@ -129,7 +129,7 @@
         <div class="flash-msg danger">{{ error }}</div>
         {% endif %}
 
-        <form method="POST" action="{{ url_for('auth.authorize', client_id=client_id, redirect_uri=redirect_uri, response_type=response_type, scope=scope, state=state) }}">
+        <form method="POST" action="{{ action_url if action_url else url_for('auth.login') }}">
             <!-- OAuth2 Parameters as hidden fields (Backup for POST) -->
             <input type="hidden" name="client_id" value="{{ client_id }}">
             <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">

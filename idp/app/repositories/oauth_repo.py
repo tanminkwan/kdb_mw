@@ -2,7 +2,7 @@
 import secrets
 import time
 
-from idp.models import db, OAuth2Client, OAuth2AuthorizationCode, OAuth2Token
+from app.models import db, OAuth2Client, OAuth2AuthorizationCode, OAuth2Token
 
 
 class OAuthRepository:

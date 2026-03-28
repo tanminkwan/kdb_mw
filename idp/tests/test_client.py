@@ -1,8 +1,8 @@
 import pytest
-from idp import create_app
-from idp.models import db, OAuth2Client
+from app import create_app
+from app.models import db, OAuth2Client
 
-from idp.config import TestConfig
+from app.config import TestConfig
 
 @pytest.fixture
 def app():

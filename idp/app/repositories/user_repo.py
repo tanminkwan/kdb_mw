@@ -1,5 +1,5 @@
 """사용자 데이터 접근 계층. SOLID-SRP: DB CRUD 조작만 담당."""
-from idp.models import db, IdpUser
+from app.models import db, IdpUser
 
 
 class UserRepository:
