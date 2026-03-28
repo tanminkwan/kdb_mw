@@ -1,13 +1,13 @@
 import os
 from datetime import datetime
-from idp import create_app
+from app import create_app
 
 app = create_app()
 
 def init_idp(app):
     with app.app_context():
         # Setup OAuth Client
-        from idp.models import db, OAuth2Client
+        from app.models import db, OAuth2Client
         client_id = os.getenv('IDP_DEFAULT_CLIENT_ID', 'mwm-client')
         client = OAuth2Client.query.filter_by(client_id=client_id).first()
         if not client:
@@ -26,8 +26,8 @@ def init_idp(app):
             
         # Initial user sync
         try:
-            from idp.repositories.user_repo import UserRepository
-            from idp.services.sync_service import SyncService
+            from app.repositories.user_repo import UserRepository
+            from app.services.sync_service import SyncService
             user_repo = UserRepository()
             svc = SyncService(user_repo)
             for source in svc.get_sync_sources():

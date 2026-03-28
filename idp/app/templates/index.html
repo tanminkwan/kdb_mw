@@ -69,6 +69,23 @@
             border-color: rgba(239, 68, 68, 0.2);
             color: #ef4444;
         }
+        .btn-admin {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #38bdf8, #228be6);
+            border-radius: 12px;
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+        }
+        .btn-admin:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(56, 189, 248, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -88,6 +105,10 @@
             </div>
         </div>
         
+        <div class="admin-section" style="margin-bottom: 24px;">
+            <a href="{{ url_for('auth.client_list') }}" class="btn-admin">클라이언트 관리 (OAuth2)</a>
+        </div>
+
         <a href="{{ url_for('auth.logout') }}" class="btn-logout">로그아웃</a>
     </div>
 </body>

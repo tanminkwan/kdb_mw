@@ -1,5 +1,18 @@
 """OAuth2 Flow 통합 테스트. Coverage 목표: routes.py, oauth_service.py 100%"""
 from urllib.parse import urlparse, parse_qs
+import re
+
+
+def get_redirect_url(resp):
+    if resp.status_code == 302:
+        return resp.headers.get("Location") or resp.location
+    # SSO Landing page (200 OK)
+    html = resp.data.decode("utf-8")
+    # <meta http-equiv="refresh" content="1.0;url={{ target_url }}">
+    match = re.search(r'url=(.*?)"', html)
+    if match:
+        return match.group(1)
+    return None
 
 
 class TestAuthorize:
@@ -43,8 +56,9 @@ class TestAuthorize:
             "&response_type=code&scope=openid+profile+email",
             data={"username": "testuser", "password": "TestPass123!"},
         )
-        assert resp.status_code == 302
-        location = resp.headers["Location"]
+        assert resp.status_code == 200
+        location = get_redirect_url(resp)
+        assert location is not None
         assert "code=" in location
         parsed = urlparse(location)
         assert parsed.hostname == "localhost"
@@ -57,8 +71,9 @@ class TestAuthorize:
             "&response_type=code&state=xyz123",
             data={"username": "testuser", "password": "TestPass123!"},
         )
-        assert resp.status_code == 302
-        assert "state=xyz123" in resp.headers["Location"]
+        assert resp.status_code == 200
+        location = get_redirect_url(resp)
+        assert "state=xyz123" in location
 
     def test_authorize_post_bad_credentials(self, client, db, sample_user,
                                              sample_oauth_client):
@@ -79,7 +94,7 @@ class TestTokenExchange:
             "&response_type=code",
             data={"username": "testuser", "password": "TestPass123!"},
         )
-        location = resp.headers["Location"]
+        location = get_redirect_url(resp)
         qs = parse_qs(urlparse(location).query)
         return qs["code"][0]
 
@@ -110,7 +125,7 @@ class TestTokenExchange:
         assert resp.status_code == 400
 
     def test_token_invalid_client_secret(self, client, db, sample_user,
-                                          sample_oauth_client):
+                                           sample_oauth_client):
         code = self._get_code(client, sample_user, sample_oauth_client)
         resp = client.post("/oauth/token", data={
             "grant_type": "authorization_code",
@@ -139,7 +154,8 @@ class TestRefreshToken:
             "&response_type=code",
             data={"username": "testuser", "password": "TestPass123!"},
         )
-        qs = parse_qs(urlparse(resp.headers["Location"]).query)
+        location = get_redirect_url(resp)
+        qs = parse_qs(urlparse(location).query)
         code = qs["code"][0]
 
         resp2 = client.post("/oauth/token", data={
@@ -175,6 +191,15 @@ class TestRefreshToken:
 
 
 class TestIndexPage:
-    def test_index(self, client, db):
+    def test_index_unauthenticated_redirects(self, client, db):
+        # 인증 전에는 /로그인으로 리다이렉트 (302)
+        resp = client.get("/")
+        assert resp.status_code == 302
+        assert "/login" in resp.headers["Location"]
+
+    def test_index_authenticated_success(self, client, db, sample_user):
+        # 로그인 후에는 200 OK
+        client.post("/login", data={"username": "testuser", "password": "TestPass123!"})
         resp = client.get("/")
         assert resp.status_code == 200
+        assert b"Dashboard" in resp.data or b"Dashboard" in resp.data.decode()

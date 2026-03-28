@@ -20,7 +20,7 @@ services:
     volumes:
       - /home/hennry/data1:/var/lib/postgresql/data
       - ./create_db.sql:/docker-entrypoint-initdb.d/01_create_db.sql
-      - ./create_idp_db.sql:/docker-entrypoint-initdb.d/02_create_idp_db.sql
+      - ./idp/create_idp_db.sql:/docker-entrypoint-initdb.d/02_create_idp_db.sql
   mwm-minio:
     container_name: mwm-minio
     image: minio/minio
@@ -56,7 +56,7 @@ services:
     container_name: mwm-idp
     image: mwm-idp
     build:
-      context: .
+      context: ./idp
       dockerfile: Dockerfile.idp
     depends_on:
       - mwm-db

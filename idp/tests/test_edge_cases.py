@@ -6,11 +6,11 @@ import pytest
 from unittest.mock import patch, MagicMock
 from sqlalchemy import create_engine
 
-from idp.services.oauth_service import OAuthService
-from idp.services.sync_service import SyncService
-from idp.repositories.user_repo import UserRepository
-from idp.repositories.oauth_repo import OAuthRepository
-from idp.models import db as _db, IdpUser, OAuth2Token, OAuth2AuthorizationCode
+from app.services.oauth_service import OAuthService
+from app.services.sync_service import SyncService
+from app.repositories.user_repo import UserRepository
+from app.repositories.oauth_repo import OAuthRepository
+from app.models import db as _db, IdpUser, OAuth2Token, OAuth2AuthorizationCode
 
 
 class TestOAuthInvalidClientInExchange:
@@ -187,7 +187,7 @@ class TestRouteAuthorizeException:
     def test_authorize_code_creation_error(self, client, db, sample_user,
                                             sample_oauth_client):
         with patch(
-            "idp.routes.OAuthService.create_authorization_code",
+            "app.routes.OAuthService.create_authorization_code",
             side_effect=RuntimeError("DB crashed"),
         ):
             resp = client.post(

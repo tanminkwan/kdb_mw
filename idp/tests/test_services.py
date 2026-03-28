@@ -2,10 +2,10 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from idp.services.user_service import UserService
-from idp.services.oauth_service import OAuthService
-from idp.repositories.user_repo import UserRepository
-from idp.repositories.oauth_repo import OAuthRepository
+from app.services.user_service import UserService
+from app.services.oauth_service import OAuthService
+from app.repositories.user_repo import UserRepository
+from app.repositories.oauth_repo import OAuthRepository
 
 
 class TestUserServiceAuth:
@@ -92,7 +92,7 @@ class TestOAuthServiceEdgeCases:
                                             sample_oauth_client, access_token):
         with app.app_context():
             # 다른 client 생성
-            from idp.models import OAuth2Client
+            from app.models import OAuth2Client
             other = OAuth2Client(
                 client_id="other-client", client_secret="other-secret",
                 client_name="Other", redirect_uris="http://localhost/other",
