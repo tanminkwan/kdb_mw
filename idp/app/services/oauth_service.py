@@ -9,9 +9,10 @@ logger = logging.getLogger(__name__)
 class OAuthService:
     """OAuth2 인가 및 토큰 비즈니스 로직. Repository를 주입받아 사용 (SOLID-DIP)."""
 
-    def __init__(self, oauth_repo, user_repo):
+    def __init__(self, oauth_repo, user_repo, oidc_service=None):
         self.oauth_repo = oauth_repo
         self.user_repo = user_repo
+        self.oidc_service = oidc_service
 
     def validate_authorize_request(self, client_id, redirect_uri, response_type):
         client = self.oauth_repo.get_client_by_id(client_id)
@@ -23,15 +24,16 @@ class OAuthService:
             raise ValueError(f"Unsupported response_type: {response_type}")
         return client
 
-    def create_authorization_code(self, client_id, redirect_uri, scope, user_id):
+    def create_authorization_code(self, client_id, redirect_uri, scope, user_id, nonce=None):
         code = self.oauth_repo.create_authorization_code(
             client_id=client_id,
             redirect_uri=redirect_uri,
             scope=scope,
             user_id=user_id,
+            nonce=nonce,
         )
         self.oauth_repo.commit()
-        logger.info(f"Authorization code created for user_id={user_id}")
+        logger.info(f"Authorization code created for user_id={user_id}, nonce={'yes' if nonce else 'no'}")
         return code
 
     def exchange_code_for_token(self, code_value, client_id, client_secret,
@@ -65,12 +67,26 @@ class OAuthService:
             expires_in=expires_in,
         )
 
+        # OIDC: ID Token 생성 (scope에 openid 포함 시)
+        token_data = token.to_dict()
+        if "openid" in (code.scope or "") and self.oidc_service:
+            user = self.user_repo.get_by_id(code.user_id)
+            if user:
+                id_token = self.oidc_service.create_id_token(
+                    user=user,
+                    client_id=client_id,
+                    nonce=code.nonce,
+                    policy_mapping=client.policy_mapping
+                )
+                token_data["id_token"] = id_token
+                logger.info(f"ID Token generated for user_id={code.user_id}")
+
         # Code 삭제 (1회용)
         self.oauth_repo.delete_authorization_code(code)
         self.oauth_repo.commit()
 
         logger.info(f"Token issued for user_id={code.user_id}")
-        return token
+        return token_data
 
     def refresh_access_token(self, refresh_token_value, client_id, client_secret):
         # Client 검증
@@ -97,7 +113,7 @@ class OAuthService:
         self.oauth_repo.commit()
 
         logger.info(f"Token refreshed for user_id={old_token.user_id}")
-        return new_token
+        return new_token.to_dict()
 
     def get_userinfo(self, access_token):
         token = self.oauth_repo.get_token_by_access(access_token)
@@ -130,7 +146,7 @@ class OAuthService:
         return client
 
     def create_client(self, client_id, client_secret, client_name, redirect_uris,
-                      grant_types=None, scope=None):
+                      grant_types=None, scope=None, policy_mapping=None):
         if self.oauth_repo.get_client_by_id(client_id):
             raise ValueError(f"Client ID '{client_id}' already exists")
 
@@ -140,7 +156,8 @@ class OAuthService:
             client_name=client_name,
             redirect_uris=redirect_uris,
             grant_types=grant_types or "authorization_code refresh_token",
-            scope=scope or "openid profile email"
+            scope=scope or "openid profile email",
+            policy_mapping=policy_mapping or {}
         )
         self.oauth_repo.commit()
         logger.info(f"New OAuth2 client created: {client_id}")

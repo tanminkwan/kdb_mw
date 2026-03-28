@@ -39,13 +39,14 @@ class OAuthRepository:
 
     # ── Authorization Code ──
     def create_authorization_code(self, client_id, redirect_uri, scope, user_id,
-                                  code_lifetime=300):
+                                  nonce=None, code_lifetime=300):
         code = OAuth2AuthorizationCode(
             code=secrets.token_urlsafe(32),
             client_id=client_id,
             redirect_uri=redirect_uri,
             scope=scope,
             user_id=user_id,
+            nonce=nonce,
             expires_at=int(time.time()) + code_lifetime,
         )
         db.session.add(code)

@@ -138,9 +138,22 @@
                 <span class="help-text">인증 후 돌아올 주소입니다. (공백으로 구분하여 여러 개 입력 가능)</span>
             </div>
 
-            <div class="form-group" style="display: none;">
-                <input type="hidden" name="grant_types" value="authorization_code refresh_token">
-                <input type="hidden" name="scope" value="openid profile email">
+            <div class="form-group">
+                <label class="form-label" for="policy_mapping">POLICY MAPPING (JSON)</label>
+                <textarea id="policy_mapping" name="policy_mapping" class="form-input" placeholder='{"Admin": "consoleAdmin", "User": "readwrite"}' rows="2">{{ (client.policy_mapping | tojson) if client and client.policy_mapping else '{}' }}</textarea>
+                <span class="help-text">역할(IDP)을 정책(Service)으로 매핑합니다. JSON 형식으로 입력하세요.</span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="grant_types">GRANT TYPES</label>
+                <input type="text" id="grant_types" name="grant_types" class="form-input" placeholder="e.g. authorization_code refresh_token" value="{{ client.grant_types if client else 'authorization_code refresh_token' }}" required>
+                <span class="help-text">허용할 OAuth2 권한 부여 방식입니다. (공백 구분)</span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="scope">SCOPE</label>
+                <input type="text" id="scope" name="scope" class="form-input" placeholder="e.g. openid profile email groups" value="{{ client.scope if client else 'openid profile email' }}" required>
+                <span class="help-text">허용할 데이터 접근 범위입니다. (공백 구분, MinIO는 groups 필수)</span>
             </div>
 
             <div class="btn-row">

@@ -23,6 +23,7 @@ class IdpUser(db.Model, UserMixin):
     roles = Column(JSON, default=list)
     sync_source = Column(String(50), nullable=True)
     sync_id = Column(String(100), nullable=True)
+    api_key = Column(String(128), unique=True, nullable=True, index=True) # API authentication key
     created_on = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_on = Column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
@@ -49,6 +50,7 @@ class IdpUser(db.Model, UserMixin):
             "last_name": self.last_name,
             "active": self.active,
             "roles": self.roles or [],
+            "api_key": self.api_key,
             "sync_source": self.sync_source,
             "sync_id": self.sync_id,
             "created_on": self.created_on.isoformat() if self.created_on else None,
@@ -70,6 +72,7 @@ class OAuth2Client(db.Model):
     redirect_uris = Column(Text, nullable=False, default="")
     grant_types = Column(String(200), nullable=False, default="authorization_code")
     scope = Column(String(200), nullable=False, default="openid profile email")
+    policy_mapping = Column(JSON, default=dict) # Role mapping for specific services (e.g., Minio)
     created_on = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     def get_redirect_uris(self):
@@ -97,6 +100,7 @@ class OAuth2Client(db.Model):
             "redirect_uris": self.get_redirect_uris(),
             "grant_types": self.grant_types.split(),
             "scope": self.scope,
+            "policy_mapping": self.policy_mapping or {},
         }
 
     def __repr__(self):
@@ -113,6 +117,7 @@ class OAuth2AuthorizationCode(db.Model):
     redirect_uri = Column(Text, nullable=False)
     scope = Column(String(200), nullable=False, default="")
     user_id = Column(Integer, nullable=False)
+    nonce = Column(String(128), nullable=True) # OIDC nonce
     expires_at = Column(Integer, nullable=False)
 
     def is_expired(self):

@@ -1,8 +1,8 @@
 # SPEC_012: OAuth2 IDP Server (Authlib 기반) 구축 및 mwm-app 연계
 
-> **날짜**: 2026-03-27  
-> **버전**: `리발소(VER:20260327.003)`  
-> **변경 요약**: Authlib 기반 커스텀 OAuth2 IDP 서버를 독립 DB로 신규 구축하고, 범용 외부 DB 동기화 기능을 제공하며, mwm-app의 인증 체계를 AUTH_OAUTH로 전환한다.
+> **날짜**: 2026-03-28  
+> **버전**: `리발소(VER:20260328.002)`  
+> **변경 요약**: Authlib 기반 OAuth2 IDP 서버를 OIDC(OpenID Connect) 표준으로 확장하여 ID Token 발급, Discovery 엔드포인트 및 JWKS 지원을 추가한다.
 
 ---
 
@@ -126,8 +126,8 @@ GRANT ALL PRIVILEGES ON DATABASE idp TO tiffanie;
 
 | 테이블 | 설명 | 주요 컬럼 |
 |--------|------|-----------|
-| `idp_user` | IDP 사용자 | id, username, password_hash, email, first_name, last_name, active, roles(JSON), sync_source, sync_id, created_on, updated_on |
-| `oauth2_client` | OAuth2 클라이언트 등록 | id, client_id, client_secret, client_name, redirect_uris, grant_types, scope |
+| `idp_user` | IDP 사용자 | id, username, password_hash, email, first_name, last_name, active, roles(JSON), api_key, sync_source, sync_id, created_on, updated_on |
+| `oauth2_client` | OAuth2 클라이언트 등록 | id, client_id, client_secret, client_name, redirect_uris, grant_types, scope, policy_mapping(JSON) |
 | `oauth2_token` | 발급된 Access/Refresh Token | id, token_type, access_token, refresh_token, scope, expires_in, user_id, client_id |
 | `oauth2_code` | Authorization Code (임시) | id, code, client_id, redirect_uri, scope, user_id, expires_at |
 
@@ -142,6 +142,7 @@ GRANT ALL PRIVILEGES ON DATABASE idp TO tiffanie;
 | `last_name` | VARCHAR(64) | 성 |
 | `active` | BOOLEAN | 활성 여부 |
 | `roles` | JSON | 역할 목록 (예: `["Admin", "mw_rgroup"]`) |
+| `api_key` | VARCHAR(64), UNIQUE | 관리자 전용 REST API 접근 키 (Bearer 토큰) |
 | `sync_source` | VARCHAR(50), NULL | 동기화 출처 식별자 (예: `"mwm_app"`, NULL이면 IDP 직접 생성) |
 | `sync_id` | VARCHAR(100), NULL | 원본 테이블의 PK 또는 고유 식별값 |
 
@@ -177,8 +178,9 @@ GRANT ALL PRIVILEGES ON DATABASE idp TO tiffanie;
 
 | URL | 설명 |
 |-----|------|
-| `/admin/users` | 사용자 목록/등록/수정/삭제 화면 |
-| `/admin/clients` | OAuth2 Client 관리 화면 |
+| `/` | 사용자 본인 정보 메인 대시보드 |
+| `/admin/settings` | **중앙 관리자 콘솔** (Client, API Key, Sync 통합 관리) |
+| `/admin/clients` | OAuth2 Client 관리 화면 (어드민 내 포함) |
 
 ---
 
@@ -301,6 +303,16 @@ def sync_users(source_name: str) -> dict:
      └─(7) 결과 반환:
            {"created": 5, "updated": 3, "deactivated": 1, "errors": []}
 ```
+
+### 4-6. REST API 보안 (API Key)
+IDP의 관리용 API는 권한이 검증된 사용자의 **`api_key`**를 통한 Bearer 인증을 수행한다.
+- **인증 헤더**: `Authorization: Bearer <mwm_sk_...>`
+- **보안 로직**: `api_key` 일치 여부 확인 후, 해당 사용자가 `Admin` 또는 `PowerUser` 역할인지 최종 검증.
+
+### 4-7. 관리자 콘솔 (Admin Console)
+복잡한 수동 조작을 배제하기 위해 통합 UI를 제공한다.
+- **동기화 트리거**: 단일 버튼 클릭으로 `sync_users("mwm_app")` 엔진 가동.
+- **시스템 모니터링**: 등록된 전체 사용자의 Role 및 Sync 상태를 Read-only 리스트로 제공.
 
 ### 4-5. 동기화 정책
 
@@ -1045,3 +1057,55 @@ curl -X POST http://localhost:5000/api/sync/mwm_app
   * **원인 2**: 양 컨테이너 간의 네트워크 링크(`links: mwm-idp`)와 `IDP_INTERNAL_SERVER_URL` 상태를 점검하세요.
   * **해결**: 최신 `idp/routes.py` 패치를 통해 HTTP Basic Auth를 지원하도록 업데이트되었는지 확인하세요.
 ```
+
+---
+
+## 15. OIDC (OpenID Connect) 지원 확장
+
+### 15-1. 설계 목표
+- **표준 준수**: OpenID Connect Core 1.0 사양을 준수하여 MinIO, Metabase 등 표준 OIDC 클라이언트와 호환성을 확보한다.
+- **ID Token 발급**: Access Token 외에 사용자 인증 정보를 담은 JWT 형식의 `id_token`을 발급한다.
+- **비대칭키 서명**: 보안 강화를 위해 RS256(RSA Signature with SHA-256) 알고리즘을 사용하여 토큰을 서명한다.
+- **자동 구성**: Discovery 엔드포인트를 제공하여 클라이언트가 수동 설정 없이 IDP 정보를 가져올 수 있도록 한다.
+
+### 15-2. 주요 추가 기능
+
+| 기능 | 설명 | 경로 |
+|------|------|------|
+| **OIDC Discovery** | IDP의 설정을 JSON으로 제공 | `/.well-known/openid-configuration` |
+| **JWKS (JSON Web Key Set)** | 토큰 검증을 위한 공개키 목록 제공 | `/.well-known/jwks.json` |
+| **ID Token 발급** | 로그인 성공 시 `id_token` 반환 | `/oauth/token` 응답에 포함 |
+| **표준 Claim 매핑** | 사용 정보를 OIDC 표준 필드로 변환 | `sub`, `email`, `preferred_username` 등 |
+
+### 15-3. ID Token 클레임 설계 (Claims)
+
+| 클레임 | 설명 | 소스 (idp_user) |
+|--------|------|----------------|
+| `iss` | Issuer (발행자 주소) | `IDP_EXTERNAL_SERVER_URL` |
+| `sub` | Subject (사용자 고유 식별자) | `str(id)` |
+| `aud` | Audience (대상 클라이언트 ID) | `client_id` |
+| `exp` | Expiration Time (만료 시간) | 현재 시간 + 유효 기간 |
+| `iat` | Issued At (발행 시간) | 현재 시간 |
+| `preferred_username`| 사용자 로그인 ID | `username` |
+| `email` | 이메일 주소 | `email` |
+| `name` | 전체 이름 | `f"{first_name} {last_name}"` |
+| `groups` | 역할(Role) 목록 | `roles` (JSON Array) |
+
+### 15-4. 보안 및 키 관리 (Key Management)
+
+- **알고리즘**: **RS256** (상용 수준의 보안 확보)
+- **키 생성**: 2048비트 RSA 키 쌍 사용.
+- **설정 방식**:
+  - `IDP_RSA_PRIVATE_KEY`: 환경변수로 주입받거나 파일로 관리.
+  - 기본값: 개발 환경용 고정 키 제공 (운영 배포 시 필히 변경).
+
+### 15-5. 수정 및 추가 파일 목록
+
+| 구분 | 파일 | 내용 |
+|------|------|----------|
+| **IDP** | `idp/app/config.py` | `IDP_RSA_PRIVATE_KEY` 추가 |
+| **IDP** | `idp/app/routes.py` | Discovery, JWKS 라우트 추가 |
+| **IDP** | `idp/app/services/oauth_service.py` | `id_token` 생성 로직 추가 (PyJWT/Authlib 사용) |
+| **IDP** | `idp/app/models.py` | `OAuth2Token.to_dict()`에 `id_token` 필드 추가 |
+
+---
