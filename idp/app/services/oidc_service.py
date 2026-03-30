@@ -8,24 +8,38 @@ from flask import current_app
 class OIDCService:
     """OIDC (OpenID Connect) 핵심 로직. ID Token 생성 및 JWKS 추출 담당."""
 
+    _private_key = None
+    _public_key = None
+    _jwks = None
+
     def __init__(self):
-        self._private_key = None
-        self._public_key = None
-        self._jwks = None
+        pass
 
     def _get_private_key(self):
-        if self._private_key is None:
-            key_pem = current_app.config.get("IDP_RSA_PRIVATE_KEY")
-            if not key_pem:
+        if OIDCService._private_key is None:
+            key_source = current_app.config.get("IDP_RSA_PRIVATE_KEY")
+            if not key_source:
                 raise ValueError("IDP_RSA_PRIVATE_KEY is not configured")
             
+            # If it's a file path, read the file
+            import os
+            if os.path.isfile(key_source):
+                try:
+                    with open(key_source, 'r') as f:
+                        key_pem = f.read()
+                except Exception as e:
+                    current_app.logger.error(f"Failed to read RSA private key from file {key_source}: {str(e)}")
+                    raise ValueError(f"Could not read RSA private key file: {str(e)}")
+            else:
+                # Assume it's the PEM content directly
+                key_pem = key_source
+
             try:
-                # PEM 형식이 아닐 경우 (예: 단순히 문자열로 되어있을 때) 처리
-                if "-----BEGIN RSA PRIVATE KEY-----" not in key_pem:
-                    # 환경변수 등에서 \n이 탈출된 경우 처리
+                # Handle escaped newlines if coming from env var
+                if "-----BEGIN" not in key_pem:
                     key_pem = key_pem.replace("\\n", "\n")
                 
-                self._private_key = serialization.load_pem_private_key(
+                OIDCService._private_key = serialization.load_pem_private_key(
                     key_pem.encode("utf-8"),
                     password=None,
                     backend=default_backend()
@@ -34,17 +48,17 @@ class OIDCService:
                 current_app.logger.error(f"Failed to load RSA private key: {str(e)}")
                 raise ValueError(f"Invalid RSA private key format: {str(e)}")
         
-        return self._private_key
+        return OIDCService._private_key
 
     def get_public_key(self):
-        if self._public_key is None:
+        if OIDCService._public_key is None:
             priv_key = self._get_private_key()
-            self._public_key = priv_key.public_key()
-        return self._public_key
+            OIDCService._public_key = priv_key.public_key()
+        return OIDCService._public_key
 
     def get_jwks(self):
         """JWKS (JSON Web Key Set) 생성"""
-        if self._jwks is None:
+        if OIDCService._jwks is None:
             pub_key = self.get_public_key()
             numbers = pub_key.public_numbers()
             
@@ -56,7 +70,7 @@ class OIDCService:
                 b = value.to_bytes(byte_len, 'big')
                 return base64.urlsafe_b64encode(b).decode('utf-8').rstrip('=')
 
-            self._jwks = {
+            OIDCService._jwks = {
                 "keys": [
                     {
                         "kty": "RSA",
@@ -68,7 +82,7 @@ class OIDCService:
                     }
                 ]
             }
-        return self._jwks
+        return OIDCService._jwks
 
     def create_id_token(self, user, client_id, nonce=None, policy_mapping=None):
         """ID Token (JWT) 생성"""
@@ -101,7 +115,7 @@ class OIDCService:
         
         token = jwt.encode(
             payload, 
-            current_app.config.get("IDP_RSA_PRIVATE_KEY"), 
+            self._get_private_key(), 
             algorithm="RS256", 
             headers=headers
         )
