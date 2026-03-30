@@ -29,12 +29,8 @@ services:
       - '9001:9001'
     environment:
       - MINIO_CONFIG_ENV_FILE=/etc/config.env
-      - MINIO_IDENTITY_OPENID_CONFIG_URL=https://idp.mwm.local:20443/.well-known/openid-configuration
-      - MINIO_IDENTITY_OPENID_CLIENT_ID=minio-client
-      - MINIO_IDENTITY_OPENID_CLIENT_SECRET=minio-secret
-      - MINIO_IDENTITY_OPENID_SCOPES=openid,profile,email,groups
-      - MINIO_IDENTITY_OPENID_REDIRECT_URI=https://minio.mwm.local:20443/oauth_callback
-      - MINIO_IDENTITY_OPENID_CLAIM_NAME=policy
+    depends_on:
+      - mwm-nginx
     volumes:
       - /home/hennry/minio/data:/mnt/data
       - ./minio_config.env:/etc/config.env
@@ -80,10 +76,13 @@ services:
       IDP_EXTERNAL_SERVER_URL: "https://idp.mwm.local:20443"
       IDP_DATABASE_URI: "postgresql://tiffanie:1q2w3e4r!!@mwm-db:5432/idp"
       IDP_SECRET_KEY: "idp-secret-key-change-me"
+      IDP_RSA_PRIVATE_KEY: "/etc/idp/certs/idp_private.pem"
       IDP_MWM_CLIENT_ID: "mwm-client"
       IDP_MWM_CLIENT_SECRET: "mwm-secret"
       IDP_MWM_REDIRECT_URI: "https://app.mwm.local:20443/idp/callback"
       SYNC_MWM_DB_URI: "postgresql://tiffanie:1q2w3e4r!!@mwm-db:5432/mw"
+    volumes:
+      - ./idp/certs:/etc/idp/certs:ro
     links:
       - mwm-db
     extra_hosts:
@@ -102,7 +101,6 @@ services:
     depends_on:
       - mwm-db
       - mwm-redis
-      - mwm-minio
       - mwm-kroki
     ports:
       - 8000:8000
@@ -123,7 +121,6 @@ services:
     links:
       - mwm-db
       - mwm-redis
-      - mwm-minio
       - mwm-kroki
     extra_hosts:
       - "app.mwm.local:host-gateway"
@@ -172,7 +169,6 @@ services:
     depends_on:
       - mwm-app
       - mwm-idp
-      - mwm-minio
     extra_hosts:
       - "app.mwm.local:host-gateway"
       - "idp.mwm.local:host-gateway"

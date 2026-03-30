@@ -40,6 +40,14 @@ def create_app(config_class=None):
     with app.app_context():
         db.create_all()
         _register_default_client(app)
+        # RSA Private Key 사전 로드 (Fail-fast 및 메모리 캐싱)
+        from .services.oidc_service import OIDCService
+        try:
+            OIDCService()._get_private_key()
+            app.logger.info("OIDC RSA Private Key successfully loaded into memory.")
+        except Exception as e:
+            app.logger.error(f"Failed to load OIDC RSA Private Key at startup: {str(e)}")
+            raise e
 
     # Blueprints
     from .routes import auth_bp
