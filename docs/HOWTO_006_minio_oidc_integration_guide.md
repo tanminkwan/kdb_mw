@@ -30,7 +30,9 @@
 
 MinIO 서버가 자체 서명 인증서(Self-signed)를 사용하는 IDP를 신뢰할 수 있도록 인증서를 마운트하고 환경 변수를 설정합니다.
 
-### 3.1 `docker-compose.yml` 설정 예시
+### 3.1 방법 1: `docker-compose.yml` 직접 설정 (빠른 테스트용)
+설정의 가시성이 좋아 초기 연동 테스트에 유리합니다.
+
 
 ```yaml
 services:
@@ -43,13 +45,36 @@ services:
       - MINIO_IDENTITY_OPENID_SCOPES=openid,profile,email,groups
       - MINIO_IDENTITY_OPENID_REDIRECT_URI=https://minio.mwm.local:20443/oauth_callback
       - MINIO_IDENTITY_OPENID_CLAIM_NAME=policy
+      - MINIO_IDENTITY_OPENID_DISPLAY_NAME="MWM IDP"
     volumes:
       - /home/hennry/minio/data:/mnt/data
       - ./minio_config.env:/etc/config.env
       - ./nginx/certs/mwm_local.crt:/root/.minio/certs/CAs/mwm_local.crt:ro
 ```
+### 3.2 방법 2: 외부 설정 파일(`.env`) 사용 (운영/실무 권장)
+설정 항목이 많아질 경우 관리 효율성을 위해 별도의 파일을 사용합니다.
 
-### 3.2 SSL 인증서 신뢰 설정 (Trust Store)
+1. **`minio_config.env` 파일 생성**:
+   ```env
+   MINIO_IDENTITY_OPENID_CONFIG_URL=https://idp.mwm.local:20443/.well-known/openid-configuration
+   MINIO_IDENTITY_OPENID_CLIENT_ID=minio-client
+   MINIO_IDENTITY_OPENID_CLIENT_SECRET=minio-secret
+   MINIO_IDENTITY_OPENID_SCOPES=openid,profile,email,groups
+   MINIO_IDENTITY_OPENID_REDIRECT_URI=https://minio.mwm.local:20443/oauth_callback
+   MINIO_IDENTITY_OPENID_CLAIM_NAME=policy
+   MINIO_IDENTITY_OPENID_DISPLAY_NAME="MWM IDP"
+   ```
+
+2. **`docker-compose.yml` 마운트 설정**:
+   마운트한 파일을 컨테이너 내부의 `/etc/config.env` 경로에 둡니다.
+   ```yaml
+   services:
+     mwm-minio:
+       volumes:
+         - ./minio_config.env:/etc/config.env
+   ```
+
+### 3.3 SSL 인증서 신뢰 설정 (Trust Store)
 자체 서명 인증서(Self-signed) 환경에서 MinIO가 IDP의 SSL을 신뢰할 수 있도록 인증서를 시스템 보관소에 주입합니다.
 
 - **마운트 경로**: `/root/.minio/certs/CAs/` 디렉토리에 인증서(`.crt`)를 마운트합니다.
