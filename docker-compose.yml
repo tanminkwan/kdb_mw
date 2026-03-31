@@ -37,10 +37,10 @@ services:
       - ./nginx/certs/mwm_local.crt:/root/.minio/certs/CAs/mwm_local.crt:ro
     command: server --console-address ":9001"
     extra_hosts:
-      - "app.mwm.local:host-gateway"
-      - "idp.mwm.local:host-gateway"
-      - "minio.mwm.local:host-gateway"
-      - "s3.mwm.local:host-gateway"
+      - "app.mwm.local:172.26.0.1"
+      - "idp.mwm.local:172.26.0.1"
+      - "minio.mwm.local:172.26.0.1"
+      - "s3.mwm.local:172.26.0.1"
   #  mwm-prefect-server:
   #    container_name: mwm-prefect-server
   #    image: prefecthq/prefect:3-latest
@@ -86,10 +86,10 @@ services:
     links:
       - mwm-db
     extra_hosts:
-      - "app.mwm.local:host-gateway"
-      - "idp.mwm.local:host-gateway"
-      - "minio.mwm.local:host-gateway"
-      - "s3.mwm.local:host-gateway"
+      - "app.mwm.local:172.26.0.1"
+      - "idp.mwm.local:172.26.0.1"
+      - "minio.mwm.local:172.26.0.1"
+      - "s3.mwm.local:172.26.0.1"
 
   mwm-app:
     container_name: mwm-app
@@ -123,10 +123,10 @@ services:
       - mwm-redis
       - mwm-kroki
     extra_hosts:
-      - "app.mwm.local:host-gateway"
-      - "idp.mwm.local:host-gateway"
-      - "minio.mwm.local:host-gateway"
-      - "s3.mwm.local:host-gateway"
+      - "app.mwm.local:172.26.0.1"
+      - "idp.mwm.local:172.26.0.1"
+      - "minio.mwm.local:172.26.0.1"
+      - "s3.mwm.local:172.26.0.1"
 
   mwm-kroki:
     container_name: mwm-kroki
@@ -170,10 +170,10 @@ services:
       - mwm-app
       - mwm-idp
     extra_hosts:
-      - "app.mwm.local:host-gateway"
-      - "idp.mwm.local:host-gateway"
-      - "minio.mwm.local:host-gateway"
-      - "s3.mwm.local:host-gateway"
+      - "app.mwm.local:172.26.0.1"
+      - "idp.mwm.local:172.26.0.1"
+      - "minio.mwm.local:172.26.0.1"
+      - "s3.mwm.local:172.26.0.1"
 
 volumes:
   redis_data: #  prefect:
