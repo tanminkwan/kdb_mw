@@ -107,9 +107,9 @@ chmod 600 idp/certs/idp_private.pem
       # 주의: PEM 파일 '내용'을 넣는 것이 아니라, 마운트된 '파일 경로'를 지정합니다.
       - IDP_RSA_PRIVATE_KEY=/etc/idp/certs/idp_private.pem
       
-      # 기본 OAuth2 클라이언트(mwm-app) 자동 등록 정보
       - IDP_MWM_CLIENT_ID=mwm-client
       - IDP_MWM_CLIENT_SECRET=mwm-secret
+      - IDP_MWM_REDIRECT_URI=https://app.mwm.local:20443/idp/callback
     volumes:
       # [필수] 호스트의 PEM 파일을 컨테이너 내부로 마운트 (Read-only)
       - ./idp/certs:/etc/idp/certs:ro
@@ -156,14 +156,22 @@ docker compose up -d mwm-idp
 
 ## 7. Step 5: 초기 사용자 동기화 (Initial Sync)
 
-서비스 기동 시 자동으로 수행되지만, 명시적으로 `mwm-app`의 사용자(`ab_user`)를 가져오려면 API를 호출합니다.
+서비스 기동 시 자동으로 수행되지만, 운영 중에 명시적으로 `mwm-app`의 사용자(`ab_user`)를 다시 가져오려면 관리자 전용 API를 호출합니다.
 
+### 7-1. API 사용 제약 (Constraints)
+- **인증 방식**: `Authorization: Bearer <API_KEY>` 헤더가 필수입니다.
+- **권한 요구**: API Key를 발급받은 사용자가 **`Admin`** 또는 **`PowerUser`** 역할을 보유해야 합니다.
+- **예외**: 서버 기동 시 `init_idp()`에 의해 수행되는 최초 동기화는 내부 프로세스이므로 별도의 인증 없이 자동 실행됩니다.
+
+### 7-2. 동기화 API 호출 예시
 ```bash
-# mwm-idp 컨테이너 내부에서 동기화 명령 실행 (또는 REST API 호출)
-curl -X POST http://localhost:5000/api/sync/mwm_app
+# 관리자 API Key를 사용하여 mwm-app 사용자 동기화
+curl -X POST https://idp.mwm.local:20443/api/sync/mwm_app \
+     -H "Authorization: Bearer mwm_sk_your_admin_api_key_here" \
+     -H "Content-Type: application/json"
 ```
 
-로그를 통해 동기화 결과를 확인합니다.
+성공 시 `{ "created": n, "updated": m, ... }` 형태의 JSON 결과가 반환됩니다. 로그를 통해서도 상세 내역 확인이 가능합니다.
 `docker compose logs -f mwm-idp`
 
 ---

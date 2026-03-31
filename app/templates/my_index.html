@@ -333,7 +333,14 @@
             <!-- Not Logged In Message -->
             <div class="card full-width" style="text-align: center; padding: 5rem;">
                 <h3 style="color: var(--text-muted); margin-bottom: 1.5rem;">서비스를 이용하시려면 로그인이 필요합니다.</h3>
-                <a href="/login/" class="btn" style="display: inline-block; text-decoration: none; padding: 1rem 2rem; font-size: 1.2rem;">로그인 하러가기</a>
+                <div style="display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap;">
+                    <a href="/idp/login" class="btn" style="display: inline-block; text-decoration: none; padding: 1.2rem 2.5rem; font-size: 1.3rem; background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); font-weight: 700;">
+                        🔐 MWM IDP 계정으로 로그인
+                    </a>
+                    <a href="/login/" class="btn" style="display: inline-block; text-decoration: none; padding: 1.2rem 2.5rem; font-size: 1.3rem; background-color: #64748b; color: white; border-radius: 12px;">
+                        ID / PW로 Login 하기
+                    </a>
+                </div>
             </div>
         {% endif %}
     </div>

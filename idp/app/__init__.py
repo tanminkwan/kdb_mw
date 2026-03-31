@@ -60,20 +60,29 @@ def create_app(config_class=None):
 
 
 def _register_default_client(app):
-    """초기 OAuth2 Client(mwm-app) 자동 등록"""
+    """초기 OAuth2 Client(mwm-app) 자동 등록 및 정보 동기화"""
     from .models import OAuth2Client
 
     client_id = app.config["DEFAULT_CLIENT_ID"]
+    redirect_uri = app.config["DEFAULT_REDIRECT_URI"]
     existing = OAuth2Client.query.filter_by(client_id=client_id).first()
+
     if not existing:
         client = OAuth2Client(
             client_id=client_id,
             client_secret=app.config["DEFAULT_CLIENT_SECRET"],
             client_name="MWM App",
-            redirect_uris=app.config["DEFAULT_REDIRECT_URI"],
+            redirect_uris=redirect_uri,
             grant_types="authorization_code refresh_token",
             scope="openid profile email",
         )
         db.session.add(client)
         db.session.commit()
-        logging.info(f"Default OAuth2 client '{client_id}' registered.")
+        logging.info(f"Default OAuth2 client '{client_id}' registered with {redirect_uri}")
+    else:
+        # 이미 존재하더라도 설정값과 다르면 업데이트 (Production 도메인 반영 용도)
+        if existing.redirect_uris != redirect_uri:
+            old_uri = existing.redirect_uris
+            existing.redirect_uris = redirect_uri
+            db.session.commit()
+            logging.info(f"Updated Redirect URIs for '{client_id}': {old_uri} -> {redirect_uri}")
