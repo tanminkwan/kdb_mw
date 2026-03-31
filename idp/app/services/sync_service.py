@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from flask import current_app
 from sqlalchemy import create_engine, text
+from app.models import db
 
 logger = logging.getLogger(__name__)
 
@@ -161,24 +162,32 @@ class SyncService:
                     self.user_repo.update(existing, **mapped)
                     result["updated"] += 1
                 else:
-                    # 신규 생성 시 username/email 충돌 체크
+                    # 신규 생성 시 중복 체크 (Race condition 방지를 위해 try-except 사용)
                     username = mapped.get("username")
                     email = mapped.get("email")
-                    if username and self.user_repo.get_by_username(username):
-                        result["errors"].append(
-                            f"Username conflict: {username} (sync_id={sync_id})"
-                        )
-                        continue
-                    if email and self.user_repo.get_by_email(email):
-                        result["errors"].append(
-                            f"Email conflict: {email} (sync_id={sync_id})"
-                        )
-                        continue
+                    
+                    try:
+                        # Nested transaction (savepoint) 사용: 충돌 시 이 사용자에 대한 작업만 롤백
+                        with db.session.begin_nested():
+                            if username and self.user_repo.get_by_username(username):
+                                raise ValueError(f"Username conflict: {username}")
+                            if email and self.user_repo.get_by_email(email):
+                                raise ValueError(f"Email conflict: {email}")
 
-                    mapped["sync_source"] = source_name
-                    mapped["sync_id"] = sync_id
-                    self.user_repo.create(**mapped)
-                    result["created"] += 1
+                            mapped["sync_source"] = source_name
+                            mapped["sync_id"] = sync_id
+                            self.user_repo.create(**mapped)
+                            result["created"] += 1
+                    except Exception as e:
+                        # 이미 다른 워커가 생성했다면 update로 전환 시도
+                        db.session.rollback() # Nested transaction만 롤백
+                        existing = self.user_repo.get_by_sync(source_name, sync_id)
+                        if existing:
+                            self.user_repo.update(existing, **mapped)
+                            result["updated"] += 1
+                        else:
+                            result["errors"].append(f"sync_id={sync_id}: {str(e)}")
+                            continue
 
             except Exception as e:
                 result["errors"].append(f"sync_id={sync_id}: {str(e)}")
