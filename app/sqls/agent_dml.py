@@ -309,7 +309,29 @@ class AutorunResult:
                 )
             )
 
-        return update_rows('mw_web_domain', update_dict, filter_dict)
+        rtn, msg = update_rows('mw_web_domain', update_dict, filter_dict)
+
+        # mw_web_domain에 해당 레코드가 없으면 → mw_etc_ssl_domain에 upsert
+        if rtn < 0:
+            etc_filter = dict(
+                host_id     = host_id,
+                domain_name = domain,
+                port        = port
+            )
+
+            etc_rec, _ = select_row('mw_etc_ssl_domain', etc_filter)
+
+            etc_update = dict(**update_dict, agent_id=result.agent_id)
+
+            if etc_rec:
+                rtn, msg = update_rows('mw_etc_ssl_domain', etc_update, etc_filter)
+            else:
+                insert_dict = dict(**etc_filter, **etc_update)
+                rtn, msg = insert_row('mw_etc_ssl_domain', insert_dict)
+                if rtn > 0:
+                    msg = 'Inserted into mw_etc_ssl_domain'
+
+        return rtn, msg
 
     def update_connect_ssl(self):
 
