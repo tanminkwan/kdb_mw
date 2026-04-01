@@ -365,6 +365,12 @@ class MwWas(Model):
     def view_relationship(self):
         return Markup(getDiagramButton('WAS',self.was_id,'^_^'))
 
+assoc_httplistener_etcssldomain = Table('assoc_httplistener_etcssldomain', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_httplistener', Integer, ForeignKey('mw_was_httplistener.id', ondelete='CASCADE')),
+                                  Column('id_of_etcssldomain', Integer, ForeignKey('mw_etc_ssl_domain.id', ondelete='CASCADE'))
+)
+
 class MwWasHttpListener(Model):
     __tablename__ = "mw_was_httplistener"
     t__table_comment = {"comment":"WAS instance의 http listener"}
@@ -394,12 +400,28 @@ class MwWasHttpListener(Model):
     )
 
     mw_was_instance = relationship('MwWasInstance')
+    mw_etc_ssl_domain = relationship('MwEtcSslDomain', secondary=assoc_httplistener_etcssldomain, backref='mw_was_httplistener')
 
     def __repr__(self):
         return self.webconnection_id + '[' + str(self.listen_port) + ']'
 
     def host_id(self):
         return Markup(self.mw_was_instance.host_id)
+
+    def ssl_notafter(self):
+        if self.mw_etc_ssl_domain and self.mw_etc_ssl_domain[0].notafter:
+            return self.mw_etc_ssl_domain[0].notafter.strftime('%Y-%m-%d %H:%M:%S')
+        return ''
+
+    def ssl_update_dt(self):
+        if self.mw_etc_ssl_domain and self.mw_etc_ssl_domain[0].update_dt:
+            return self.mw_etc_ssl_domain[0].update_dt.strftime('%Y-%m-%d %H:%M:%S')
+        return ''
+
+    def ssl_cn(self):
+        if self.mw_etc_ssl_domain:
+            return self.mw_etc_ssl_domain[0].t__cn()
+        return ''
 
     def https_yn(self):
         
@@ -548,7 +570,6 @@ class MwWeb(Model):
     built_type       = Column(Enum(BuiltEnum), info={'enum_class':BuiltEnum}, comment='Built Type') #외장형/내장형 구분 (manual)
     landscape        = Column(Enum(LocationEnum), info={'enum_class':LocationEnum}, comment='Landscape') #운영/이관/개발/DR 구분 (manual)
     newgeneration_yn = Column(Enum(YnEnum), info={'enum_class':YnEnum}, comment='차세대여부') #차세대 구분 (manual)
-    hth_count        = Column(Integer, comment='hth count') # hth count (auto)
     service_port     = Column(String(50), comment='http service port') # Service port (auto)
     node_name        = Column(String(100), comment='node name in http.m') # node 이름(http.m기준) (auto)
     web_name         = Column(String(50), comment='web서버 이름/용도') # WEB 서버 이름 (manual)
@@ -1191,6 +1212,68 @@ class MwWebDomain(Model):
 
             result = subject[start:start+end]
 
+        return result
+
+    def __repr__(self):
+        return self.domain_name + ':' + self.port
+
+class MwEtcSslDomain(Model):
+    __tablename__ = "mw_etc_ssl_domain"
+    t__table_comment = {"comment": "기타 SSL Domain"}
+    function_comments = {"t__domain": "domain name : port"}
+
+    id            = Column(Integer, primary_key=True, nullable=False, comment='Primary Key')
+    host_id       = Column(String(30), ForeignKey('mw_server.host_id'), nullable=False, comment='HOST ID')
+    domain_name   = Column(String(100), nullable=False, comment='Domain 이름')
+    port          = Column(String(10), nullable=False, comment='서비스 port')
+    notbefore     = Column(DateTime(), comment='유효기간시작')
+    notafter      = Column(DateTime(), comment='유효기간만료')
+    subject       = Column(String(300), comment='주제')
+    serial        = Column(String(100), comment='일련번호')
+    issuer        = Column(String(300), comment='발급자')
+    notbefore_ca  = Column(DateTime(), comment='유효기간시작(CA)')
+    notafter_ca   = Column(DateTime(), comment='유효기간만료(CA)')
+    subject_ca    = Column(String(300), comment='주제(CA)')
+    serial_ca     = Column(String(100), comment='일련번호(CA)')
+    issuer_ca     = Column(String(300), comment='발급자(CA)')
+    update_dt     = Column(DateTime())
+    agent_id      = Column(String(30), comment='수집 Agent ID')
+    description   = Column(String(500), comment='설명')
+    use_yn        = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("YES"), nullable=False, comment='사용여부')
+    managed_yn    = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("NO"), nullable=False, comment='미들웨어 관리대상여부')
+    user_id       = Column(String(50), default=get_user, nullable=False)
+    create_on     = Column(DateTime(), default=datetime.now, nullable=False)
+
+    UniqueConstraint(host_id, domain_name, port)
+
+    @validates('host_id')
+    def validate_host_id(self, key, host_id):
+        if host_id:
+            return host_id.lower()
+        return host_id
+
+    __table_args__ = (
+        t__table_comment,
+    )
+
+    mw_server = relationship('MwServer')
+
+    def t__domain(self):
+        return self.domain_name + ':' + self.port
+
+    def t__cn(self):
+        subject = self.subject
+        if not subject:
+            return ''
+        start = subject.find('CN=')
+        if start < 0:
+            result = subject
+        else:
+            subject = subject.replace('/', ',')
+            end = subject[start:].find(',')
+            if end < 0:
+                end = len(subject[start:])
+            result = subject[start:start+end]
         return result
 
     def __repr__(self):

@@ -12,11 +12,12 @@ from app import appbuilder, db #, mongoClient, dbMongo, footprint, vv_P_secs
 from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, DailyReport\
     , MwWebServer, MwWebUri, MwWaschangeHistory, MwWebchangeHistory\
-    , MwBizCategory, MwAppMaster, MwDBMaster, MwWebDomain, MwWebSsl
+    , MwBizCategory, MwAppMaster, MwDBMaster, MwWebDomain, MwWebSsl\
+    , MwEtcSslDomain
 from app.models.knowledge import UtTag
 from app.sqls.was import get_was_instance_id, get_landscape
 from app.sqls.relationship import get_was_relationship, get_web_relationship
-from app.sqls.agent import create_connect_ssl, create_file_ssl, insert_command_master, get_agent
+from app.sqls.agent import create_connect_ssl, create_file_ssl, insert_command_master, get_agent, get_agents, create_connect_ssl_for_httplistener
 from app.sqls.batch import create_ssl_info, re_register_web_from_text, re_register_was_from_text
 from app.sqls.monitor import select_row, select_item, select_items
 from .common import FilterStartsWithFunction, FilterNotNull, FilterIsNull, \
@@ -104,9 +105,12 @@ class WasHttpListenerModelView(ModelView):
 
     datamodel = SQLAInterface(MwWasHttpListener)
 
+    list_template = 'listWithJson.html'
+    list_widget   = ListAdvanced
+
     list_title   = "WAS Http Listener 목록"    
-    list_columns = ['was_id', 'was_instance_id', 'host_id', 'webconnection_id', 'listen_port', 'ssl_yn', 'domain_name'\
-                    ,'min_thread_pool_count', 'max_thread_pool_count']
+    list_columns = ['was_id', 'was_instance_id', 'host_id', 'webconnection_id', 'listen_port', 'min_thread_pool_count', 'max_thread_pool_count', 'ssl_yn', 'domain_name'\
+                    ,'ssl_cn', 'ssl_notafter', 'ssl_update_dt']
     label_columns = {'was_id':'WAS Domain'
                     ,'was_instance_id':'MS intance id'
                     ,'host_id':'HOST ID'
@@ -114,14 +118,38 @@ class WasHttpListenerModelView(ModelView):
                     ,'listen_port':'서비스Port'
                     ,'ssl_yn':'SSL 여부'
                     ,'domain_name':'도메인명'
+                    ,'ssl_cn': 'CN'
+                    ,'ssl_update_dt':'인증서 확인일'
+                    ,'ssl_notafter':'만료일'
                     ,'min_thread_pool_count':'Min Thread pool 개수'
                     ,'max_thread_pool_count':'Max Thread pool 개수'}
 
-    search_columns = ['was_id', 'mw_was_instance', 'webconnection_id']
+    search_columns = ['ssl_yn', 'was_id', 'mw_was_instance', 'webconnection_id']
 
     edit_exclude_columns = ['httplistener_object','create_on']
     add_exclude_columns = ['httplistener_object','create_on']
     search_exclude_columns = ['httplistener_object']
+
+    extra_args = {
+        'inputList':[
+         {'text':'WAS ID','id':'was-id','combind':'0','condition':'_flt_2_was_id=','size':20}
+        ],
+        'buttonList':[
+         {'text':'SSL만 조회','id':'toggle_bt1','bt_group':'1','onclick':'_flt_0_ssl_yn=YES'},
+        ],
+        }
+
+    @action("call_connect_ssl", "Call Connect SSL", "", "fa-rocket", single=False)
+    def callConnectSSL(self, items):
+        for item in items:
+            success, msg = create_connect_ssl_for_httplistener(item)
+            if not success:
+                flash(msg, 'warning')
+            else:
+                flash(f"{item.domain_name}:{item.listen_port} - {msg}", 'info')
+
+        self.update_redirect()
+        return redirect(self.get_redirect())
 
 
 
@@ -878,6 +906,99 @@ class WebDisusedModelView(WebCommonView):
         return redirect(self.get_redirect())
 
 
+class EtcSslDomainCommonView(ModelView):
+
+    datamodel = SQLAInterface(MwEtcSslDomain)
+
+    def almost_expired():
+        now = datetime.now()
+        plus_30 = now + timedelta(days=30)
+        filter_str = f'_flt_1_notafter={now.strftime("%m/%d/%Y")}&_flt_2_notafter={plus_30.strftime("%m/%d/%Y")}'
+        return filter_str
+
+    list_template = 'listWithJson.html'
+    list_widget   = ListAdvanced
+
+    list_columns = ['host_id', 't__domain', 'notbefore', 'notafter',
+                    't__cn', 'managed_yn', 'description', 'update_dt']
+    label_columns = {
+        'host_id': 'Host ID',
+        't__domain': 'URL',
+        'notbefore': '시작일',
+        'notafter': '만료일',
+        't__cn': 'CN',
+        'managed_yn': 'MW관리대상',
+        'description': '설명',
+        'update_dt': '확인일시',
+        'use_yn': '사용여부',
+        'agent_id': 'Agent ID',
+        'domain_name': 'Domain',
+        'port': 'Port',
+    }
+
+    edit_columns = ['host_id', 'domain_name', 'port', 'description',
+                    'use_yn', 'managed_yn']
+    add_columns  = ['host_id', 'domain_name', 'port', 'description',
+                    'use_yn', 'managed_yn']
+
+    search_columns = ['host_id', 'domain_name', 'notafter', 'update_dt',
+                      'managed_yn']
+
+    search_filters = {
+        'notafter': [FilterIsNull, FilterGreater, FilterSmaller],
+        'update_dt': [FilterIsNull, FilterGreater, FilterSmaller]
+    }
+
+    formatters_columns = {
+        'update_dt': lambda x: x.strftime('%Y.%m.%d %H:%M') if x else '',
+        'notafter': lambda x: x.strftime('%Y-%m-%d') if x else '',
+        'notbefore': lambda x: x.strftime('%Y-%m-%d') if x else '',
+    }
+
+    extra_args = {
+        'inputList': [
+            {'text': 'HOSTNAME', 'id': 'host-name', 'combind': '0',
+             'condition': '_flt_2_host_id=', 'size': 20}
+        ],
+        'buttonList': [
+            {'text': 'SSL만료 임박', 'id': 'toggle_bt1', 'bt_group': '1',
+             'onclick': almost_expired()}
+        ],
+    }
+
+    base_order = ('host_id', 'asc')
+
+    @action("call_connect_ssl", "Call Connect SSL", "", "fa-rocket", single=False)
+    def callConnectSSL(self, items):
+        for item in items:
+            if not item.agent_id:
+                continue
+
+            agent_rec = get_agent(item.agent_id)
+
+            if not agent_rec:
+                continue
+
+            insert_command_master('CALL.GET_SSL_CERTI',
+                                 [agent_rec.agent_id],
+                                 item.domain_name + ':' + item.port)
+
+        db.session.commit()
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+
+class EtcSslDomainModelView(EtcSslDomainCommonView):
+    list_title = "기타 SSL Domain"
+    base_filters = [['use_yn', FilterEqual, 'YES']]
+
+
+class EtcSslDomainDisusedModelView(EtcSslDomainCommonView):
+    list_title = "불용 기타 SSL Domain"
+    base_filters = [['use_yn', FilterEqual, 'NO']]
+    base_permissions = ['can_list', 'can_show', 'can_edit', 'can_delete']
+
+
 class BizCategoryModelView(ModelView):
     
     datamodel = SQLAInterface(MwBizCategory)
@@ -1348,6 +1469,19 @@ appbuilder.add_view(
 appbuilder.add_view(
     WebDisusedModelView,
     "WEBTOB 불용 목록",
+    icon="fa-trash-o",
+    category="Web"
+)
+appbuilder.add_separator("Web")
+appbuilder.add_view(
+    EtcSslDomainModelView,
+    "기타 SSL Domain",
+    icon="fa-globe",
+    category="Web"
+)
+appbuilder.add_view(
+    EtcSslDomainDisusedModelView,
+    "불용 기타 SSL Domain",
     icon="fa-trash-o",
     category="Web"
 )
