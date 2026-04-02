@@ -189,7 +189,7 @@ def create_connect_ssl_for_httplistener(item):
 def create_connect_ssl_real_ip(agent_id, domain_name, port, ip):
     # JSON 파라미터 구성
     param_dict = {
-        "domain": domain_name,
+        "domain_name": domain_name,
         "port": str(port),
         "ip": ip
     }

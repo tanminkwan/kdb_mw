@@ -252,7 +252,7 @@ class AutorunResult:
         result_dict = json.loads(result_text)
 
         host_id   = result.host_id.lower()
-        domain_full = result_dict.get('domain', '')
+        domain_full = result_dict.get('domain_name', result_dict.get('domain', ''))
         
         domain = ''
         port = ''
@@ -270,7 +270,7 @@ class AutorunResult:
                 try:
                     # JSON 형태인 경우 (신규)
                     params = json.loads(cmaster.additional_params)
-                    if not domain: domain = params.get('domain', '')
+                    if not domain: domain = params.get('domain_name', '')
                     if not port: port = str(params.get('port', ''))
                 except:
                     # domain:port 문자열 형태인 경우 (기존)
@@ -371,10 +371,11 @@ class AutorunResult:
 
         ssl_dict = self._parse_ssl_info(content)
 
-        if not ssl_dict.get('domain'):
+        domain_full = ssl_dict.get('domain_name', ssl_dict.get('domain', ''))
+        if not domain_full:
             return -1, 'Domain doesn\'t exist'
 
-        if ':' not in ssl_dict['domain']:
+        if ':' not in domain_full:
             return -1, 'Domain isn\'t valid'
 
         #if not ssl_dict.get('serial'):
@@ -391,13 +392,13 @@ class AutorunResult:
             update_dict = dict(
                 notbefore = ssl_dict['notbefore']
                ,notafter  = ssl_dict['notafter']
-               ,subject   = ssl_dict['subject']
+                ,subject   = ssl_dict['subject']
                ,serial    = ssl_dict['serial']
                ,issuer    = ssl_dict['issuer']
                ,update_dt = datetime.now()
             )
 
-        domain, port = ssl_dict['domain'].split(':', 1)
+        domain, port = domain_full.split(':', 1)
 
         filter_dict = dict(
             host_id     = host_id
@@ -445,7 +446,7 @@ class AutorunResult:
 
     def _parse_ssl_info(self, content):
 
-        item_names = ['file','domain','notbefore','notafter','subject','serial','issuer']
+        item_names = ['file','domain','domain_name','notbefore','notafter','subject','serial','issuer']
         rtn_dict = {}
         info_list = content.splitlines()
 
