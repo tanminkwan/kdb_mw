@@ -711,6 +711,7 @@ def get_cert_expiry_stat_jeus():
     from app.models.was import MwWasHttpListener, MwEtcSslDomain, MwWasInstance, MwWas
     from app.models.common import YnEnum, LocationEnum
     
+    # [Bug Fix] mw_etc_ssl_domain이 없는 경우(Outer Join 결과가 NULL인 경우) '미확인'으로 분류
     status_case = case(
         (MwEtcSslDomain.notafter == None, '미확인'),
         (MwEtcSslDomain.notafter <= now, '만료'),
@@ -719,12 +720,13 @@ def get_cert_expiry_stat_jeus():
         else_='정상'
     ).label('status')
     
+    # [Target] MwWas.use_yn == YES & MwWasHttpListener.ssl_yn == YES
     query = db.session.query(status_case, MwWas.landscape, func.count().label('count'))\
         .select_from(MwWasHttpListener)\
-        .join(MwWasHttpListener.mw_etc_ssl_domain)\
         .join(MwWasInstance, MwWasHttpListener.mw_was_instance)\
         .join(MwWas, MwWasInstance.mw_was)\
-        .filter(MwWasHttpListener.ssl_yn == YnEnum.YES)\
+        .outerjoin(MwWasHttpListener.mw_etc_ssl_domain)\
+        .filter(MwWas.use_yn == YnEnum.YES, MwWasHttpListener.ssl_yn == YnEnum.YES)\
         .group_by(status_case, MwWas.landscape)
     
     results = query.all()
