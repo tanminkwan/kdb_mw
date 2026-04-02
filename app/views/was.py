@@ -17,7 +17,7 @@ from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, Mw
 from app.models.knowledge import UtTag
 from app.sqls.was import get_was_instance_id, get_landscape
 from app.sqls.relationship import get_was_relationship, get_web_relationship
-from app.sqls.agent import create_connect_ssl, create_file_ssl, insert_command_master, get_agent, get_agents, create_connect_ssl_for_httplistener
+from app.sqls.agent import create_connect_ssl, create_file_ssl, insert_command_master, get_agent, get_agents, create_connect_ssl_for_httplistener, create_connect_ssl_real_ip_for_httplistener
 from app.sqls.batch import create_ssl_info, re_register_web_from_text, re_register_was_from_text
 from app.sqls.monitor import select_row, select_item, select_items
 from .common import FilterStartsWithFunction, FilterNotNull, FilterIsNull, \
@@ -147,6 +147,18 @@ class WasHttpListenerModelView(ModelView):
                 flash(msg, 'warning')
             else:
                 flash(f"{item.domain_name}:{item.listen_port} - {msg}", 'info')
+
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+    @action("call_connect_ssl_real_ip", "Call connect SSL(real ip)", "Are you sure you want to call connect SSL with Real IP?", "fa-lock", single=False)
+    def callConnectSSLRealIp(self, items):
+        for item in items:
+            success, msg = create_connect_ssl_real_ip_for_httplistener(item)
+            if not success:
+                flash(msg, 'warning')
+            else:
+                flash(f"{item.domain_name}:{item.listen_port} (IP: {item.mw_was_instance.mw_server.ip_address}) - {msg}", 'info')
 
         self.update_redirect()
         return redirect(self.get_redirect())
@@ -687,6 +699,25 @@ class WebDomainModelView(ModelView):
         self.update_redirect()
         return redirect(self.get_redirect())
 
+    @action("call_connect_ssl_real_ip", "Call connect SSL(real ip)", "Are you sure you want to call connect SSL with Real IP?", "fa-lock", single=False)
+    def callConnectSSLRealIp(self, items):
+        for item in items:
+            if item.ssl_yn.name == 'YES':
+                agent_rec = get_agent(item.mw_web_vhost.mw_web.agent_id)
+                if not agent_rec:
+                    continue
+
+                # Real IP 추출
+                real_ip = ""
+                if item.mw_web_vhost and item.mw_web_vhost.mw_web and item.mw_web_vhost.mw_web.mw_server:
+                    real_ip = item.mw_web_vhost.mw_web.mw_server.ip_address
+
+                create_connect_ssl_real_ip(agent_rec.agent_id, item.domain_name, item.port, real_ip)
+
+        db.session.commit()
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
     @action("get_connect_ssl","Get Connect SSL","","fa-rocket",single=False)
     def getConnectSSL(self, items):
 
@@ -982,6 +1013,27 @@ class EtcSslDomainCommonView(ModelView):
             insert_command_master('CALL.GET_SSL_CERTI',
                                  [agent_rec.agent_id],
                                  item.domain_name + ':' + item.port)
+
+        db.session.commit()
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+    @action("call_connect_ssl_real_ip", "Call connect SSL(real ip)", "Are you sure you want to call connect SSL with Real IP?", "fa-lock", single=False)
+    def callConnectSSLRealIp(self, items):
+        for item in items:
+            if not item.agent_id:
+                continue
+
+            agent_rec = get_agent(item.agent_id)
+            if not agent_rec:
+                continue
+
+            # Real IP 추출
+            real_ip = ""
+            if item.mw_server:
+                real_ip = item.mw_server.ip_address
+
+            create_connect_ssl_real_ip(agent_rec.agent_id, item.domain_name, item.port, real_ip)
 
         db.session.commit()
         self.update_redirect()

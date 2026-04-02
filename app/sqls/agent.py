@@ -186,6 +186,71 @@ def create_connect_ssl_for_httplistener(item):
 
     return True, "Call Connect SSL 명령이 생성되었습니다."
 
+def create_connect_ssl_real_ip(agent_id, domain_name, port, ip):
+    # JSON 파라미터 구성
+    param_dict = {
+        "domain": domain_name,
+        "port": str(port),
+        "ip": ip
+    }
+    json_param = json.dumps(param_dict)
+
+    insert_command_master('CALL.GET_SSL_CERTI',
+                         [agent_id],
+                         json_param)
+    db.session.commit()
+    return True, f"SSL 접수 완료 (Real IP: {ip})"
+
+def create_connect_ssl_real_ip_for_httplistener(item):
+    if getattr(item.ssl_yn, 'name', item.ssl_yn) != 'YES' or not item.domain_name:
+        return False, f"SSL 대상이 아니거나 도메인명이 설정되지 않았습니다. ({item.domain_name}:{item.listen_port})"
+
+    # Agent 찾기 로직
+    host_id = item.mw_was_instance.host_id.lower()
+    agents = get_agents()
+    if not agents:
+        return False, f"해당 서버({host_id})에 사용 가능한 Agent가 존재하지 않습니다."
+    
+    matched_agents = [ag for ag in agents if host_id in ag.agent_id.lower()]
+    if not matched_agents:
+        return False, f"해당 서버({host_id})에 사용 가능한 Agent가 존재하지 않습니다."
+    
+    jeus_agents = [ag for ag in matched_agents if "_jeus" in ag.agent_id.lower()]
+    if jeus_agents:
+        matched_agents = jeus_agents
+
+    matched_agents.sort(key=lambda x: x.agent_id)
+    selected_agent_id = matched_agents[0].agent_id
+
+    # `mw_etc_ssl_domain` 정보 확인 / 생성 (기존 로직 유지)
+    etc_domain = db.session.query(MwEtcSslDomain).filter_by(
+        host_id=host_id,
+        domain_name=item.domain_name,
+        port=str(item.listen_port)
+    ).first()
+
+    if not etc_domain:
+        etc_domain = MwEtcSslDomain(
+            host_id=host_id,
+            domain_name=item.domain_name,
+            port=str(item.listen_port),
+            managed_yn='YES',
+            use_yn='YES',
+            agent_id=selected_agent_id
+        )
+        db.session.add(etc_domain)
+
+    # Association
+    if etc_domain not in item.mw_etc_ssl_domain:
+        item.mw_etc_ssl_domain.append(etc_domain)
+
+    # Real IP 추출 (mw_was_instance -> mw_server -> ip_address)
+    real_ip = ""
+    if item.mw_was_instance and item.mw_was_instance.mw_server:
+        real_ip = item.mw_was_instance.mw_server.ip_address
+
+    return create_connect_ssl_real_ip(selected_agent_id, item.domain_name, item.listen_port, real_ip)
+
 def create_file_ssl(agent_id, certi_file):
 
     agent_rec = get_agent(agent_id)
