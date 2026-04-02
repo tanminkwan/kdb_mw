@@ -255,7 +255,12 @@
                     <h3>[SSL인증서 만료 현황]</h3>
                 </div>
                 <div class="table-wrapper">
+                    <h4>1) webtob 집계</h4>
                     <table id="certStat"></table>
+                </div>
+                <div class="table-wrapper" style="margin-top: 2rem;">
+                    <h4>2) jeus https 집계</h4>
+                    <table id="certStatJeus"></table>
                 </div>
             </div>
 
@@ -403,24 +408,33 @@
         return month + "/" + day + "/" + d.getFullYear();
     }
 
-    function gotoSSLList(status) {
-        var url = "/webdomainmodelview/list/?_flt_0_ssl_yn=YES";
+    function gotoSSLList(status, type) {
+        var url = "";
+        if (type === 'webtob') {
+            url = "/webdomainmodelview/list/?_flt_0_ssl_yn=YES";
+        } else {
+            url = "/washttplistenermodelview/list/?_flt_0_ssl_yn=YES";
+        }
+
         var now = new Date();
         var d7 = new Date(); d7.setDate(now.getDate() + 7);
         var d30 = new Date(); d30.setDate(now.getDate() + 30);
         
+        var date_flt = "";
+        var col_name = (type === 'webtob') ? "notafter" : "mw_etc_ssl_domain.notafter";
+
         if (status == '만료') {
-            url += "&_flt_2_notafter=" + formatDate(now);
+            date_flt = "&_flt_2_" + col_name + "=" + formatDate(now);
         } else if (status == '임박') {
-            url += "&_flt_1_notafter=" + formatDate(now) + "&_flt_2_notafter=" + formatDate(d7);
+            date_flt = "&_flt_1_" + col_name + "=" + formatDate(now) + "&_flt_2_" + col_name + "=" + formatDate(d7);
         } else if (status == '주의') {
-            url += "&_flt_1_notafter=" + formatDate(d7) + "&_flt_2_notafter=" + formatDate(d30);
+            date_flt = "&_flt_1_" + col_name + "=" + formatDate(d7) + "&_flt_2_" + col_name + "=" + formatDate(d30);
         } else if (status == '정상') {
-            url += "&_flt_1_notafter=" + formatDate(d30);
+            date_flt = "&_flt_1_" + col_name + "=" + formatDate(d30);
         } else if (status == '미확인') {
-            url += "&_flt_0_notafter=y";
+            date_flt = "&_flt_0_" + col_name + "=y";
         }
-        window.open(url, '_blank');
+        window.open(url + date_flt, '_blank');
     }
 
     {% if g.user.is_authenticated %}
@@ -475,9 +489,37 @@
         }
     });
 
-    // certStat table after call (already increased size)
-    // Update the SSL card to remove the h4 since we have it in the card title now
-    $('#ssl-card h4').remove();
+    function renderExpiryTable(tableId, stats, type) {
+        var landscapes = ['PROD', 'TEST', 'DEV'];
+        var statuses = ['정상', '주의', '임박', '만료', '미확인', '전체'];
+        
+        var header = "<tr><th>상태</th>" + landscapes.map(l => "<th style='text-align:right;'>" + l + "</th>").join('') + "<th style='text-align:right;'>전체</th></tr>";
+        $('#' + tableId).html(header);
+
+        statuses.forEach(status => {
+            var item = stats.find(s => s.status === status);
+            if (!item) return;
+
+            if (status !== '정상' && status !== '전체' && item.total <= 0) {
+                return;
+            }
+
+            var isTotal = (status === '전체');
+            var rowClass = isTotal ? "class='total-row'" : "";
+            var rowStyle = isTotal ? "" : "style='cursor:pointer;'";
+            
+            var row = $("<tr " + rowClass + " " + rowStyle + "><td>" + status + "</td><td style='text-align:right;'>" + item.PROD + "</td><td style='text-align:right;'>" + item.TEST + "</td><td style='text-align:right;'>" + item.DEV + "</td><td style='text-align:right;'>" + item.total + "</td></tr>");
+            
+            if (!isTotal) {
+                row.click(function() { gotoSSLList(status, type); });
+            }
+            $('#' + tableId).append(row);
+        });
+        
+        if (tableId === 'certStatJeus') {
+            $('#' + tableId).after("<div id='certStatJeusNote' style='font-size:12px;color:gray;margin-top:5px;'>* 임박: 만료 7일 이내, 주의: 만료 30일 이내</div>");
+        }
+    }
 
     $.ajax({
         url: "/monitor/cert_expiry_stat",
@@ -486,37 +528,19 @@
                 console.log("No cert_expiry_stat data found");
                 return;
             }
-            var stats = data.cert_expiry_stat;
-            
-            var landscapes = ['PROD', 'TEST', 'DEV'];
-            var statuses = ['정상', '주의', '임박', '만료', '미확인', '전체'];
-            
-            var header = "<tr><th>상태</th>" + landscapes.map(l => "<th style='text-align:right;'>" + l + "</th>").join('') + "<th style='text-align:right;'>전체</th></tr>";
-            $('#certStat').append(header);
-
-            statuses.forEach(status => {
-                var item = stats.find(s => s.status === status);
-                if (!item) return;
-
-                // '정상'과 '전체'는 항상 표시, 그 외(주의, 임박, 만료, 미확인)는 건수가 있을 때만 표시
-                if (status !== '정상' && status !== '전체' && item.total <= 0) {
-                    return;
-                }
-
-                var isTotal = (status === '전체');
-                var rowClass = isTotal ? "class='total-row'" : "";
-                var rowStyle = isTotal ? "" : "style='cursor:pointer;'";
-                
-                var row = $("<tr " + rowClass + " " + rowStyle + "><td>" + status + "</td><td style='text-align:right;'>" + item.PROD + "</td><td style='text-align:right;'>" + item.TEST + "</td><td style='text-align:right;'>" + item.DEV + "</td><td style='text-align:right;'>" + item.total + "</td></tr>");
-                
-                if (!isTotal) {
-                    row.click(function() { gotoSSLList(status); });
-                }
-                $('#certStat').append(row);
-            });
-            
-            $('#certStat').after("<div style='font-size:12px;color:gray;margin-top:5px;'>* 임박: 만료 7일 이내, 주의: 만료 30일 이내</div>");
+            renderExpiryTable('certStat', data.cert_expiry_stat, 'webtob');
             checkTableAndHide('certStat', 'ssl-card');
+        }
+    });
+
+    $.ajax({
+        url: "/monitor/cert_expiry_stat_jeus",
+        success: function (data) {
+            if (!data || !data.cert_expiry_stat_jeus) {
+                console.log("No cert_expiry_stat_jeus data found");
+                return;
+            }
+            renderExpiryTable('certStatJeus', data.cert_expiry_stat_jeus, 'jeus');
         }
     });
 
