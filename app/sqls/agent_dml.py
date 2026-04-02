@@ -252,12 +252,41 @@ class AutorunResult:
         result_dict = json.loads(result_text)
 
         host_id   = result.host_id.lower()
-        domain, port = result_dict['domain'].split(':', 1)
+        domain_full = result_dict.get('domain', '')
+        
+        domain = ''
+        port = ''
+
+        if ':' in domain_full:
+            domain, port = domain_full.split(':', 1)
+        else:
+            domain = domain_full
+            port = result_dict.get('port')
+
+        # result에 정보가 부족한 경우 command의 additional_params에서 보충
+        if not domain or not port:
+            cmaster = get_command_master(result.command_id)
+            if cmaster and cmaster.additional_params:
+                try:
+                    # JSON 형태인 경우 (신규)
+                    params = json.loads(cmaster.additional_params)
+                    if not domain: domain = params.get('domain', '')
+                    if not port: port = str(params.get('port', ''))
+                except:
+                    # domain:port 문자열 형태인 경우 (기존)
+                    if ':' in cmaster.additional_params:
+                        p_domain, p_port = cmaster.additional_params.split(':', 1)
+                        if not domain: domain = p_domain
+                        if not port: port = p_port
+
+        # 최종적으로 port가 없는 경우 기본값 443 사용
+        if not port:
+            port = '443'
 
         filter_dict = dict(
             host_id     = host_id
            ,domain_name = domain
-           ,port        = port
+           ,port        = str(port)
         )
 
         update_dict = dict(
