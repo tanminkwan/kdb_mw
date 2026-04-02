@@ -702,3 +702,63 @@ def get_cert_expiry_stat():
     final_results.append(total_row)
     
     return final_results
+def get_cert_expiry_stat_jeus():
+    now = datetime.now()
+    d7 = now + timedelta(days=7)
+    d30 = now + timedelta(days=30)
+    
+    from sqlalchemy import case, func
+    from app.models.was import MwWasHttpListener, MwEtcSslDomain, MwWasInstance, MwWas
+    from app.models.common import YnEnum, LocationEnum
+    
+    status_case = case(
+        (MwEtcSslDomain.notafter == None, '미확인'),
+        (MwEtcSslDomain.notafter <= now, '만료'),
+        (MwEtcSslDomain.notafter <= d7, '임박'),
+        (MwEtcSslDomain.notafter <= d30, '주의'),
+        else_='정상'
+    ).label('status')
+    
+    query = db.session.query(status_case, MwWas.landscape, func.count().label('count'))\
+        .select_from(MwWasHttpListener)\
+        .join(MwWasHttpListener.mw_etc_ssl_domain)\
+        .join(MwWasInstance, MwWasHttpListener.mw_was_instance)\
+        .join(MwWas, MwWasInstance.mw_was)\
+        .filter(MwWasHttpListener.ssl_yn == YnEnum.YES)\
+        .group_by(status_case, MwWas.landscape)
+    
+    results = query.all()
+    
+    stats_dict = {}
+    statuses = ['정상', '주의', '임박', '만료', '미확인']
+    landscapes = ['PROD', 'TEST', 'DEV']
+    
+    for status in statuses:
+        stats_dict[status] = {l: 0 for l in landscapes}
+        stats_dict[status]['total'] = 0
+    
+    for r in results:
+        status = r.status
+        landscape = r.landscape.name if r.landscape else 'UNKNOWN'
+        count = r.count
+        
+        if status not in stats_dict:
+            stats_dict[status] = {l: 0 for l in landscapes}
+            stats_dict[status]['total'] = 0
+            
+        if landscape in landscapes:
+            stats_dict[status][landscape] = count
+        stats_dict[status]['total'] += count
+
+    final_results = []
+    for status in statuses:
+        row = stats_dict[status]
+        row['status'] = status
+        final_results.append(row)
+        
+    total_row = {l: sum(stats_dict[s][l] for s in statuses) for l in landscapes}
+    total_row['total'] = sum(total_row[l] for l in landscapes)
+    total_row['status'] = '전체'
+    final_results.append(total_row)
+    
+    return final_results
