@@ -1,0 +1,36 @@
+{% extends "appbuilder/general/model/add.html" %}
+
+{% block tail_js %}
+{{ super() }}
+<script type="text/javascript">
+    $(document).ready(function () {
+        var callbackField = $('#broadcast_callback');
+
+        // broadcast_callback 필드 아래에 안내 문구 삽입
+        if (callbackField.length) {
+            var helpHtml = '<p class="help-block" style="color:#2980b9;">' +
+                '<b>사용 가능:</b> {{ broadcast_callbacks | join(", ") }}' +
+                '</p>' +
+                '<p class="help-block" style="color:#e74c3c;">' +
+                '※ Broadcast Callback, 대상 Agent, 대상 Agent 그룹 중 적어도 하나는 선택해야 합니다.' +
+                '</p>';
+            callbackField.after(helpHtml);
+        }
+
+        function handleBroadcastChange() {
+            var broadcast_callback = callbackField.val();
+            if (broadcast_callback && broadcast_callback.trim() !== '') {
+                $('#ag_agent').prop('disabled', true);
+                $('#ag_agent_group').prop('disabled', true);
+                $('#ag_agent').val(null).trigger('change');
+                $('#ag_agent_group').val(null).trigger('change');
+            } else {
+                $('#ag_agent').prop('disabled', false);
+                $('#ag_agent_group').prop('disabled', false);
+            }
+        }
+        callbackField.on('change keyup', handleBroadcastChange);
+        handleBroadcastChange();
+    });
+</script>
+{% endblock %}

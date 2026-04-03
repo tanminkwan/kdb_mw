@@ -9,18 +9,18 @@ from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, pro
 from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
     , FilterEqualFunction, FilterNotEqual, FilterInFunction, FilterStartsWith, FilterEqual
 from app import appbuilder, db, kafka_admin, WAS_STATUS
-from flask_jwt_extended import create_refresh_token
+from flask_jwt_extended import create_access_token, create_refresh_token
 #from .models import Server, JeusContainer, Host
 from app.models.monitor import MoWasStatusTemplate, MoWasStatusReport, MoGridConfig, MoWasInstanceStatus
 from .common import FilterStartsWithFunction, get_mw_user, get_userid, get_reporttime
 from datetime import datetime, timedelta
-from app.sqls.monitor import select_row, getGridConfig, createWasStatusReport\
-                    , getNotRunningWasList, get_column_type, get_target_table_name\
-                    , select_rows2
-from app.sqls.agent import get_agent_stat, getErrorResults, insertCommandMaster
-from app.sqls.was import getChangedWAS, getChangedWEB
+from app.sqls.monitor import select_row, get_grid_config, create_was_status_report\
+                    , get_not_running_was_list, get_column_type, get_target_table_name\
+                    , select_rows2, get_cert_expiry_stat, get_cert_expiry_stat_jeus
+from app.sqls.agent import get_agent_stat, get_error_results, insert_command_master
+from app.sqls.was import get_changed_was, get_changed_web
 from wtforms import FieldList, StringField
-from app.auto_report.auto_report import run_auto_report
+#from app.auto_report.auto_report import run_auto_report
 import sys
 
 class SimpleListWidget(ListWidget):
@@ -56,7 +56,7 @@ class MoGridConfigModelView(ModelView):
     edit_exclude_columns = ['update_on', 'create_on']
     add_exclude_columns = ['update_on', 'create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class MoWasInstanceStatusModelView(ModelView):
     
@@ -65,7 +65,7 @@ class MoWasInstanceStatusModelView(ModelView):
     list_title   = "WAS instance 상태"    
     list_columns = ['was_id', 'was_instance_id', 'was_instance_status', 'host_id'\
                     , 'landscape','update_on']
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class MoWasStatusTemplateModelView(ModelView):
     
@@ -83,7 +83,7 @@ class MoWasStatusTemplateModelView(ModelView):
     edit_exclude_columns = ['update_on', 'create_on']
     add_exclude_columns = ['update_on', 'create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class MoWasStatusReportModelView(ModelView):
     
@@ -108,7 +108,7 @@ class MoWasStatusReportModelView(ModelView):
                     , 'c_wi_11':' ', 'c_wi_12':' ', 'c_wi_13':' ', 'c_wi_14':' ', 'c_wi_15':' '
                     , 'c_comment':'비고'
                     , 'checked_date':'확인일시' }
-    formatters_columns={'checked_date': lambda x:x.strftime('%Y.%m.%d %H:%M')}
+    formatters_columns={'checked_date': lambda x: x.strftime('%Y.%m.%d %H:%M') if x else ''}
     base_filters = [['reported_time', FilterStartsWithFunction, get_reporttime]
                     ]
 
@@ -118,7 +118,7 @@ class MoWasStatusReportModelView(ModelView):
     def create_report(self, items):
 
         print('Here')
-        rtn , msg = createWasStatusReport()
+        rtn , msg = create_was_status_report()
 
         self.update_redirect()
         return redirect(self.get_redirect())
@@ -140,21 +140,21 @@ class MonitorApi(BaseApi):
     @protect()
     def createWasStatusReport(self):
 
-        rtn , msg = createWasStatusReport()
+        rtn , msg = create_was_status_report()
         if rtn < 0:
             return jsonify({'return_code':rtn, 'message':msg}), 401
         return jsonify({'return_code':rtn, 'message':'OK'}), 200
     """
 
-    @expose('/test', methods=['GET'])
-    @expose('/test/<param>', methods=['GET'])
+    @expose('/gridView', methods=['GET'])
+    @expose('/gridView/<param>', methods=['GET'])
     @has_access
-    def test(self, param=None):
+    def gridView(self, param=None):
 
         cond_list = []
         if param:
             param = str(param)
-            rec = getGridConfig(param)
+            rec = get_grid_config(param)
 
             table_name = rec.table_name
             conditions = rec.condition_columns.split(',') if rec.condition_columns else ''
@@ -185,7 +185,7 @@ class MonitorApi(BaseApi):
         return render_template('list_jqgrid.html'\
             , param=param
             , condition=cond_list
-            , url='/monitor/test'
+            , url='/monitor/gridView'
             , base_template=appbuilder.base_template
             , appbuilder=appbuilder
             )
@@ -276,7 +276,7 @@ class MonitorApi(BaseApi):
         message = '비정상인 WAS가 존재하지 않습니다.'
         trace = ''
 
-        _, _, was_l = getNotRunningWasList()
+        _, _, was_l = get_not_running_was_list()
 
         command_type_id = ''
         agent_id = ''
@@ -287,18 +287,20 @@ class MonitorApi(BaseApi):
             try:
                 # w is a tuple (was_id, agent_id)
                 for w in was_l:
+                    '''
                     if w[0] in ['PKIF_Domain','PWMM_Domain']:
                         command_type_id = 'NOAGENT.JMX.MONITOR'
                         agent_id = 'ESX05_syper_J'
                     else:
-                        rec, _ = select_row('ag_command_helper', dict(mapping_key='ASIS_JMX_PARAMS',agent_id=w[1]))
-                        if rec:
-                            command_type_id = 'ASIS.P.JMX.MONITOR'
-                        else:
-                            command_type_id = 'NEWGEN.jmx.monitor'
-                        agent_id = w[1]
+                    '''
+                    rec, _ = select_row('ag_command_helper', dict(mapping_key='ASIS_JMX_PARAMS',agent_id=w[1]))
+                    if rec:
+                        command_type_id = 'ASIS.P.JMX.MONITOR'
+                    else:
+                        command_type_id = 'NEWGEN.jmx.monitor'
+                    agent_id = w[1]
 
-                    insertCommandMaster(command_type_id, [agent_id])
+                    insert_command_master(command_type_id, [agent_id])
 
                     agents.append(agent_id)
 
@@ -335,7 +337,7 @@ class MonitorApi(BaseApi):
             else:
                 is_was_check = True
 
-            run_auto_report(sender, sender_name, receivers, ccs, was_check=is_was_check)
+            #run_auto_report(sender, sender_name, receivers, ccs, was_check=is_was_check)
         except Exception as e:
             excType, excValue, traceback_ = sys.exc_info()
             print(e.with_traceback(traceback_))
@@ -344,11 +346,11 @@ class MonitorApi(BaseApi):
 
         return jsonify({'message':message, 'trace':trace})
 
-    @expose('/getNotRunningWasList', methods=['GET'])
+    @expose('/get_not_running_was_list', methods=['GET'])
     @has_access
-    def getNotRunningWasList(self):
+    def get_not_running_was_list(self):
 
-        uncheckedWas_list, notRunningWas_list, _ = getNotRunningWasList()
+        uncheckedWas_list, notRunningWas_list, _ = get_not_running_was_list()
 
         return jsonify({'uncheckedWas':uncheckedWas_list,'notRunningWas':notRunningWas_list})
 
@@ -360,9 +362,13 @@ class MonitorApi(BaseApi):
 
         agent_stat_list = []
         if agent_stat_recs:
-            [ agent_stat_list.append({'landscape':'NON' if r.landscape==None\
-                 else r.landscape.name,'total':r.total, 'offline':r.offline})\
-             for r in agent_stat_recs ]
+            [ agent_stat_list.append({
+                'landscape':'NON' if r.landscape==None else r.landscape.name,
+                'total':int(r.total), 
+                'online':int(r.online),
+                'offline':int(r.offline),
+                'long_term_unused':int(r.long_term_unused)
+             }) for r in agent_stat_recs ]
 
         offline_list = []
         if offline_recs:
@@ -375,12 +381,12 @@ class MonitorApi(BaseApi):
 
         return jsonify({'agent_stat':agent_stat_list, 'offline_agents':offline_list})
 
-    @expose('/getErrorResults', methods=['GET'])
+    @expose('/get_error_results', methods=['GET'])
     @has_access
-    def getErrorResults(self):
+    def get_error_results(self):
 
         d3daysAgo = datetime.now() - timedelta(days=3)
-        recs = getErrorResults(create_on=d3daysAgo)
+        recs = get_error_results(create_on=d3daysAgo)
 
         configFiles_List = []
         erroWas_List = []
@@ -426,22 +432,39 @@ class MonitorApi(BaseApi):
 
         recent_knowledge_list = []
         condition = [dict(column='update_on', operator='gt', value=d3daysAgo)]
-        sort_condition = [dict(column='update_on', option='desc')]
+        #sort_condition = [dict(column='update_on', option='desc')]
         
-        recs, _ = select_rows2('ut_html_content', condition=condition, sort_condition=sort_condition)
-        
+        #recs1, _ = select_rows2('ut_html_content', condition=condition, sort_condition=sort_condition)
+        #recs2, _ = select_rows2('ut_md_content', condition=condition, sort_condition=sort_condition)
+        recs1, _ = select_rows2('ut_html_content', condition=condition)
+        recs2, _ = select_rows2('ut_md_content', condition=condition)
+        recs = (recs1 if recs1 else []) + (recs2 if recs2 else [])
+
         if recs:
             [ recent_knowledge_list.append(
                 {'id':r.id
                 ,'content_name':r.content_name
+                ,'content_type': "md" if hasattr(r, "content_md") else "html"
                 ,'user_id':r.user_id
                 ,'category':next(( t.label for t in r.ut_tag if t.tag.startswith('지식유형-')),'')
                 ,'update_on':r.update_on.strftime('%Y.%m.%d %H:%M')
                 ,'create_on':r.create_on.strftime('%Y.%m.%d %H:%M')}
                 ) for r in recs ]
 
+            recent_knowledge_list.sort(key=lambda x: x["update_on"], reverse=True)
         return jsonify({'recent_knowledge_list':recent_knowledge_list})
 
+    @expose('/cert_expiry_stat', methods=['GET'])
+    @has_access
+    def cert_expiry_stat(self):
+        result = get_cert_expiry_stat()
+        return jsonify({'cert_expiry_stat': result})
+
+    @expose('/cert_expiry_stat_jeus', methods=['GET'])
+    @has_access
+    def cert_expiry_stat_jeus(self):
+        result = get_cert_expiry_stat_jeus()
+        return jsonify({'cert_expiry_stat_jeus': result})
 
     @expose('/get_changed_configs', methods=['GET'])
     @has_access
@@ -450,7 +473,7 @@ class MonitorApi(BaseApi):
         d3daysAgo = datetime.now() - timedelta(days=3)
 
         changedWAS_List = []
-        recs = getChangedWAS(create_on=d3daysAgo)
+        recs = get_changed_was(create_on=d3daysAgo)
         if recs:
             [ changedWAS_List.append(
                 {'id':r.id
@@ -462,7 +485,7 @@ class MonitorApi(BaseApi):
                 ) for r in recs ]
 
         changedWEB_List = []
-        recs = getChangedWEB(create_on=d3daysAgo)
+        recs = get_changed_web(create_on=d3daysAgo)
         if recs:
             [ changedWEB_List.append(
                 {'id':r.id
@@ -496,6 +519,7 @@ appbuilder.add_view(
     category="Monitor",
     category_icon="fa-envelope"
 )
+appbuilder.add_separator("Monitor")
 appbuilder.add_view(
     MoGridConfigModelView,
     "Table 목록 조회 설정",
@@ -505,7 +529,7 @@ appbuilder.add_view(
 )
 appbuilder.add_link(
     name='TABLE.INFO',
-    href='/monitor/test',
+    href='/monitor/gridView',
     label="Table 정보 조회",
     icon="fa-envelope",
     category="Monitor"

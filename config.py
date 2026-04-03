@@ -33,7 +33,7 @@ load_dotenv()
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 # Your App secret key
-SECRET_KEY = os.urandom(24)
+SECRET_KEY = '\2\i\thisismysecretkey\1\2\h\h'
 
 # The SQLAlchemy connection string.
 # SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(basedir, "app.db")
@@ -53,7 +53,8 @@ KAFKA_CONSUMER_4_WAS_MONITORING = 'g_w_mw_server'
 redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 
 SESSION_TYPE = 'redis'
-SESSION_PERMANENT = False
+#SESSION_PERMANENT = False
+SESSION_PERMANENT = True # 서버 재기동 후에도 token 유효하도록
 SESSION_USE_SIGNER = True
 SESSION_REDIS = redis.from_url(redis_url)
 
@@ -69,8 +70,9 @@ PLANTUML_URL = os.getenv('PLANTUML_URL', 'https://mwm-plantuml.kdb.co.kr:20443')
 AWS_URL = os.getenv('AWS_URL', 'http://localhost:9000')
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', 'x7QobM7I5WNI5zGWbkr4')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', 'pdoWz2Zw0yaJw9fW32jqZigaqiyXRuYLKK9x7PzJ')
-BUCKET_NAME = os.getenv('BUCKET_NAME', 'mwm_contents')
+BUCKET_NAME = os.getenv('BUCKET_NAME', 'mwm-contents')
 
+NOTIFICATION_URL = os.getenv('NOTIFICATION_URL', 'https://mwm-monitor.kdb.co.kr:20443/notification')
 BUCKET_PREFIX = '/uploads/'
 
 # Flask-WTF flag for CSRF
@@ -80,7 +82,8 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20241230.001)"
+APP_NAME = "리발소(VER:20260403.010)"
+PREFERRED_URL_SCHEME = 'https'
 
 # Uncomment to setup Setup an App icon
 # APP_ICON = "static/img/logo.jpg"
@@ -94,7 +97,6 @@ APP_NAME = "리발소(VER:20241230.001)"
 # AUTH_LDAP : Is for LDAP
 # AUTH_REMOTE_USER : Is for using REMOTE_USER from web server
 AUTH_TYPE = AUTH_DB
-
 # Uncomment to setup Full admin role name
 # AUTH_ROLE_ADMIN = 'Admin'
 
@@ -165,9 +167,28 @@ FAB_API_SHOW_STACKTRACE = True
 # APP_THEME = "readable.css"
 # APP_THEME = "simplex.css"
 # APP_THEME = "slate.css"
-# APP_THEME = "spacelab.css"
-APP_THEME = "united.css"
+APP_THEME = "spacelab.css"
+# APP_THEME = "united.css"
 # APP_THEME = "yeti.css"
+
+# ---------------------------------------------------
+# Constant Values (moved from app/__init__.py con_val)
+# ---------------------------------------------------
+TAG_EMAILS    = '이메일-'
+KDB_SMTP_IP   = os.getenv('KDB_SMTP_IP', 'smtp.gmail.com')
+KDB_SMTP_PORT = int(os.getenv('KDB_SMTP_PORT', '587'))
+SMTP_USE_TLS  = os.getenv('SMTP_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+SMTP_USERNAME = os.getenv('SMTP_USERNAME', 'tanminkwan@gmail.com')
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', 'ruak yvem adlh aatv')
+SMTP_SENDER   = os.getenv('SMTP_SENDER', 'tanminkwan@gmail.com')
+KROKI_URL     = os.getenv('KROKI_URL', 'http://mwm-kroki:8000')
 
 #Added by Hennry
 SCHEDULER_API_ENABLED = True
+AGENT_OFFLINE_MINUTES = 5
+
+# IDP Configuration
+IDP_INTERNAL_SERVER_URL = os.getenv('IDP_INTERNAL_SERVER_URL', 'http://mwm-idp:5000')
+IDP_EXTERNAL_SERVER_URL = os.getenv('IDP_EXTERNAL_SERVER_URL', 'http://localhost:5000')
+IDP_CLIENT_ID = os.getenv('IDP_CLIENT_ID', 'mwm-client')
+IDP_CLIENT_SECRET = os.getenv('IDP_CLIENT_SECRET', 'mwm-secret')

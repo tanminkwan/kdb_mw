@@ -68,6 +68,18 @@ assoc_tag_tag = Table('ut_tag_tag', Model.metadata,
                                   Column('id_of_child_tag', Integer, ForeignKey('ut_tag.id', ondelete='CASCADE'))
 )    
 
+assoc_kmgroup_htmlcontent = Table('ut_kmgroup_htmlcontent', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_group', Integer, ForeignKey('ut_km_group.id', ondelete='CASCADE')),
+                                  Column('id_of_htmlcontent', Integer, ForeignKey('ut_html_content.id', ondelete='CASCADE'))
+)    
+
+assoc_kmgroup_mdcontent = Table('ut_kmgroup_mdcontent', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_group', Integer, ForeignKey('ut_km_group.id', ondelete='CASCADE')),
+                                  Column('id_of_mdcontent', Integer, ForeignKey('ut_md_content.id', ondelete='CASCADE'))
+)    
+
 class UtTag(Model):
     __tablename__ = "ut_tag"
     t__table_comment = {"comment":"TAG"}
@@ -206,6 +218,23 @@ class UtResourceAddedText(Model):
     def __repr__(self):
         return self.resource_added_name
 
+class UtKmGroup(Model):
+    __tablename__ = "ut_km_group"
+    t__table_comment = {"comment":"지식관리 그룹"}
+    function_comments = {}
+
+    id               = Column(Integer, primary_key=True, nullable=False, comment='Primary Key')
+    group_name       = Column(String(50), nullable=False, comment='그룹 이름')
+
+    UniqueConstraint(group_name)
+
+    __table_args__ = (
+        t__table_comment,
+    )
+
+    def __repr__(self):
+        return self.group_name
+
 class UtHtmlContent(Model):
 
     __tablename__ = "ut_html_content"
@@ -227,6 +256,7 @@ class UtHtmlContent(Model):
     ut_tag = relationship('UtTag', secondary=assoc_tag_htmlcontent, backref='ut_html_content')
     ut_tagkm = relationship('UtTagKm', secondary=assoc_tagkm_htmlcontent, backref='ut_html_content')
     ut_file = relationship('UtFile', secondary=assoc_file_htmlcontent, backref='ut_html_content')
+    ut_kmgroup = relationship('UtKmGroup', secondary=assoc_kmgroup_htmlcontent, backref='ut_html_content')
 
     __table_args__ = (
         t__table_comment
@@ -234,6 +264,16 @@ class UtHtmlContent(Model):
 
     def __repr__(self):
         return datetime.now().strftime("%y-%m-%d %H:%M") + '_' + self.content_name
+
+    def user_name(self):
+        from flask_appbuilder.security.sqla.models import User
+        from sqlalchemy.orm import Session
+        session = Session.object_session(self)
+        if session and self.user_id:
+            u = session.query(User).filter_by(username=self.user_id).first()
+            if u:
+                return u.first_name
+        return self.user_id or ''
 
     def pop_html(self):
         return Markup(getHtmlButton('ut_html_content','content_html','content_name',str(self.id),'^_^'))
@@ -253,14 +293,15 @@ class UtMdContent(Model):
     search_tags     = Column(String(500), comment='SEARCH TAGS')    
     user_id         = Column(String(50), default=get_user, nullable=False)
     group_id        = Column(String(50), default=get_group)
-    update_on       = Column(DateTime(), default=get_date, nullable=False)    
-    create_on       = Column(DateTime(), default=get_date, nullable=False)    
+    update_on       = Column(DateTime, default=get_date, nullable=False)    
+    create_on       = Column(DateTime, default=get_date, nullable=False)    
 
     UniqueConstraint(content_id)
 
     ut_tag = relationship('UtTag', secondary=assoc_tag_mdcontent, backref='ut_md_content')
     ut_tagkm = relationship('UtTagKm', secondary=assoc_tagkm_mdcontent, backref='ut_md_content')
     ut_file = relationship('UtFile', secondary=assoc_file_mdcontent, backref='ut_md_content')
+    ut_kmgroup = relationship('UtKmGroup', secondary=assoc_kmgroup_mdcontent, backref='ut_md_content')
 
     __table_args__ = (
         t__table_comment
@@ -268,6 +309,16 @@ class UtMdContent(Model):
 
     def __repr__(self):
         return datetime.now().strftime("%y-%m-%d %H:%M") + '_' + self.content_name
+
+    def user_name(self):
+        from flask_appbuilder.security.sqla.models import User
+        from sqlalchemy.orm import Session
+        session = Session.object_session(self)
+        if session and self.user_id:
+            u = session.query(User).filter_by(username=self.user_id).first()
+            if u:
+                return u.first_name
+        return self.user_id or ''
 
     def show_md(self):
         return Markup('<a href="/ut/mdcontent/'+str(self.id)+'" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 보기"><i class="fa fa-search"></i></a>')

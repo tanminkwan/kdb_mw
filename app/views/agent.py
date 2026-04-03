@@ -1,42 +1,34 @@
-import logging
-from flask import g, render_template, Flask, request, jsonify\
-     , send_file, redirect, url_for, render_template_string
-from flask_appbuilder.filemanager import FileManager, get_file_original_name
+from flask import g, render_template, request, jsonify\
+     , redirect, url_for
+from flask_appbuilder.filemanager import get_file_original_name
 from flask_appbuilder.models.sqla.interface import SQLAInterface
-from flask_appbuilder import BaseView, ModelView, ModelRestApi, MultipleView, MasterDetailView\
+from flask_appbuilder import BaseView, ModelView\
     , expose, has_access
 from flask_appbuilder.widgets import ListBlock
 from flask_appbuilder.actions import action
-from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, protect
-from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
-    , FilterEqualFunction, FilterNotEqual,FilterInFunction,FilterStartsWith, FilterEqual
-from app import appbuilder, db, scheduler, KAFKA_BROKERS
+from flask_appbuilder.models.sqla.filters import FilterEqual
+from app import appbuilder, db, scheduler
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgAgentGroup, AgAgent, AgResult, AgFile, AgCommandHelper, AgAutorunResult
-from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
-from app.dmlsForAgent import AutorunResult
-from .common import FilterStartsWithFunction, get_mw_user, get_userid\
-    , ReadOnlyField, RequiredOnContidion, ValidateBatchFunctionName
-from app.sqls.was import getWasInstanceId, getLandscape, getDomainIdAsPK
-from app.sqls.agent import checkAgentUpdated, checkAgentAproved\
-    , sendCommands, addAgent, addResult, cancelCommands, createCommandDetail_bySch\
-    , getLatestFile, updateResultStatus, updateExpiration
+import logging
+from app.sqls.agent_dml import AutorunResult
 from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
+from .common import FilterStartsWithFunction, get_mw_user\
+    , ReadOnlyField, RequiredOnContidion, ValidateBatchFunctionName
+from app.sqls.agent import cancel_commands, create_command_detail\
+    , update_result_status, broadcast_callback_registry
 from sqlalchemy import event
 
 from wtforms import Form, StringField
 
 #from wtforms.fields import TextField
 from wtforms.validators import Regexp, EqualTo
+from config import AGENT_OFFLINE_MINUTES
 from datetime import datetime, timedelta
 from app.jobs  import job_ag_create_job
 from flask_appbuilder.filemanager import get_file_original_name
-import apscheduler
-from flask_jwt_extended import create_refresh_token
-import sys
-from deepdiff import DeepDiff
 import json
-import xmltodict
+import apscheduler
 """
 @event.listens_for(db.session, 'after_attach')
 def test(session, instance):
@@ -47,7 +39,7 @@ def create_command_detail2(target, value, old_value, initiator):
     print("value :",value)
     print("old_value :",old_value)
     if value.name == 'IMMEDIATE' and old_value != 'IMMEDIATE':
-        createCommandDetail(connection, target)
+        create_command_detail(connection, target)
 @db.event.listens_for(AgCommandMaster, 'after_update')
 def job_after_update_command(mapper, connection, target):
     
@@ -57,11 +49,31 @@ def job_after_update_command(mapper, connection, target):
 @db.event.listens_for(AgCommandMaster, 'after_insert')
 def create_command_detail1(mapper, connection, target):
     
-    job_ag_create_job(target)
+    logging.debug(f"after_insert create_command_detail1 called : {target}")
+    # [서버내부기능] 이거나 주기가 있는 작업은 scheduler로 등록
+    if target.periodic_type.name in ('PERIODIC','ONETIME') or target.ag_command_type.command_class.name == 'ServerFunc':
+        job_ag_create_job(target)
+    else:
+        create_command_detail(target)
+
+@db.event.listens_for(AgCommandMaster, 'after_delete')
+def delete_command_job(mapper, connection, target):
+    
+    logging.debug(f"after_delete delete_command_job called : {target}")
+    try:
+        scheduler.remove_job('CreDetail_'+ target.command_id)
+    except Exception as e:
+        pass
+
+    try:
+        scheduler.remove_job('RunBatch_'+ target.command_id)
+    except Exception as e:
+        pass
 
 @db.event.listens_for(AgCommandMaster, 'before_insert')
 def set_interval_type(mapper, connection, target):
     
+    logging.debug(f"before_insert set_interval_type called : {target}")
     if target.periodic_type.name != 'PERIODIC':
         target.interval_type = None
 
@@ -81,11 +93,11 @@ class AgentModelView(ModelView):
          {'text':'PROD','id':'toggle_bt1','bt_group':'1','onclick':'_flt_0_landscape=PROD'}
         ,{'text':'DEV','id':'toggle_bt2','bt_group':'1','onclick':'_flt_0_landscape=DEV'}
         ,{'text':'TEST','id':'toggle_bt3','bt_group':'1','onclick':'_flt_0_landscape=TEST'}
-        ,{'text':'OffLine','id':'toggle_bt3','bt_group':'1','onclick':'_flt_2_last_checked_date='+(datetime.now() - timedelta(minutes=4)).strftime("%Y-%m-%d+%H:%M:%S")}
+        ,{'text':'OffLine','id':'toggle_bt3','bt_group':'1','onclick':'_flt_2_last_checked_date='+(datetime.now() - timedelta(minutes=AGENT_OFFLINE_MINUTES)).strftime("%Y-%m-%d+%H:%M:%S")}
         ,{'text':'Not Approved','id':'toggle_bt4','bt_group':'1','onclick':'_flt_0_approved_yn=NO'}
         ],
-        'selectList':[
-         {'text':'Hostname','id':'host-selector','combind':'0','type':'child'}
+        'inputList':[
+         {'text':'Hostname','id':'host-id','combind':'1','condition':'_flt_2_host_id=','size':20}
         ]
         }
     page_size = 100
@@ -100,7 +112,7 @@ class AgentModelView(ModelView):
     }
 
     base_permissions = ['can_list', 'can_show', 'can_edit']
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class CommandHelperModelView(ModelView):
     
@@ -117,7 +129,7 @@ class AgentGroupModelView(ModelView):
     list_columns  = ['agent_group_id','agent_group_name', 'ag_agent']
     add_columns   = ['agent_group_id','agent_group_name', 'agent_type', 'ag_agent']
     edit_columns  = ['agent_group_id','agent_group_name', 'agent_type', 'ag_agent']
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class FileModelView(ModelView):
     datamodel = SQLAInterface(AgFile)
@@ -163,7 +175,7 @@ class CommandTypeModelView(ModelView):
 
     add_columns = ['command_type_id', 'command_type_name', 'command_class', 'target_file_name', 'target_file_path']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     validators_columns = {
                     'target_file_name':[ValidateBatchFunctionName()]
@@ -215,9 +227,9 @@ class ResultModelView(ModelView):
     base_order = ('create_on', 'desc')
     base_permissions = ['can_list', 'can_show', 'can_edit', 'can_delete']
 
-    formatters_columns={'create_on': lambda x:x.strftime('%Y.%m.%d %H:%M')}
+    formatters_columns={'create_on': lambda x: x.strftime('%Y.%m.%d %H:%M') if x else ''}
     
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     @action("update_config","Update Config","진짜로?","fa-rocket",single=False)
     def update_config(self, items):
@@ -234,42 +246,42 @@ class ResultModelView(ModelView):
 
             msg = ''
             if file_name in ['domain.xml','JEUSMain.xml']:
-                rtn, msg = ar.updateJeusDomain()
+                rtn, msg = ar.update_jeus_domain()
             elif file_name == 'http.m':
                 rtn, msg = ar.update_httpm()
             elif file_name == 'WEBMain.xml':
-                rtn, msg = ar.updateWebMain()
+                rtn, msg = ar.update_web_main()
             elif file_name == 'urlrewrite_config':
-                rtn, msg = ar.updateUrlRewrite()
+                rtn, msg = ar.update_url_rewrite()
             elif file_name == 'get_server_stat':
-                rtn, msg = ar.updateWasStatus()
+                rtn, msg = ar.update_was_status()
             elif file_name == 'get_ssl_certi':
-                rtn, msg = ar.updateConnectSSLByAPI()
+                rtn, msg = ar.update_connect_ssl_by_api()
             elif file_name == 'webtob.version.sh':
-                rtn, msg = ar.updateWebtobVersion()
+                rtn, msg = ar.update_webtob_version()
             elif file_name == 'webtob.monitor.sh':
-                rtn, msg = ar.updateWebtobMonitor()
+                rtn, msg = ar.update_webtob_monitor()
             elif file_name == 'get_ssl_certifile':
-                rtn, msg = ar.update_file_SSL_byAPI()
+                rtn, msg = ar.update_file_ssl_by_api()
             elif file_name.startswith('fileSSL.out'):
-                rtn, msg = ar.updateFileSSL()
+                rtn, msg = ar.update_file_ssl()
             elif file_name.startswith('connectSSL.out'):
-                rtn, msg = ar.updateConnectSSL()
+                rtn, msg = ar.update_connect_ssl()
             elif file_name == 'webtob.license.sh' or file_name == 'webtob.license.bat' or file_name.startswith('RUN.WEBTOB.LICENSE.out'):
-                rtn, msg = ar.updateWebtobLicenseInfo()
+                rtn, msg = ar.update_webtob_license_info()
             elif file_name == 'jeus.license.sh' or file_name == 'jeus.license.bat' or file_name.startswith('RUN.JEUS.LICENSE.out'):
-                rtn, msg = ar.updateJeusLicenseInfo()
+                rtn, msg = ar.update_jeus_license_info()
             elif file_name == 'get_find_cmd.sh' or file_name == 'get_find_cmd.bat' or file_name.startswith('RUN.FIND.CMD.out'):
-                rtn, msg = ar.updateFilteredInfo()
+                rtn, msg = ar.update_filtered_info()
             elif file_name in ['jeus.properties','jeus.properties.cmd']:
-                rtn, msg = ar.updateJeusProperties()
+                rtn, msg = ar.update_jeus_properties()
             elif file_name in ['mwmanager.jar','mwmanager4j6.jar','mwmanager4j7.jar']:
                 continue
             else:
                 rtn = -1
                 msg = 'Invalid file_name :' + file_name
             
-            ar.updateResultStatus('COMPLITED' if rtn > 0 else 'NOCHANGE' if rtn==0 else 'ERROR', msg)
+            ar.update_result_status('COMPLITED' if rtn > 0 else 'NOCHANGE' if rtn==0 else 'ERROR', msg)
             
             db.session.commit()
 
@@ -297,17 +309,18 @@ class CommandDetailModelView(ModelView):
     base_order   = ('create_on', 'desc')
     search_columns = ['command_id','agent_id','command_type_id','command_class']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     related_views = [ResultModelView]
 
 class CommandMasterModelView(ModelView):
     
     datamodel = SQLAInterface(AgCommandMaster)
-
+ 
     list_title    = "Command 목록"    
+
     list_columns  = ['command_id', 'ag_command_type', 'periodic_type', 'ag_agent', 'ag_agent_group'\
-                    , 'time_to_exe', 'interval_type', 'cycle_to_exe', 'time_to_stop', 'create_on']
+                    , 'time_to_exe', 'interval_type', 'cycle_to_exe', 'time_to_stop', 'broadcast_callback', 'create_on']
     label_columns = {'command_id':'Command ID'
                     ,'ag_command_type':'Command Type ID'
                     ,'periodic_type':'실행 구분'
@@ -321,26 +334,30 @@ class CommandMasterModelView(ModelView):
                     ,'command_sender':'Command를 보내는 곳'
                     ,'result_receiver':'Result 받는 곳'
                     ,'target_object':'Target Object'
+                    ,'broadcast_callback':'Broadcast Callback'
                      }
 
-    add_columns  = ['command_id', 'ag_command_type', 'ag_agent', 'ag_agent_group', 'periodic_type'\
+    add_columns  = ['command_id', 'ag_command_type', 'broadcast_callback', 'ag_agent', 'ag_agent_group', 'periodic_type'\
                     , 'command_sender', 'time_to_exe', 'interval_type', 'cycle_to_exe', 'time_to_stop'\
                     , 'additional_params', 'result_receiver','target_object']
 
-    edit_columns  = ['command_id', 'ag_command_type', 'ag_agent', 'ag_agent_group', 'periodic_type'\
+    edit_columns  = ['command_id', 'ag_command_type', 'broadcast_callback', 'ag_agent', 'ag_agent_group', 'periodic_type'\
                     , 'command_sender', 'time_to_exe', 'interval_type', 'cycle_to_exe', 'time_to_stop'\
                     , 'additional_params', 'cancel_yn']
 
+    add_template = 'agent/command_master_add.html'
+    edit_template = 'agent/command_master_edit.html'
+
     base_order   = ('create_on', 'desc')
+    extra_args   = {'broadcast_callbacks': list(broadcast_callback_registry.keys())}
 
     validators_columns = {
                     'cycle_to_exe':[RequiredOnContidion('periodic_type', 'PERIODIC', message='주기작업의 경우 필수입력항목입니다.')]
                   , 'time_to_exe':[RequiredOnContidion('periodic_type', 'ONETIME', message='1회성작업의 경우 필수입력항목입니다.')]
                   , 'target_object':[RequiredOnContidion('result_receiver', ['KAFKA','SERVER_N_KAFKA'], message='Result를 KAFKA로 선택한 경우 Target Object에 topic이름을 입력하세요.')]
-                  , 'ag_agent':[RequiredOnContidion('ag_agent_group', [[]], message='Agent 또는 Agent 그룹을 선택하세요.')]
                 }
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     related_views = [CommandDetailModelView]
 
@@ -365,7 +382,7 @@ class CommandMasterAliveView(ModelView):
 
     base_order   = ('create_on', 'desc')
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user],['finished_yn', FilterEqual, 'NO']]
+    base_filters = [['finished_yn', FilterEqual, 'NO']]
     base_permissions = ['can_list', 'can_show', 'can_edit']
     related_views = [CommandDetailModelView]
 
@@ -379,7 +396,7 @@ class CommandMasterAliveView(ModelView):
                 print('cancel_commands : ',e)
 
         cids = [item.command_id for item in items]
-        cancelCommands(cids)
+        cancel_commands(cids)
         db.session.commit()
 
         self.update_redirect()
@@ -399,6 +416,10 @@ class AutorunResultModelView(ModelView):
                     ,'autorun_func':'자동실행 기능'
                     ,'autorun_param':'Parameter'
                      }
+    
+    description_columns = {
+        'target_file_name': '파일명, 기능명 또는 정규식(Regex)을 입력하십시오. (예: run\.agent\.(sh|bat))'
+    }
 
     add_columns  = ['autorun_id', 'autorun_type', 'target_file_name', 'command_id'\
                     , 'autorun_func', 'autorun_param']
@@ -413,190 +434,7 @@ class AutorunResultModelView(ModelView):
                   , 'command_id':[RequiredOnContidion('autorun_type', 'COMMAND', message='Command ID를 입력하세요.')]
                 }
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
 
-class CommandApi(BaseApi):
-
-    resource_name = 'command'
-
-    @expose('/<agent_id>/<agent_version>', methods=['GET'])
-    @protect()
-    def command(self, agent_id, agent_version):
-        
-        rtn , msg = checkAgentAproved(agent_id)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , msg = checkAgentUpdated(agent_version)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , data = sendCommands(agent_id, agent_version)
-
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'message':'OK', 'data':data}), 200
-
-    @expose('/<agent_id>/<agent_version>/<agent_type>', methods=['GET'])
-    @protect()
-    def command_v2(self, agent_id, agent_version, agent_type):
-        
-        rtn , msg = checkAgentAproved(agent_id)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , msg = checkAgentUpdated(agent_version)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , data = sendCommands(agent_id, agent_version, agent_type)
-
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'message':'OK', 'data':data}), 200
-
-    @expose('/<agent_id>/<agent_version>/<agent_type>/<agent_status>', methods=['GET'])
-    @protect()
-    def command_v4(self, agent_id, agent_version, agent_type, agent_status):
-        
-        rtn , msg = checkAgentAproved(agent_id)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , msg = checkAgentUpdated(agent_version)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , data = sendCommands(agent_id, agent_version, agent_type)
-
-        #최초 접속인 경우
-        if agent_status == 'BOOT':
-            data.append(dict(
-                        command_class     = 'BOOT',
-                        kafka_broker_address = ','.join(KAFKA_BROKERS)
-                    ))
-
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'message':'OK', 'data':data}), 200
-
-    @expose('/<agent_id>', methods=['GET'])
-    @protect()
-    def command_v3(self, agent_id):
-        
-        rtn , msg = checkAgentAproved(agent_id)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg}), 201
-
-        rtn , data = sendCommands(agent_id)
-
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'message':'OK', 'data':data}), 200
-
-    @expose('/result', methods=['POST'])
-    @protect()
-    def agent(self, **kwargs):
-
-        data = json.loads(request.data)
-
-        ip_address = request.remote_addr
-
-        if not data.get('agent_id'):
-            return jsonify({'return_code':-2,'message':'agent_id does not exist'}), 201
-        elif not data.get('command_id'):
-            return jsonify({'return_code':-2,'message':'command_id does not exist'}), 201
-        elif not data.get('repetition_seq'):
-            return jsonify({'return_code':-2,'message':'command_id does not exist'}), 201
-        elif not data.get('host_id'):
-            return jsonify({'return_code':-2,'message':'host_id does not exist'}), 201
-        elif data.get('result_text') == None :
-            return jsonify({'return_code':-2,'message':'result_text does not exist'}), 201
-
-        rtn , result_id = addResult(data)
-
-        db.session.commit()
-
-        #Result 상태가 'CREATE' 인 경우 Auto Run Result 수행
-        if rtn > 0:
-
-            msg = ''
-            try:
-                ar = AutorunResult(result_id=result_id)
-                rtn2, msg = ar.callAutorunFunc()
-            except Exception as e:
-                excType, excValue, traceback = sys.exc_info()
-                logging.error(f'callAutorunFunc Error : 1{excType} 2{excValue} 3{traceback}')
-                rtn2 = -1
-
-            if rtn2 > 0:
-                db.session.commit()
-            else:
-                command_id = data.get('command_id')
-                logging.error(f'callAutorunFunc [command_id:{command_id}][msg:{msg}]')
-                db.session.rollback()
-
-        return jsonify({'return_code':1, 'message':'OK'}), 200
-
-class AgentApi(BaseApi):
-
-    resource_name = 'agent'
-
-    @expose('/boot', methods=['POST'])
-    @protect()
-    def agentBoot(self, **kwargs):
-        return jsonify({'return_code':1, 'message':'OK'}), 200
-
-    @expose('/agent', methods=['POST'])
-    @protect()
-    def agent(self, **kwargs):
-
-        data = json.loads(request.data)
-
-        ip_address = request.remote_addr
-
-        if not data.get('agent_id'):
-            return jsonify({'return_code':-2,'message':'agent_id does not exist'}), 401
-        elif not data.get('host_id'):
-            return jsonify({'return_code':-2,'message':'host_id does not exist'}), 401
-        elif not data.get('agent_type'):
-            return jsonify({'return_code':-2,'message':'agent_type does not exist'}), 401
-
-        agent_id   = data['agent_id']
-        host_id    = data['host_id']
-        agent_type = data['agent_type']
-        installation_path  = data['installation_path']
-
-        rtn , msg = addAgent(agent_id, host_id, agent_type, ip_address, installation_path=installation_path)
-        
-        return jsonify({'return_code':1, 'message':'OK'}), 200
-
-    @expose('/download/<agent_type>/<file_name>', methods=['GET'])
-    @protect()
-    def download_file(self, agent_type, file_name):
-
-        #get file name from db
-        realname = getLatestFile(agent_type, file_name)
-
-        if not realname:
-            return jsonify({'return_code':-1, 'message':'File not found'}), 404
-
-        fm = FileManager()
-        fullname = fm.get_path(realname)
-
-        return send_file(fullname, attachment_filename=file_name, as_attachment=True)
-        
-    @expose('/getRefreshToken/<agent_id>', methods=['GET'])
-    @protect()
-    def getRefreshToken(self, agent_id):
-
-        refresh_token = create_refresh_token(g.user.id , expires_delta=timedelta(days=15))
-        print('Hennry refresh token : ', refresh_token)
-        expiration_date = datetime.now() + timedelta(days=15)
-        rtn , msg = updateExpiration(agent_id, expiration_date, refresh_token)
-        if rtn < 0:
-            return jsonify({'return_code':rtn, 'message':msg, 'refresh_token':''}), 401
-        return jsonify({'return_code':rtn, 'message':'OK', 'refresh_token':refresh_token}), 200
 
 class AjaxView(BaseView):
 
@@ -618,6 +456,8 @@ class AjaxView(BaseView):
         time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
 		
         return self.render_template("ajax1.html",name='hennry', time=time)
+
+
 
 #appbuilder.add_view(AjaxView, "ajax test", category="ajax")
 #appbuilder.add_link("ajax test", href="/ajax/ajax1", category="ajax")
@@ -685,5 +525,3 @@ appbuilder.add_view(
     icon="fa-folder-open-o",
     category="Agent&Command"
 )
-appbuilder.add_api(CommandApi)
-appbuilder.add_api(AgentApi)

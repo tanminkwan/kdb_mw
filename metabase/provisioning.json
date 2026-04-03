@@ -1,0 +1,397 @@
+{
+    "database": {
+        "name": "MWM Database",
+        "engine": "postgres"
+    },
+    "questions": [
+        {
+            "name": "Total Agents",
+            "display": "scalar",
+            "query": "SELECT count(*)::integer as total FROM ag_agent WHERE 1=1 [[ AND ({{landscape}} = '전체' OR landscape::text = {{landscape}}) ]]"
+        },
+        {
+            "name": "Online Agents",
+            "display": "scalar",
+            "query": "SELECT count(*)::integer as online FROM ag_agent WHERE approved_yn::text = 'YES' AND last_checked_date > NOW() - INTERVAL '300 seconds' [[ AND ({{landscape}} = '전체' OR landscape::text = {{landscape}}) ]]"
+        },
+        {
+            "name": "Agent Status Summary",
+            "display": "bar",
+            "query": "SELECT CASE WHEN approved_yn::text = 'NO' THEN '미승인' WHEN last_checked_date IS NULL THEN 'Offline' WHEN last_checked_date > NOW() - INTERVAL '300 seconds' THEN 'Online' ELSE 'Offline' END as status, count(*)::integer as count FROM ag_agent WHERE 1=1 [[ AND ({{landscape}} = '전체' OR landscape::text = {{landscape}}) ]] GROUP BY 1",
+            "visualization_settings": {
+                "graph.dimensions": ["status"],
+                "graph.metrics": ["count"],
+                "column_settings": {
+                    "[\"name\",\"status\"]": { "column_title": "상태" },
+                    "[\"name\",\"count\"]": { "column_title": "수량" }
+                }
+            }
+        },
+        {
+            "name": "Agent Status Table",
+            "display": "table",
+            "query": "SELECT status, count FROM (SELECT CASE WHEN approved_yn::text = 'NO' THEN '미승인' WHEN last_checked_date IS NULL THEN 'Offline' WHEN last_checked_date > NOW() - INTERVAL '300 seconds' THEN 'Online' ELSE 'Offline' END as status, count(*)::integer as count, 1 as sort_priority FROM ag_agent WHERE 1=1 [[ AND ({{landscape}} = '전체' OR landscape::text = {{landscape}}) ]] GROUP BY 1 UNION ALL SELECT '전체' as status, count(*)::integer as count, 2 as sort_priority FROM ag_agent WHERE 1=1 [[ AND ({{landscape}} = '전체' OR landscape::text = {{landscape}}) ]]) sub ORDER BY sort_priority ASC, count DESC",
+            "visualization_settings": {
+                "column_settings": {
+                    "[\"name\",\"status\"]": { "column_title": "상태" },
+                    "[\"name\",\"count\"]": { "column_title": "수량" }
+                }
+            }
+        },
+        {
+            "name": "Agent List",
+            "display": "table",
+            "query": "SELECT * FROM (SELECT agent_id, agent_name, agent_version, ip_address, landscape, last_checked_date, CASE WHEN approved_yn::text = 'NO' THEN '미승인' WHEN last_checked_date IS NULL THEN 'Offline' WHEN last_checked_date > NOW() - INTERVAL '300 seconds' THEN 'Online' ELSE 'Offline' END as status FROM ag_agent WHERE 1=1 [[ AND ({{landscape}} = '전체' OR landscape::text = {{landscape}}) ]]) sub WHERE 1=1 [[ AND ({{status_filter}} = '전체' OR sub.status = {{status_filter}}) ]]",
+            "visualization_settings": {
+                "column_settings": {
+                    "[\"name\",\"agent_id\"]": { "column_title": "에이전트 ID" },
+                    "[\"name\",\"agent_name\"]": { "column_title": "에이전트명" },
+                    "[\"name\",\"agent_version\"]": { "column_title": "버전" },
+                    "[\"name\",\"ip_address\"]": { "column_title": "IP 주소" },
+                    "[\"name\",\"landscape\"]": { "column_title": "영역" },
+                    "[\"name\",\"last_checked_date\"]": { "column_title": "최근 체크" },
+                    "[\"name\",\"status\"]": { "column_title": "상태" }
+                }
+            }
+        },
+        {
+            "name": "Agents by Landscape",
+            "display": "bar",
+            "query": "SELECT landscape::text as landscape, count(*)::integer as count FROM ag_agent GROUP BY 1",
+            "visualization_settings": {
+                "column_settings": {
+                    "[\"name\",\"landscape\"]": { "column_title": "영역" },
+                    "[\"name\",\"count\"]": { "column_title": "수량" }
+                }
+            }
+        },
+        {
+            "name": "Certificate Expiry Summary",
+            "display": "bar",
+            "query": "SELECT CASE WHEN d.notafter IS NULL THEN '미확인' WHEN d.notafter <= NOW() THEN '만료' WHEN d.notafter <= NOW() + INTERVAL '7 days' THEN '임박' WHEN d.notafter <= NOW() + INTERVAL '30 days' THEN '주의' ELSE '정상' END as status, count(*)::integer as count FROM mw_web w JOIN mw_web_vhost v ON w.id = v.mw_web_id JOIN mw_web_domain d ON v.id = d.mw_web_vhost_id WHERE w.use_yn::text = 'YES' AND d.ssl_yn::text = 'YES' [[ AND ({{landscape}} = '전체' OR w.landscape::text = {{landscape}}) ]] GROUP BY 1",
+            "visualization_settings": {
+                "graph.dimensions": ["status"],
+                "graph.metrics": ["count"],
+                "column_settings": {
+                    "[\"name\",\"status\"]": { "column_title": "상태" },
+                    "[\"name\",\"count\"]": { "column_title": "수량" }
+                }
+            }
+        },
+        {
+            "name": "Certificate Status Table",
+            "display": "table",
+            "query": "SELECT status, count FROM (SELECT CASE WHEN d.notafter IS NULL THEN '미확인' WHEN d.notafter <= NOW() THEN '만료' WHEN d.notafter <= NOW() + INTERVAL '7 days' THEN '임박' WHEN d.notafter <= NOW() + INTERVAL '30 days' THEN '주의' ELSE '정상' END as status, count(*)::integer as count, 1 as sort_priority FROM mw_web w JOIN mw_web_vhost v ON w.id = v.mw_web_id JOIN mw_web_domain d ON v.id = d.mw_web_vhost_id WHERE w.use_yn::text = 'YES' AND d.ssl_yn::text = 'YES' [[ AND ({{landscape}} = '전체' OR w.landscape::text = {{landscape}}) ]] GROUP BY 1 UNION ALL SELECT '전체' as status, count(*)::integer as count, 2 as sort_priority FROM mw_web w JOIN mw_web_vhost v ON w.id = v.mw_web_id JOIN mw_web_domain d ON v.id = d.mw_web_vhost_id WHERE w.use_yn::text = 'YES' AND d.ssl_yn::text = 'YES' [[ AND ({{landscape}} = '전체' OR w.landscape::text = {{landscape}}) ]]) sub ORDER BY sort_priority ASC, count DESC",
+            "visualization_settings": {
+                "column_settings": {
+                    "[\"name\",\"status\"]": { "column_title": "상태" },
+                    "[\"name\",\"count\"]": { "column_title": "수량" }
+                }
+            }
+        },
+        {
+            "name": "Certificate Detail List",
+            "display": "table",
+            "query": "SELECT * FROM (SELECT d.host_id, d.domain_name, d.port, COALESCE(SUBSTRING(d.subject FROM '(?i)CN=[^,/]+'), d.subject, '') as t__cn, d.notafter, d.update_dt, CASE WHEN d.notafter IS NULL THEN '미확인' WHEN d.notafter <= NOW() THEN '만료' WHEN d.notafter <= NOW() + INTERVAL '7 days' THEN '임박' WHEN d.notafter <= NOW() + INTERVAL '30 days' THEN '주의' ELSE '정상' END as status FROM mw_web w JOIN mw_web_vhost v ON w.id = v.mw_web_id JOIN mw_web_domain d ON v.id = d.mw_web_vhost_id WHERE w.use_yn::text = 'YES' AND d.ssl_yn::text = 'YES' [[ AND ({{landscape}} = '전체' OR w.landscape::text = {{landscape}}) ]]) sub WHERE 1=1 [[ AND ({{status_filter}} = '전체' OR sub.status = {{status_filter}}) ]] ORDER BY sub.notafter ASC NULLS FIRST",
+            "visualization_settings": {
+                "column_settings": {
+                    "[\"name\",\"host_id\"]": { "column_title": "호스트" },
+                    "[\"name\",\"domain_name\"]": { "column_title": "도메인" },
+                    "[\"name\",\"port\"]": { "column_title": "포트" },
+                    "[\"name\",\"t__cn\"]": { "column_title": "CN" },
+                    "[\"name\",\"notafter\"]": { "column_title": "만료일" },
+                    "[\"name\",\"update_dt\"]": { "column_title": "업데이트" },
+                    "[\"name\",\"status\"]": { "column_title": "상태" }
+                }
+            }
+        }
+    ],
+    "dashboards": [
+        {
+            "name": "Agent Status Dashboard",
+            "parameters": [
+                {
+                    "name": "Landscape",
+                    "slug": "landscape",
+                    "type": "string/=",
+                    "values_source_type": "static-list",
+                    "values_source_config": {
+                        "values": [
+                            "전체",
+                            "PROD",
+                            "DEV",
+                            "TEST"
+                        ]
+                    },
+                    "values_query_type": "list",
+                    "default": "전체"
+                },
+                {
+                    "name": "Agent Status",
+                    "slug": "status_filter",
+                    "type": "string/=",
+                    "values_source_type": "static-list",
+                    "values_source_config": {
+                        "values": [
+                            "전체",
+                            "Online",
+                            "Offline",
+                            "미승인"
+                        ]
+                    },
+                    "values_query_type": "list",
+                    "default": "전체"
+                }
+            ],
+            "cards": [
+                {
+                    "card_name": "Agent Status Summary",
+                    "row": 0,
+                    "col": 0,
+                    "size_x": 12,
+                    "size_y": 6,
+                    "parameter_mappings": [
+                        {
+                            "parameter_mapping": "landscape",
+                            "target": [
+                                "variable",
+                                [
+                                    "template-tag",
+                                    "landscape"
+                                ]
+                            ]
+                        }
+                    ],
+                    "visualization_settings": {
+                        "click_behavior": {
+                            "type": "crossfilter",
+                            "parameterMapping": {
+                                "status_filter": {
+                                    "id": "status_filter",
+                                    "source": {
+                                        "type": "column",
+                                        "id": "status",
+                                        "name": "status"
+                                    },
+                                    "target": { "type": "parameter", "id": "status_filter" }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "card_name": "Agent Status Table",
+                    "row": 0,
+                    "col": 12,
+                    "size_x": 12,
+                    "size_y": 6,
+                    "parameter_mappings": [
+                        {
+                            "parameter_mapping": "landscape",
+                            "target": [
+                                "variable",
+                                [
+                                    "template-tag",
+                                    "landscape"
+                                ]
+                            ]
+                        }
+                    ],
+                    "visualization_settings": {
+                        "column_settings": {
+                            "[\"name\",\"status\"]": {
+                                "click_behavior": {
+                                    "type": "crossfilter",
+                                    "parameterMapping": {
+                                        "status_filter": {
+                                            "id": "status_filter",
+                                            "source": {
+                                                "type": "column",
+                                                "id": "status",
+                                                "name": "status"
+                                            },
+                                            "target": { "type": "parameter", "id": "status_filter" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "card_name": "Agent List",
+                    "row": 6,
+                    "col": 0,
+                    "size_x": 24,
+                    "size_y": 14,
+                    "parameter_mappings": [
+                        {
+                            "parameter_mapping": "landscape",
+                            "target": [
+                                "variable",
+                                [
+                                    "template-tag",
+                                    "landscape"
+                                ]
+                            ]
+                        },
+                        {
+                            "parameter_mapping": "status_filter",
+                            "target": [
+                                "variable",
+                                [
+                                    "template-tag",
+                                    "status_filter"
+                                ]
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "SSL Certificate Dashboard",
+            "parameters": [
+                {
+                    "name": "Landscape",
+                    "slug": "landscape",
+                    "type": "string/=",
+                    "values_source_type": "static-list",
+                    "values_source_config": {
+                        "values": [
+                            "전체",
+                            "PROD",
+                            "DEV",
+                            "TEST"
+                        ]
+                    },
+                    "values_query_type": "list",
+                    "default": "전체"
+                },
+                {
+                    "name": "Certificate Status",
+                    "slug": "status_filter",
+                    "type": "string/=",
+                    "values_source_type": "static-list",
+                    "values_source_config": {
+                        "values": [
+                            "전체",
+                            "정상",
+                            "주의",
+                            "임박",
+                            "만료",
+                            "미확인"
+                        ]
+                    },
+                    "values_query_type": "list",
+                    "default": "전체"
+                }
+            ],
+            "cards": [
+                {
+                    "card_name": "Certificate Expiry Summary",
+                    "row": 0,
+                    "col": 0,
+                    "size_x": 12,
+                    "size_y": 6,
+                    "parameter_mappings": [
+                        {
+                            "parameter_mapping": "landscape",
+                            "target": [
+                                "variable",
+                                [
+                                    "template-tag",
+                                    "landscape"
+                                ]
+                            ]
+                        }
+                    ],
+                    "visualization_settings": {
+                        "click_behavior": {
+                            "type": "crossfilter",
+                            "parameterMapping": {
+                                "status_filter": {
+                                    "id": "status_filter",
+                                    "source": {
+                                        "type": "column",
+                                        "id": "status",
+                                        "name": "status"
+                                    },
+                                    "target": { "type": "parameter", "id": "status_filter" }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "card_name": "Certificate Status Table",
+                    "row": 0,
+                    "col": 12,
+                    "size_x": 12,
+                    "size_y": 6,
+                    "parameter_mappings": [
+                        {
+                            "parameter_mapping": "landscape",
+                            "target": [
+                                "variable",
+                                [
+                                    "template-tag",
+                                    "landscape"
+                                ]
+                            ]
+                        }
+                    ],
+                    "visualization_settings": {
+                        "column_settings": {
+                            "[\"name\",\"status\"]": {
+                                "click_behavior": {
+                                    "type": "crossfilter",
+                                    "parameterMapping": {
+                                        "status_filter": {
+                                            "id": "status_filter",
+                                            "source": {
+                                                "type": "column",
+                                                "id": "status",
+                                                "name": "status"
+                                            },
+                                            "target": { "type": "parameter", "id": "status_filter" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "card_name": "Certificate Detail List",
+                    "row": 6,
+                    "col": 0,
+                    "size_x": 24,
+                    "size_y": 14,
+                    "parameter_mappings": [
+                        {
+                            "parameter_mapping": "landscape",
+                            "target": [
+                                "variable",
+                                [
+                                    "template-tag",
+                                    "landscape"
+                                ]
+                            ]
+                        },
+                        {
+                            "parameter_mapping": "status_filter",
+                            "target": [
+                                "variable",
+                                [
+                                    "template-tag",
+                                    "status_filter"
+                                ]
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

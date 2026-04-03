@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import JSON, JSONB
 from sqlalchemy import Column, Integer, String, ForeignKey\
 , DateTime, Enum, UniqueConstraint, ForeignKeyConstraint\
 , Table, Date, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 import enum
 from datetime import datetime
 from flask_appbuilder.models.mixins import FileColumn
@@ -188,7 +188,7 @@ class MwWaschangeHistory(Model):
         t__table_comment,
     )
 
-    mw_was        = relationship('MwWas')
+    mw_was        = relationship('MwWas', back_populates='mw_was_change_history')
 
     def show_diff(self):
         return Markup('<a href="/diff/was/'+str(self.id)+'" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 보기"><i class="fa fa-search"></i></a>')
@@ -213,6 +213,30 @@ assoc_tag_web = Table('ut_tag_web', Model.metadata,
                                   Column('id_of_tag', Integer, ForeignKey('ut_tag.id', ondelete='CASCADE')),
                                   Column('id_of_web', Integer, ForeignKey('mw_web.id', ondelete='CASCADE'))
 )    
+
+assoc_tag_server = Table('ut_tag_server', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_tag', Integer, ForeignKey('ut_tag.id', ondelete='CASCADE')),
+                                  Column('id_of_server', Integer, ForeignKey('mw_server.id', ondelete='CASCADE'))
+)    
+
+assoc_tag_server_itdep = Table('ut_tag_server_itdep', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_tag', Integer, ForeignKey('ut_tag.id', ondelete='CASCADE')),
+                                  Column('id_of_server', Integer, ForeignKey('mw_server.id', ondelete='CASCADE'))
+)    
+
+assoc_tag_server_bizdep = Table('ut_tag_server_bizdep', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_tag', Integer, ForeignKey('ut_tag.id', ondelete='CASCADE')),
+                                  Column('id_of_server', Integer, ForeignKey('mw_server.id', ondelete='CASCADE'))
+)    
+
+assoc_was_web = Table('mw_was_web', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_was', Integer, ForeignKey('mw_was.id', ondelete='CASCADE')),
+                                  Column('id_of_web', Integer, ForeignKey('mw_web.id', ondelete='CASCADE'))
+)
 
 class MwWas(Model):
     __tablename__ = "mw_was"
@@ -247,6 +271,7 @@ class MwWas(Model):
     license_update_date = Column(DateTime(), comment='License 정보 갱신일시')
 
     version_info     = Column(Text, comment='Version 정보') # Version 정보
+    blackout_info     = Column(Text, comment='Blackout 정보')
 
     jeus_properties_text = Column(Text, comment='jeus properties 정보') # jeus properties 정보
     jeus_properties_update_date = Column(DateTime(), comment='jeus properties 정보 갱신일시')
@@ -260,6 +285,12 @@ class MwWas(Model):
 
     UniqueConstraint(was_id)
 
+    @validates('located_host_id')
+    def validate_located_host_id(self, key, host_id):
+        if host_id:
+            return host_id.lower()
+        return host_id
+
     __table_args__ = (
         t__table_comment,
     )
@@ -270,6 +301,7 @@ class MwWas(Model):
     mw_was_change_history = relationship('MwWaschangeHistory', back_populates='mw_was', cascade='all,delete', passive_deletes=True)
     mw_server        = relationship('MwServer') 
     ut_tag = relationship('UtTag', secondary=assoc_tag_was, backref='mw_was')
+    mw_web = relationship('MwWeb', secondary=assoc_was_web, back_populates='mw_was')
 
     def __repr__(self):
         return self.was_id
@@ -324,7 +356,7 @@ class MwWas(Model):
         return rtn
 
     def link_ip_address(self):
-        ip = self.mw_server.ip_address
+        ip = self.mw_server.ip_address if self.mw_server.ip_address is not None else "Null"
         return Markup('<a href="http://'+ ip +':19736/webadmin/login" target="_blank" style="color:blue;">' + ip + '</a>')
 
     def view_domaininfo(self):
@@ -332,6 +364,12 @@ class MwWas(Model):
 
     def view_relationship(self):
         return Markup(getDiagramButton('WAS',self.was_id,'^_^'))
+
+assoc_httplistener_etcssldomain = Table('assoc_httplistener_etcssldomain', Model.metadata,
+                                  Column('id', Integer, primary_key=True),
+                                  Column('id_of_httplistener', Integer, ForeignKey('mw_was_httplistener.id', ondelete='CASCADE')),
+                                  Column('id_of_etcssldomain', Integer, ForeignKey('mw_etc_ssl_domain.id', ondelete='CASCADE'))
+)
 
 class MwWasHttpListener(Model):
     __tablename__ = "mw_was_httplistener"
@@ -343,6 +381,8 @@ class MwWasHttpListener(Model):
     was_instance_id  = Column(String(30), nullable=False, comment='WAS instance id') #MS ID
     webconnection_id = Column(String(30), nullable=False, comment='Web Connector ID') #Web Connection ID (auto)
     listen_port      = Column(Integer, nullable=False, comment='listener port') # listener port (auto)
+    ssl_yn           = Column(Enum(YnEnum), info={'enum_class':YnEnum}, comment='SSL 사용여부')
+    domain_name      = Column(String(200), comment='도메인명')
     min_thread_pool_count = Column(Integer, comment='Http Thread min 개수') #Http Thread min 개수 (auto)
     max_thread_pool_count = Column(Integer, comment='Http Thread max 개수') #Http Thread max 개수 (auto)
     httplistener_object   = Column(JSONB, comment='httplistener 정보') # httplistener 정보(auto:json)
@@ -360,12 +400,28 @@ class MwWasHttpListener(Model):
     )
 
     mw_was_instance = relationship('MwWasInstance')
+    mw_etc_ssl_domain = relationship('MwEtcSslDomain', secondary=assoc_httplistener_etcssldomain, backref='mw_was_httplistener')
 
     def __repr__(self):
         return self.webconnection_id + '[' + str(self.listen_port) + ']'
 
     def host_id(self):
         return Markup(self.mw_was_instance.host_id)
+
+    def ssl_notafter(self):
+        if self.mw_etc_ssl_domain and self.mw_etc_ssl_domain[0].notafter:
+            return self.mw_etc_ssl_domain[0].notafter.strftime('%Y-%m-%d %H:%M:%S')
+        return ''
+
+    def ssl_update_dt(self):
+        if self.mw_etc_ssl_domain and self.mw_etc_ssl_domain[0].update_dt:
+            return self.mw_etc_ssl_domain[0].update_dt.strftime('%Y-%m-%d %H:%M:%S')
+        return ''
+
+    def ssl_cn(self):
+        if self.mw_etc_ssl_domain:
+            return self.mw_etc_ssl_domain[0].t__cn()
+        return ''
 
     def https_yn(self):
         
@@ -443,6 +499,12 @@ class MwWasInstance(Model):
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     UniqueConstraint(was_id, was_instance_id)
 
+    @validates('host_id')
+    def validate_host_id(self, key, host_id):
+        if host_id:
+            return host_id.lower()
+        return host_id
+
     __table_args__ = (
         t__table_comment,
     )
@@ -506,10 +568,8 @@ class MwWeb(Model):
     port             = Column(Integer, nullable=False, comment='Port') # port (auto)
     jsv_port         = Column(Integer, nullable=False, comment='JSV Port') # JSV port (auto)
     built_type       = Column(Enum(BuiltEnum), info={'enum_class':BuiltEnum}, comment='Built Type') #외장형/내장형 구분 (manual)
-    dependent_was_id = Column(String(30), comment='Built type이 내장인 경우 종속된 WAS domain id')
     landscape        = Column(Enum(LocationEnum), info={'enum_class':LocationEnum}, comment='Landscape') #운영/이관/개발/DR 구분 (manual)
     newgeneration_yn = Column(Enum(YnEnum), info={'enum_class':YnEnum}, comment='차세대여부') #차세대 구분 (manual)
-    hth_count        = Column(Integer, comment='hth count') # hth count (auto)
     service_port     = Column(String(50), comment='http service port') # Service port (auto)
     node_name        = Column(String(100), comment='node name in http.m') # node 이름(http.m기준) (auto)
     web_name         = Column(String(50), comment='web서버 이름/용도') # WEB 서버 이름 (manual)
@@ -544,8 +604,23 @@ class MwWeb(Model):
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     web_text         = Column(Text, comment='WEB 정보') # http.m 정보
 
+    tmp_text1 = Column(String(500))
+    tmp_text2 = Column(String(500))
+    tmp_text3 = Column(String(500))
+    tmp_text4 = Column(String(500))
+    tmp_text5 = Column(String(500))
+    tmp_text6 = Column(String(500))
+    tmp_text7 = Column(String(500))
+    tmp_text8 = Column(String(500))
+
     #UniqueConstraint(host_id, jsv_port)
     UniqueConstraint(host_id, port)
+
+    @validates('host_id')
+    def validate_host_id(self, key, host_id):
+        if host_id:
+            return host_id.lower()
+        return host_id
 
     __table_args__ = (
         t__table_comment,
@@ -559,9 +634,15 @@ class MwWeb(Model):
     mw_web_reverseproxy = relationship('MwWebReverseproxy', back_populates='mw_web', cascade='all,delete', passive_deletes=True)
     mw_web_vhost     = relationship('MwWebVhost', back_populates='mw_web', cascade='all,delete', passive_deletes=True)
     mw_web_ssl       = relationship('MwWebSsl', back_populates='mw_web', cascade='all,delete', passive_deletes=True)
+    mw_was           = relationship('MwWas', secondary=assoc_was_web, back_populates='mw_web')
+    mw_web_change_history = relationship('MwWebchangeHistory', back_populates='mw_web', cascade='all,delete', passive_deletes=True)
     
     def __repr__(self):
         return self.host_id+'['+ str(self.port) +']'
+
+    @renders('mw_was')
+    def linked_was(self):
+        return ", ".join([was.was_id for was in self.mw_was])
 
     @renders('landscape')
     def colored_landscape(self):
@@ -582,7 +663,7 @@ class MwWeb(Model):
 
     def c_ip_address(self):
         ip = self.mw_server.ip_address
-        return Markup('<p style="color:blue;">' + ip + '</p>')
+        return Markup('<p style="color:blue;">' + ip if ip is not None else "" + '</p>')
 
     def t__domainInfo_yn(self):
 
@@ -732,7 +813,7 @@ class MwWebchangeHistory(Model):
         t__table_comment,
     )
 
-    mw_web           = relationship('MwWeb')
+    mw_web           = relationship('MwWeb', back_populates='mw_web_change_history')
 
     def show_diff(self):
         return Markup('<a href="/diff/web/'+str(self.id)+'" class="btn btn-sm btn-default" data-toggle="tooltip" rel="tooltip" title="" data-original-title="레코드 보기"><i class="fa fa-search"></i></a>')
@@ -1057,6 +1138,7 @@ class MwWebDomain(Model):
     mw_web_vhost = relationship('MwWebVhost')
     mw_web_ssl   = relationship('MwWebSsl', secondary=assoc_webssl_domain, backref='mw_web_domain')
 
+
     def t__domain(self):
         return self.domain_name + ':' + self.port
 
@@ -1079,7 +1161,7 @@ class MwWebDomain(Model):
         start = subject.find('CN=')
 
         if start < 0:
-            result = ''
+            result = subject
         else:
             subject = subject.replace('/',',')
             end = subject[start:].find(',')
@@ -1135,6 +1217,68 @@ class MwWebDomain(Model):
     def __repr__(self):
         return self.domain_name + ':' + self.port
 
+class MwEtcSslDomain(Model):
+    __tablename__ = "mw_etc_ssl_domain"
+    t__table_comment = {"comment": "기타 SSL Domain"}
+    function_comments = {"t__domain": "domain name : port"}
+
+    id            = Column(Integer, primary_key=True, nullable=False, comment='Primary Key')
+    host_id       = Column(String(30), ForeignKey('mw_server.host_id'), nullable=False, comment='HOST ID')
+    domain_name   = Column(String(100), nullable=False, comment='Domain 이름')
+    port          = Column(String(10), nullable=False, comment='서비스 port')
+    notbefore     = Column(DateTime(), comment='유효기간시작')
+    notafter      = Column(DateTime(), comment='유효기간만료')
+    subject       = Column(String(300), comment='주제')
+    serial        = Column(String(100), comment='일련번호')
+    issuer        = Column(String(300), comment='발급자')
+    notbefore_ca  = Column(DateTime(), comment='유효기간시작(CA)')
+    notafter_ca   = Column(DateTime(), comment='유효기간만료(CA)')
+    subject_ca    = Column(String(300), comment='주제(CA)')
+    serial_ca     = Column(String(100), comment='일련번호(CA)')
+    issuer_ca     = Column(String(300), comment='발급자(CA)')
+    update_dt     = Column(DateTime())
+    agent_id      = Column(String(30), comment='수집 Agent ID')
+    description   = Column(String(500), comment='설명')
+    use_yn        = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("YES"), nullable=False, comment='사용여부')
+    managed_yn    = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("NO"), nullable=False, comment='미들웨어 관리대상여부')
+    user_id       = Column(String(50), default=get_user, nullable=False)
+    create_on     = Column(DateTime(), default=datetime.now, nullable=False)
+
+    UniqueConstraint(host_id, domain_name, port)
+
+    @validates('host_id')
+    def validate_host_id(self, key, host_id):
+        if host_id:
+            return host_id.lower()
+        return host_id
+
+    __table_args__ = (
+        t__table_comment,
+    )
+
+    mw_server = relationship('MwServer')
+
+    def t__domain(self):
+        return self.domain_name + ':' + self.port
+
+    def t__cn(self):
+        subject = self.subject
+        if not subject:
+            return ''
+        start = subject.find('CN=')
+        if start < 0:
+            result = subject
+        else:
+            subject = subject.replace('/', ',')
+            end = subject[start:].find(',')
+            if end < 0:
+                end = len(subject[start:])
+            result = subject[start:start+end]
+        return result
+
+    def __repr__(self):
+        return self.domain_name + ':' + self.port
+
 class MwServer(Model):
     __tablename__ = "mw_server"
     t__table_comment = {"comment":"Server Master"}
@@ -1152,13 +1296,19 @@ class MwServer(Model):
     jdk_version      = Column(String(20)) #JDK version (Manual)
     ip_address       = Column(String(20), comment='IP address') #IP address (Manual)
     vip_address      = Column(String(100), comment='접근 가능한 모든 IP address들') #VIP address (Manual)
-    running_type     = Column(Enum(RunEnum), info={'enum_class':RunEnum}, nullable=False) #Active/StandBy 구분 (Manual)
+    running_type     = Column(Enum(RunEnum), info={'enum_class':RunEnum}) #Active/StandBy 구분 (Manual)
     primary_host_id  = Column(String(30)) #StandBy의 경우 Primary 서버 HOST 이름 (Manual)
     dr_host_id       = Column(String(30), comment='DR HOST ID') #HOST 이름 (Manual)
     use_yn           = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("YES"), nullable=False) #사용여부 (Manual)
     user_id          = Column(String(50), default=get_user, nullable=False)
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     UniqueConstraint(host_id)
+    
+    @validates('host_id')
+    def validate_host_id(self, key, host_id):
+        if host_id:
+            return host_id.lower()
+        return host_id
 
     __table_args__ = (
         t__table_comment,
@@ -1166,6 +1316,10 @@ class MwServer(Model):
     
     mw_was_instance  = relationship('MwWasInstance')
     mw_web           = relationship('MwWeb')
+
+    ut_tag = relationship('UtTag', secondary=assoc_tag_server, backref='mw_server')
+    ut_tag_itdep = relationship('UtTag', secondary=assoc_tag_server_itdep, backref='mw_server_itdep')
+    ut_tag_bizdep = relationship('UtTag', secondary=assoc_tag_server_bizdep, backref='mw_server_bizdep')
 
     def __repr__(self):
         return self.host_id

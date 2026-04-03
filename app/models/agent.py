@@ -1,4 +1,4 @@
-from flask import g, url_for
+from flask import g, url_for, current_app
 from flask_appbuilder import Model
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import Column, Text, Integer, String, ForeignKey\
@@ -74,13 +74,15 @@ class AgAgent(Model):
         else:
             gap = 500
         
+        offline_threshold = current_app.config.get('AGENT_OFFLINE_MINUTES', 5) * 60
+        
         if self.approved_yn.name == 'NO':
             text = '<p style="color:#2B3856;text-align:center;animation:blink 1s ease-in-out infinite alternate"><b>미승인</b></p>'
         elif self.token_expiration_date and self.token_expiration_date <= datetime.now():
             text = '<p style="background-color:#2B1B17;color:#E5E4E2;text-align:center"><b>Token 만료</b></p>'
-        elif gap < 200:
+        elif gap < offline_threshold:
             text = '<p style="background-color:#5CB3FF;color:#FFFFFF;text-align:center;animation:blink 1s ease-in-out infinite alternate"><b>OnLine</b></p>'
-        elif gap >= 200 and gap <= 86400:
+        elif gap >= offline_threshold and gap <= 86400:
             text = '<p style="background-color:#C0C0C0;text-align:center;"><b>OffLine</b></p>'
         else:
             text = '<p style="background-color:#800000;color:#E5E4E2;text-align:center"><b>장기미사용</b></p>'
@@ -158,13 +160,14 @@ class AgCommandMaster(Model):
     time_to_stop     = Column(DateTime())
     cycle_to_exe     = Column(Integer)
     interval_type    = Column(Enum(IntervalTypeEnum), info={'enum_class':IntervalTypeEnum})
-    additional_params= Column(String(1000))
+    additional_params= Column(Text)
     publish_yn       = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("NO"), nullable=False)
     cancel_yn        = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("NO"), nullable=False)
     finished_yn      = Column(Enum(YnEnum), info={'enum_class':YnEnum}, server_default=("NO"))
     command_sender   = Column(Enum(TargetToSendEnum), info={'enum_class':TargetToSendEnum}, server_default=("SERVER"), nullable=False)
     result_receiver  = Column(Enum(TargetToSendEnum), info={'enum_class':TargetToSendEnum}, server_default=("SERVER"), nullable=False)
     target_object    = Column(String(50))
+    broadcast_callback = Column(String(100), comment='Broadcast Callback 함수명')
     user_id          = Column(String(50), default=get_user, nullable=False)
     create_on        = Column(DateTime(), default=datetime.now, nullable=False)    
     UniqueConstraint(command_id)
@@ -189,7 +192,7 @@ class AgCommandDetail(Model):
     command_class    = Column(Enum(CommandClassEnum), info={'enum_class':CommandClassEnum})
     target_file_path = Column(String(300))
     target_file_name = Column(String(100))
-    additional_params= Column(String(1000))
+    additional_params= Column(Text)
     command_status   = Column(Enum(CommandStatusEnum), info={'enum_class':CommandStatusEnum}, nullable=False)
     result_received_date = Column(DateTime())    
     user_id          = Column(String(50), default=get_user, nullable=False)

@@ -2,21 +2,25 @@ services:
   mwm-redis:
     container_name: mwm-redis
     image: redis:alpine
-#    ports:
-#      - "6379:6379"
+    command: redis-server --appendonly yes --appendfsync everysec
+    volumes:
+      - redis_data:/data
+  #    ports:
+  #      - "6379:6379"
   mwm-db:
     container_name: mwm-db
     image: postgres:15.2-alpine
-#    restart: no
+    #    restart: no
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD='1q2w3e4r!!'
       - PGDATA=/var/lib/postgresql/data/pgdata
-#    ports:
-#      - '5432:5432'
+    ports:
+      - '5433:5432'
     volumes:
       - /home/hennry/data1:/var/lib/postgresql/data
-      - ./create_db.sql:/docker-entrypoint-initdb.d/create_db.sql
+      - ./create_db.sql:/docker-entrypoint-initdb.d/01_create_db.sql
+      - ./idp/create_idp_db.sql:/docker-entrypoint-initdb.d/02_create_idp_db.sql
   mwm-minio:
     container_name: mwm-minio
     image: minio/minio
@@ -25,37 +29,79 @@ services:
       - '9001:9001'
     environment:
       - MINIO_CONFIG_ENV_FILE=/etc/config.env
+    depends_on:
+      - mwm-nginx
     volumes:
       - /home/hennry/minio/data:/mnt/data
       - ./minio_config.env:/etc/config.env
+      - ./nginx/certs/mwm_local.crt:/root/.minio/certs/CAs/mwm_local.crt:ro
     command: server --console-address ":9001"
-  mwm-prefect-server:
-    container_name: mwm-prefect-server
-    image: prefecthq/prefect:3-latest
-    restart: always
-#    volumes:
-#      - prefect:/root/.prefect
-#    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
-    environment:
-      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://tiffanie:1q2w3e4r!!@mwm-db:5432/prefect
-      - PREFECT_API_URL=http://127.0.0.1:4200/api
-      - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_LOGGING_LEVEL=INFO
-#      - PREFECT_UI_URL=http://127.0.0.1:4200/api
-    ports:
-      - 4200:4200
+    extra_hosts:
+      - "app.mwm.local:172.26.0.1"
+      - "idp.mwm.local:172.26.0.1"
+      - "minio.mwm.local:172.26.0.1"
+      - "s3.mwm.local:172.26.0.1"
+  #  mwm-prefect-server:
+  #    container_name: mwm-prefect-server
+  #    image: prefecthq/prefect:3-latest
+  #    restart: always
+  #    volumes:
+  #      - prefect:/root/.prefect
+  #    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
+  #    environment:
+  #      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://tiffanie:1q2w3e4r!!@mwm-db:5432/prefect
+  #      - PREFECT_API_URL=http://127.0.0.1:4200/api
+  #      - PREFECT_SERVER_API_HOST=0.0.0.0
+  #      - PREFECT_LOGGING_LEVEL=INFO
+  #      - PREFECT_UI_URL=http://127.0.0.1:4200/api
+  #    ports:
+  #      - 4200:4200
+  #    depends_on:
+  #      - mwm-db
+  #    command: prefect server start
+  #    profiles: ["server"]
+  mwm-idp:
+    container_name: mwm-idp
+    image: mwm-idp
+    build:
+      context: ./idp
+      dockerfile: Dockerfile.idp
     depends_on:
       - mwm-db
-    command: prefect server start
-#    profiles: ["server"]
+    ports:
+      - "5000:5000"
+    environment:
+      TZ: Asia/Seoul
+      OIDC_ISSUER: "https://idp.mwm.local:20443"
+      IDP_EXTERNAL_SERVER_URL: "https://idp.mwm.local:20443"
+      IDP_DATABASE_URI: "postgresql://tiffanie:1q2w3e4r!!@mwm-db:5432/idp"
+      IDP_SECRET_KEY: "idp-secret-key-change-me"
+      IDP_RSA_PRIVATE_KEY: "/etc/idp/certs/idp_private.pem"
+      IDP_MWM_CLIENT_ID: "mwm-client"
+      IDP_MWM_CLIENT_SECRET: "mwm-secret"
+      IDP_MWM_REDIRECT_URI: "https://app.mwm.local:20443/idp/callback"
+      SYNC_MWM_DB_URI: "postgresql://tiffanie:1q2w3e4r!!@mwm-db:5432/mw"
+    volumes:
+      - ./idp/certs:/etc/idp/certs:ro
+    links:
+      - mwm-db
+    extra_hosts:
+      - "app.mwm.local:172.26.0.1"
+      - "idp.mwm.local:172.26.0.1"
+      - "minio.mwm.local:172.26.0.1"
+      - "s3.mwm.local:172.26.0.1"
+
   mwm-app:
     container_name: mwm-app
     image: mwm-app
-#    restart: no
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    #    restart: no
     depends_on:
       - mwm-db
       - mwm-redis
-      - mwm-minio
+      - mwm-kroki
     ports:
       - 8000:8000
     environment:
@@ -63,13 +109,71 @@ services:
       MWM_DATABASE_URI: "postgresql://tiffanie:1q2w3e4r!!@mwm-db:5432/mw"
       REDIS_URL: redis://mwm-redis:6379/0
       AWS_URL: http://mwm-minio:9000
-      AWS_ACCESS_KEY_ID: x7QobM7I5WNI5zGWbkr4
-      AWS_SECRET_ACCESS_KEY: pdoWz2Zw0yaJw9fW32jqZigaqiyXRuYLKK9x7PzJ
-      BUCKET_NAME: mwm_contents
-      PLANTUML_URL: https://mwm-plantuml.kdb.co.kr:20443
+      AWS_ACCESS_KEY_ID: ixbjcVrcQnQPNKuW01eO
+      AWS_SECRET_ACCESS_KEY: jzXQCcfUzBAPajLSSChOgIArbGhyEUoXcG9v4DrR
+      BUCKET_NAME: mwm-contents
+      KROKI_URL: http://mwm-kroki:8000
+      IDP_EXTERNAL_SERVER_URL: https://idp.mwm.local:20443
+      IDP_INTERNAL_SERVER_URL: https://idp.mwm.local:20443
+      IDP_CLIENT_ID: mwm-client
+      IDP_CLIENT_SECRET: mwm-secret
+    #      PLANTUML_URL: https://mwm-plantuml.kdb.co.kr:20443
     links:
       - mwm-db
       - mwm-redis
-      - mwm-minio
+      - mwm-kroki
+    extra_hosts:
+      - "app.mwm.local:172.26.0.1"
+      - "idp.mwm.local:172.26.0.1"
+      - "minio.mwm.local:172.26.0.1"
+      - "s3.mwm.local:172.26.0.1"
+
+  mwm-kroki:
+    container_name: mwm-kroki
+    image: yuzutech/kroki:latest
+    environment:
+      - KROKI_MERMAID_HOST=mwm-kroki-mermaid
+    ports:
+      - "8081:8000"
+
+  mwm-kroki-mermaid:
+    container_name: mwm-kroki-mermaid
+    image: yuzutech/kroki-mermaid:latest
+
+  mwm-metabase:
+    container_name: mwm-metabase
+    image: metabase/metabase:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_DBNAME=metabase
+      - MB_DB_PORT=5432
+      - MB_DB_USER=tiffanie
+      - MB_DB_PASS=1q2w3e4r!!
+      - MB_DB_HOST=mwm-db
+      - TZ=Asia/Seoul
+    depends_on:
+      - mwm-db
+
+  mwm-nginx:
+    container_name: mwm-nginx
+    image: nginx:stable-alpine
+    restart: always
+    ports:
+      - "20080:80"
+      - "20443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - mwm-app
+      - mwm-idp
+    extra_hosts:
+      - "app.mwm.local:172.26.0.1"
+      - "idp.mwm.local:172.26.0.1"
+      - "minio.mwm.local:172.26.0.1"
+      - "s3.mwm.local:172.26.0.1"
+
 volumes:
-  prefect:
+  redis_data: #  prefect:

@@ -15,6 +15,15 @@ class OSEnum(enum.Enum):
     WINDOWS = 'WINDOWS'
     HPUX    = 'HP-UX'
     ETC     = 'ETC'
+    LINUX_REDHAT   = 'LINUX-REDHAT'
+    LINUX_ORACLE   = 'LINUX-ORACLE'
+    LINUX_ROCKY   = 'LINUX-ROCKY'
+    LINUX_CENTOS   = 'LINUX-CENTOS'
+    LINUX_SOMANSAOS   = 'LINUX-SOMANSAOS'
+    LINUX_OPENSUSE   = 'LINUX-OPENSUSE'
+    LINUX_DEBIAN   = 'LINUX-DEBIAN'
+    LINUX_UBUNTU   = 'LINUX-UBUNTU'
+    SUNOS = 'SUNOS'
 
 class YnEnum(enum.Enum):
     YES = 'YES'
@@ -91,6 +100,7 @@ class CommandClassEnum(enum.Enum):
     ReadPlainFile  = '파일 Read'
     ReadFullPathFile = '파일 Read(파일 이름 후 지정)'
     ExeScript      = '프로그램 실행'
+    ExeText        = '명령어 실행'
     ExeShell       = 'Shell 실행'
     ExeAgentFunc   = 'Agent기능 실행'
     DownloadFile   = 'File Download'
@@ -155,10 +165,36 @@ class IntervalTypeEnum(enum.Enum):
     days       = 'days(일)'
 
 def get_user():
-    return g.user.username
+    try:
+        from flask import has_request_context, g
+        if has_request_context():
+            # Check for various app types (e.g. Superset, FAB, or plain Flask)
+            user = getattr(g, 'user', None)
+            if user and hasattr(user, 'username'):
+                return user.username
+            if user and isinstance(user, str):
+                return user
+    except Exception:
+        pass
+    return 'batch'
 
 def get_group():
-    return next((r.name for r in g.user.roles if '_role' in r.name),'')
+    try:
+        from flask import has_request_context
+        if has_request_context() and g and hasattr(g, 'user') and g.user:
+            return next((r.name for r in g.user.roles if '_role' in r.name),'')
+    except Exception:
+        pass
+    return ''
+
+def get_groups():
+    try:
+        from flask import has_request_context
+        if has_request_context() and g and hasattr(g, 'user') and g.user:
+            return [r.name for r in g.user.roles if '_role' in r.name]
+    except Exception:
+        pass
+    return []
 
 def get_date():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -189,7 +225,7 @@ def getColoredText(obj):
         color = color_map[obj.__class__.__name__][obj.name]
         text = '<p style="color:' + color + ';">' + obj.value + '</p>'
     except KeyError:
-        text = ""
+        text = '<p style="color:black;">' +  'Null' if obj is None else obj.value + '</p>'
     return text
 
 def isNotNull(obj):

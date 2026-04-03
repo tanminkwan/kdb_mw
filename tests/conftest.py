@@ -109,7 +109,7 @@ def get_test_user():
     # Ensure the user has the required permission
     permission = db.session.query(PermissionView).filter_by(
         permission=appbuilder.sm.find_permission('can_httpm_config'),
-        view_menu=appbuilder.sm.find_view_menu('MWConfiguration')
+        view_menu=appbuilder.sm.find_view_menu('MWConfigurationApi')
     ).first()
 
     if permission and permission not in user.roles[0].permissions:

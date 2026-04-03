@@ -1,10 +1,8 @@
-from app import appbuilder, db
+from app import db
 from flask import g, current_app
-from flask_appbuilder import Model
 from sqlalchemy.sql import update, func, sqltypes
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import null, text, or_, not_, select
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta
 from sqlalchemy.dialects.postgresql import insert, JSON
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import aliased
@@ -12,21 +10,38 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute, ScalarAttributeImpl
 from app.models.agent import AgResult
 from app.models.monitor import MoWasInstanceStatus, MoWasStatusTemplate, MoWasStatusReport\
     , MoGridConfig
-import json
-import enum
+from app.models.was import MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWebDomain
+from app.models.common import YnEnum, LocationEnum
+import re
+from croniter import croniter
 import types
 from sys import exc_info
-from flask_jwt_extended import create_refresh_token
+import logging
 
-table_dict = {table.__tablename__: table for table in db.Model.__subclasses__()}
-table_args = {table.__tablename__: table.t__table_comment if hasattr(table, 't__table_comment') else {} for table in db.Model.__subclasses__()}
+def _get_table_dict():
+    """Returns a dictionary of all tables defined in db.Model."""
+    return {table.__tablename__: table for table in db.Model.__subclasses__()}
+
+def _get_table_args():
+    """Returns a dictionary of __table_args__ for all models."""
+    result = {}
+    for table in db.Model.__subclasses__():
+        targs = getattr(table, '__table_args__', None)
+        if isinstance(targs, tuple):
+            # Last element of tuple is the dict with comment etc.
+            for item in targs:
+                if isinstance(item, dict):
+                    result[table.__tablename__] = item
+                    break
+        elif isinstance(targs, dict):
+            result[table.__tablename__] = targs
+    return result
 
 def get_all_tables():
-
-    return [ t for t in table_dict ]
+    return [t for t in _get_table_dict()]
 
 def select_row(table_name, filter_dict):
-
+    table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
 
@@ -40,7 +55,7 @@ def select_row(table_name, filter_dict):
     return rec, 1 if rec else 0
 
 def select_rows(table_name, filter_dict):
-
+    table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
 
@@ -55,7 +70,7 @@ def select_rows(table_name, filter_dict):
 
  
 def select_item(table_name, column_name, filter_dict):
-
+    table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
     column = getattr(table, column_name)
@@ -70,7 +85,7 @@ def select_item(table_name, column_name, filter_dict):
     return value, 1 if value else 0
 
 def select_items(table_name, column_name, filter_dict):
-
+    table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
     column = getattr(table, column_name)
@@ -85,7 +100,7 @@ def select_items(table_name, column_name, filter_dict):
     return values, 1 if values else 0
 
 def insert_row(table_name, insert_dict):
-
+    table_dict = _get_table_dict()
     table = table_dict[table_name]
 
     if g and g.user:
@@ -94,6 +109,11 @@ def insert_row(table_name, insert_dict):
         user_id = 'scheduler'
 
     insert_dict.update(dict(user_id=user_id, create_on=datetime.now()))
+
+    # Normalize host fields
+    for field in ['host_id', 'located_host_id']:
+        if field in insert_dict and isinstance(insert_dict[field], str):
+            insert_dict[field] = insert_dict[field].lower()
 
     stmt = insert(table).values(insert_dict)
 
@@ -106,9 +126,16 @@ def insert_row(table_name, insert_dict):
     return pk[0], 'OK'
 
 def update_rows(table_name, update_dict, filter_dict):
-
+    table_dict = _get_table_dict()
     filter_list = []
     table = table_dict[table_name]
+
+    # Normalize update and filter fields
+    for field in ['host_id', 'located_host_id']:
+        if field in update_dict and isinstance(update_dict[field], str):
+            update_dict[field] = update_dict[field].lower()
+        if field in filter_dict and isinstance(filter_dict[field], str):
+            filter_dict[field] = filter_dict[field].lower()
 
     for item in filter_dict:
         col = getattr(table, item)
@@ -123,7 +150,7 @@ def update_rows(table_name, update_dict, filter_dict):
     return 1, ''
 
 def select_tags(table_name, column_name, seperator, filter_list):
-
+    table_dict = _get_table_dict()
     table = table_dict[table_name]
     column = getattr(table, column_name)
 
@@ -133,7 +160,8 @@ def select_tags(table_name, column_name, seperator, filter_list):
     return recs, 1 if recs else 0
 
 def get_model_info(table_name):
-
+    table_dict = _get_table_dict()
+    table_args = _get_table_args()
     table = None
     spec = dict(table_name=table_name,columns=[])
     if table_dict.get(table_name):
@@ -193,7 +221,7 @@ def get_model_info(table_name):
     return spec
 
 def get_column_type(table_name, column_name):
-
+    table_dict = _get_table_dict()
     obj = getattr(table_dict[table_name], column_name)
     print('TYPE : ',column_name, obj.type, type(obj.type))
     col_v = ''
@@ -211,7 +239,7 @@ def get_column_type(table_name, column_name):
     return col_v
 
 def get_target_table_name(table_name, column_name):
-
+    table_dict = _get_table_dict()
     if isinstance(table_name, str):
         table = table_dict[table_name]
     else:
@@ -220,7 +248,7 @@ def get_target_table_name(table_name, column_name):
     second = next( ( tt for it, tt in inspect(table).relationships.items() if it == column_name), None)
     return second.target.name
 
-def __getCondition(table, condition):
+def _get_condition(table, condition):
     results = []
     for c in condition:
         column = getattr(table, c['column'])
@@ -252,41 +280,33 @@ def __getCondition(table, condition):
 
 def select_rows2(table_name, column_name=None, condition=None, join_conditions=None\
                 , distinct=True, sort_condition=None):
-
+    table_dict = _get_table_dict()
     table     = table_dict[table_name]
 
     if column_name:
-
         column = getattr(table, column_name)
-
         if distinct:
             base_q    = db.session.query(column)
         else:
             base_q    = db.session.query(column, table.id)
-
     else:
         base_q    = db.session.query(table)
 
     if condition:
-        flt   = __getCondition(table, condition)
-        
+        flt   = _get_condition(table, condition)
         flt_q = base_q.filter(*flt)
     else:
         flt_q = base_q
     
     if join_conditions:
-
         join_q  = flt_q
-
         for join_table_name, join_condition in join_conditions.items():
-
             mn_column = getattr(table, join_table_name)
-
-            real_joined_table_name = get_target_table_name(table, join_table_name)
-
+            real_joined_table_name = get_target_table_name(table_name, join_table_name)
+            
             join_table = table_dict[real_joined_table_name]
             aliased_table = aliased(join_table)
-            join_flt = __getCondition(aliased_table, join_condition)
+            join_flt = _get_condition(aliased_table, join_condition)
 
             join_q  = join_q.join(aliased_table, mn_column)\
                         .filter(*join_flt)
@@ -295,7 +315,6 @@ def select_rows2(table_name, column_name=None, condition=None, join_conditions=N
 
     if sort_condition:
         sort = []
-
         for s in sort_condition:
             column = getattr(table, s['column'])
             if s.get('option') and s['option'] == 'desc':
@@ -303,18 +322,19 @@ def select_rows2(table_name, column_name=None, condition=None, join_conditions=N
             else:
                 func = column.asc()
             sort.append(func)
-
         join_q = join_q.order_by(*sort)
 
     print('Hennry SQL :', join_q)
-    recs       = join_q.all()
+    try:
+        # Explicitly fetching all results before the session has a chance to change state
+        recs = join_q.all()
+        # Create a static copy if it's an object with lazy-load potential to avoid closures later
+        return recs, '' if recs else None
+    except Exception as e:
+        print(f"Error in select_rows2: {str(e)}")
+        return None, str(e)
 
-    if recs:
-        return recs, ''
-    else:
-        return None, ''
-
-def getGridConfig(grid_key=None):
+def get_grid_config(grid_key=None):
 
     if grid_key:
         return db.session.query(MoGridConfig)\
@@ -322,7 +342,7 @@ def getGridConfig(grid_key=None):
     else:
         return db.session.query(MoGridConfig).all()
 
-def getLastReportedTime():
+def get_last_reported_time():
     
     result = db.session.query(func.max(MoWasStatusReport.reported_time)).first()
 
@@ -362,7 +382,42 @@ def get_was_status_template():
 
     return result, groups
 
-def getNotRunningWasList():
+def _is_now_in_any_cron_range(cron_range_exprs, now=None):
+    """
+    여러 크론+범위 표현식을 확인해서 하나라도 현재 시간과 일치하면 True 반환
+    """
+    if not cron_range_exprs:
+        return False
+    
+    def parse_cron_range_list(expr_list_str):
+        """
+		문자열을 개별 cron+range 표현식 리스트로 파싱
+		"""
+		# 쉼표나 줄바꿈을 기준으로 나눔
+        lines = re.split(r'[,\n]+', expr_list_str)
+        return [line.strip() for line in lines if line.strip()]
+	
+    now = now or datetime.now()
+    entries = parse_cron_range_list(cron_range_exprs)
+
+    for entry in entries:
+        logging.debug(f"cron expression entry : {entry}")
+        match = re.match(r'^(.+):\s*(\d+)$', entry)
+        if not match:
+            raise ValueError(f"잘못된 형식: {entry} (예: '0 9 * * 1-5:30')")
+        
+        cron_expr, duration_minutes = match.group(1), int(match.group(2))
+
+        iter = croniter(cron_expr, now)
+        start_time = iter.get_prev(datetime)
+        end_time = start_time + timedelta(minutes=duration_minutes)
+
+        if start_time <= now < end_time:
+            return True  # 현재 시간이 포함되는 범위 발견
+
+    return False
+
+def get_not_running_was_list():
 
     uncheckedDomains = set()
     results1 = []
@@ -371,38 +426,52 @@ def getNotRunningWasList():
     current_date = datetime.now()
     _threshold = timedelta(hours=1)
 
-    wit_recs = db.session.query(MoWasStatusTemplate).all()
+    # 변경: MwWas(landscape=PROD, use_yn=YES) 이고 MwWasInstance(use_yn=YES) 인 대상 조회
+    instances = db.session.query(MwWasInstance).join(MwWas).filter(
+        MwWas.landscape == LocationEnum.PROD,
+        MwWas.use_yn == YnEnum.YES,
+        MwWasInstance.use_yn == YnEnum.YES
+    ).all()
 
-    for wit_rec in wit_recs:
+    # Domain별 Blackout 정보 캐시 (여러 인스턴스가 동일 도메인에 속하므로 중복 체크 방지)
+    blackout_cache = {}
 
-        dict_rec = wit_rec.__dict__
+    for instance in instances:
+        was_id = instance.was_id
+        
+        if was_id not in blackout_cache:
+            blackout_cache[was_id] = _is_now_in_any_cron_range(instance.mw_was.blackout_info)
+        
+        is_blacked_out = blackout_cache[was_id]
 
-        for i in range(1, 16):
+        if is_blacked_out:
+            logging.debug(f"## was_id : {was_id} is_blacked_out : {is_blacked_out}")
 
-            was_instance_id = dict_rec['wi_'+str(i).zfill(2)]
+        was_instance_id = instance.was_instance_id
 
-            if not was_instance_id:
+        wis_rec = db.session.query(MoWasInstanceStatus)\
+            .filter(MoWasInstanceStatus.update_on > current_date - _threshold\
+                    , MoWasInstanceStatus.was_id==was_id\
+                    , MoWasInstanceStatus.was_instance_id==was_instance_id).first()
+
+        if wis_rec:
+            if  wis_rec.was_instance_status.name == 'RUNNING':
                 continue
-
-            wis_rec = db.session.query(MoWasInstanceStatus)\
-                .filter(MoWasInstanceStatus.update_on > current_date - _threshold\
-                        , MoWasInstanceStatus.was_id==wit_rec.was_id\
-                        , MoWasInstanceStatus.was_instance_id==was_instance_id).first()
-
-            if wis_rec:
-                if  wis_rec.was_instance_status.name == 'RUNNING':
-                    continue
-                else:
-                    results2.append(dict(
-                        domain_id=wit_rec.was_id
-                        ,was_instance_group=wit_rec.was_instance_group
-                        ,was_instance_id=was_instance_id
-                        ,was_instance_stat=wis_rec.was_instance_status.name
-                    ))
-                    results3.add((wit_rec.was_id,wit_rec.mw_was.agent_id))
             else:
-                uncheckedDomains.add(wit_rec.was_id)
-                results3.add((wit_rec.was_id,wit_rec.mw_was.agent_id))
+
+                if not is_blacked_out:
+                    results2.append(dict(
+                        domain_id=was_id,
+                        was_instance_group='Instance',
+                        was_instance_id=was_instance_id,
+                        was_instance_stat=wis_rec.was_instance_status.name,
+                        host_id=wis_rec.host_id,
+                    ))
+
+                results3.add((was_id, instance.mw_was.agent_id))
+        else:
+            uncheckedDomains.add(was_id)
+            results3.add((was_id, instance.mw_was.agent_id))
 
     for domain_id in uncheckedDomains:
 
@@ -422,7 +491,7 @@ def getNotRunningWasList():
     
     return results1, results2, results3
 
-def createWasStatusReport():
+def create_was_status_report():
 
     current_date = datetime.now()
     _threshold = timedelta(hours=1)
@@ -479,6 +548,7 @@ def createWasStatusReport():
 
 
 def test2():
+    table_dict = _get_table_dict()
     print("HHH2")
 
     table_name  = 'mw_was_instance'
@@ -512,6 +582,7 @@ def test2():
     """
     
 def test():
+    table_dict = _get_table_dict()
     print("HHH")
 
     table_name = 'ut_tag'
@@ -571,3 +642,125 @@ def test():
     recs = sql.all()
     print('recs : ', recs)
 
+
+def get_cert_expiry_stat():
+    now = datetime.now()
+    d7 = now + timedelta(days=7)
+    d30 = now + timedelta(days=30)
+    
+    from sqlalchemy import case, func
+    from app.models.was import MwWebDomain, MwWebVhost, MwWeb
+    from app.models.common import YnEnum, LocationEnum
+    
+    status_case = case(
+        (MwWebDomain.notafter == None, '미확인'),
+        (MwWebDomain.notafter <= now, '만료'),
+        (MwWebDomain.notafter <= d7, '임박'),
+        (MwWebDomain.notafter <= d30, '주의'),
+        else_='정상'
+    ).label('status')
+    
+    query = db.session.query(status_case, MwWeb.landscape, func.count().label('count'))\
+        .select_from(MwWebDomain)\
+        .join(MwWebVhost, MwWebDomain.mw_web_vhost_id == MwWebVhost.id)\
+        .join(MwWeb, MwWebVhost.mw_web_id == MwWeb.id)\
+        .filter(MwWeb.use_yn == YnEnum.YES, MwWebDomain.ssl_yn == YnEnum.YES)\
+        .group_by(status_case, MwWeb.landscape)
+    
+    results = query.all()
+    
+    stats_dict = {}
+    statuses = ['정상', '주의', '임박', '만료', '미확인']
+    landscapes = ['PROD', 'TEST', 'DEV']
+    
+    for status in statuses:
+        stats_dict[status] = {l: 0 for l in landscapes}
+        stats_dict[status]['total'] = 0
+    
+    for r in results:
+        status = r.status
+        landscape = r.landscape.name if r.landscape else 'UNKNOWN'
+        count = r.count
+        
+        if status not in stats_dict:
+            stats_dict[status] = {l: 0 for l in landscapes}
+            stats_dict[status]['total'] = 0
+            
+        if landscape in landscapes:
+            stats_dict[status][landscape] = count
+        stats_dict[status]['total'] += count
+
+    final_results = []
+    for status in statuses:
+        row = stats_dict[status]
+        row['status'] = status
+        final_results.append(row)
+        
+    total_row = {l: sum(stats_dict[s][l] for s in statuses) for l in landscapes}
+    total_row['total'] = sum(total_row[l] for l in landscapes)
+    total_row['status'] = '전체'
+    final_results.append(total_row)
+    
+    return final_results
+def get_cert_expiry_stat_jeus():
+    now = datetime.now()
+    d7 = now + timedelta(days=7)
+    d30 = now + timedelta(days=30)
+    
+    from sqlalchemy import case, func
+    from app.models.was import MwWasHttpListener, MwEtcSslDomain, MwWasInstance, MwWas
+    from app.models.common import YnEnum, LocationEnum
+    
+    # [Bug Fix] mw_etc_ssl_domain이 없는 경우(Outer Join 결과가 NULL인 경우) '미확인'으로 분류
+    status_case = case(
+        (MwEtcSslDomain.notafter == None, '미확인'),
+        (MwEtcSslDomain.notafter <= now, '만료'),
+        (MwEtcSslDomain.notafter <= d7, '임박'),
+        (MwEtcSslDomain.notafter <= d30, '주의'),
+        else_='정상'
+    ).label('status')
+    
+    # [Target] MwWas.use_yn == YES & MwWasHttpListener.ssl_yn == YES
+    query = db.session.query(status_case, MwWas.landscape, func.count().label('count'))\
+        .select_from(MwWasHttpListener)\
+        .join(MwWasInstance, MwWasHttpListener.mw_was_instance)\
+        .join(MwWas, MwWasInstance.mw_was)\
+        .outerjoin(MwWasHttpListener.mw_etc_ssl_domain)\
+        .filter(MwWas.use_yn == YnEnum.YES, MwWasHttpListener.ssl_yn == YnEnum.YES)\
+        .group_by(status_case, MwWas.landscape)
+    
+    results = query.all()
+    
+    stats_dict = {}
+    statuses = ['정상', '주의', '임박', '만료', '미확인']
+    landscapes = ['PROD', 'TEST', 'DEV']
+    
+    for status in statuses:
+        stats_dict[status] = {l: 0 for l in landscapes}
+        stats_dict[status]['total'] = 0
+    
+    for r in results:
+        status = r.status
+        landscape = r.landscape.name if r.landscape else 'UNKNOWN'
+        count = r.count
+        
+        if status not in stats_dict:
+            stats_dict[status] = {l: 0 for l in landscapes}
+            stats_dict[status]['total'] = 0
+            
+        if landscape in landscapes:
+            stats_dict[status][landscape] = count
+        stats_dict[status]['total'] += count
+
+    final_results = []
+    for status in statuses:
+        row = stats_dict[status]
+        row['status'] = status
+        final_results.append(row)
+        
+    total_row = {l: sum(stats_dict[s][l] for s in statuses) for l in landscapes}
+    total_row['total'] = sum(total_row[l] for l in landscapes)
+    total_row['status'] = '전체'
+    final_results.append(total_row)
+    
+    return final_results

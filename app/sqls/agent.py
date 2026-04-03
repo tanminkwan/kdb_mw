@@ -1,21 +1,65 @@
 import logging
 from app import appbuilder, db, kafka_producer
-from flask import g
+from flask import g, current_app
 from sqlalchemy.sql import select, update, func
-from sqlalchemy import null, text, or_, not_, case
+from sqlalchemy import null, text, or_, and_, not_, case
 from datetime import datetime, timedelta
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import insert, JSON
 from app.models.common import get_uuid
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgResult, AgAgentGroup, AgAgent, AgFile, AgCommandHelper, AgAutorunResult
 from app.models.monitor import MoWasInstanceStatus
-from .was import getHostId, getDomainIdAsPK
+from app.models.was import MwWas, MwWeb, MwEtcSslDomain
+from .was import get_domain_id_as_pk
+from .relationship import get_host_id
 from .monitor import select_row
 from sys import exc_info
 import json
 import re
 
-def getErrorResults(create_on=None):
+# ---- Broadcast Callback Registry ----
+broadcast_callback_registry = {}
+
+def register_broadcast_callback(name):
+    """Decorator to register a broadcast callback function."""
+    def decorator(func):
+        broadcast_callback_registry[name] = func
+        return func
+    return decorator
+
+@register_broadcast_callback('get_all_agents')
+def get_all_agents():
+    """Approved 된 전체 agent 목록을 return"""
+    agents = db.session.query(AgAgent)\
+        .filter(AgAgent.approved_yn == 'YES').all()
+    return agents if agents else []
+
+@register_broadcast_callback('get_was_agents')
+def get_was_agents():
+    """WAS(use_yn=YES)를 등록한 전체 approved agent 목록을 return"""
+    was_agent_ids = db.session.query(MwWas.agent_id)\
+        .filter(MwWas.use_yn == 'YES', MwWas.agent_id != None, MwWas.agent_id != '').distinct().all()
+    agent_id_list = [r[0] for r in was_agent_ids]
+    if not agent_id_list:
+        return []
+    agents = db.session.query(AgAgent)\
+        .filter(AgAgent.approved_yn == 'YES', AgAgent.agent_id.in_(agent_id_list)).all()
+    return agents if agents else []
+
+@register_broadcast_callback('get_web_agents')
+def get_web_agents():
+    """WEB(use_yn=YES)를 등록한 전체 approved agent 목록을 return"""
+    web_agent_ids = db.session.query(MwWeb.agent_id)\
+        .filter(MwWeb.use_yn == 'YES', MwWeb.agent_id != None, MwWeb.agent_id != '').distinct().all()
+    agent_id_list = [r[0] for r in web_agent_ids]
+    if not agent_id_list:
+        return []
+    agents = db.session.query(AgAgent)\
+        .filter(AgAgent.approved_yn == 'YES', AgAgent.agent_id.in_(agent_id_list)).all()
+    return agents if agents else []
+
+def get_error_results(create_on=None):
 
     recs = None
 
@@ -30,7 +74,7 @@ def getErrorResults(create_on=None):
     else:
         return None 
 
-def getResult(id):
+def get_result(id):
 
     rec = db.session.query(AgResult).filter(AgResult.id==id).first()
 
@@ -39,7 +83,9 @@ def getResult(id):
     else:
         return None 
 
-def getAutorunFunc(command_id, target_file_name):
+def get_autorun_func(command_id, target_file_name):
+
+    logging.debug(f"get_autorun_func is called. command_id : {command_id} target_file_name : {target_file_name}")
 
     if command_id:
 
@@ -48,22 +94,35 @@ def getAutorunFunc(command_id, target_file_name):
                 ,AgAutorunResult.autorun_type=='COMMAND').first()
 
         if result:
-            return result.autorun_func.name, result.autorun_param
+            return result.autorun_func, result.autorun_param
 
     if target_file_name:
 
+        # Exact match first
         result = db.session.query(AgAutorunResult)\
             .filter(AgAutorunResult.target_file_name==target_file_name\
                 ,AgAutorunResult.autorun_type=='FILENAME').first()
 
         if result:
-            return result.autorun_func.name, result.autorun_param
+            return result.autorun_func, result.autorun_param
+
+        # Regex match
+        results = db.session.query(AgAutorunResult)\
+            .filter(AgAutorunResult.autorun_type=='FILENAME').all()
+
+        for res in results:
+            if res.target_file_name:
+                try: 
+                    if re.search(res.target_file_name, target_file_name):
+                        logging.debug(f"Regex match found: {res.target_file_name} matches {target_file_name}")
+                        return res.autorun_func, res.autorun_param
+                except re.error:
+                    continue
 
     return None, None
 
-def createConnectSSL(agent_id, domain_name, port):
-
-    agent_rec = getAgent(agent_id)
+def create_connect_ssl(agent_id, domain_name, port):
+    agent_rec = get_agent(agent_id)
 
     if not agent_rec or not agent_rec.agent_sub_type:
         return 0, ''
@@ -73,11 +132,128 @@ def createConnectSSL(agent_id, domain_name, port):
     else:
         command_type_id = 'RUN.CONNECT.SSL'
 
-    insertCommandMaster(command_type_id, [agent_rec.agent_id], domain_name+':'+port, add_CID=True)
+    insert_command_master(command_type_id, [agent_rec.agent_id], domain_name+':'+port, add_CID=True)
 
-def createFileSSL(agent_id, certi_file):
 
-    agent_rec = getAgent(agent_id)
+def create_connect_ssl_for_httplistener(item):
+    if getattr(item.ssl_yn, 'name', item.ssl_yn) != 'YES' or not item.domain_name:
+        return False, f"SSL 대상이 아니거나 도메인명이 설정되지 않았습니다. ({item.domain_name}:{item.listen_port})"
+
+    # Agent 찾기 로직
+    host_id = item.mw_was_instance.host_id.lower()
+    agents = get_agents()
+    if not agents:
+        return False, f"해당 서버({host_id})에 사용 가능한 Agent가 존재하지 않습니다."
+    
+    matched_agents = [ag for ag in agents if host_id in ag.agent_id.lower()]
+    if not matched_agents:
+        return False, f"해당 서버({host_id})에 사용 가능한 Agent가 존재하지 않습니다."
+
+    jeus_agents = [ag for ag in matched_agents if "_jeus" in ag.agent_id.lower()]
+    if jeus_agents:
+        matched_agents = jeus_agents
+
+    matched_agents.sort(key=lambda x: x.agent_id)
+    selected_agent_id = matched_agents[0].agent_id
+
+    # `mw_etc_ssl_domain` 정보 확인 / 생성
+    etc_domain = db.session.query(MwEtcSslDomain).filter_by(
+        host_id=host_id,
+        domain_name=item.domain_name,
+        port=str(item.listen_port)
+    ).first()
+
+    if not etc_domain:
+        etc_domain = MwEtcSslDomain(
+            host_id=host_id,
+            domain_name=item.domain_name,
+            port=str(item.listen_port),
+            managed_yn='YES',
+            use_yn='YES',
+            agent_id=selected_agent_id
+        )
+        db.session.add(etc_domain)
+
+    # Association
+    if etc_domain not in item.mw_etc_ssl_domain:
+        item.mw_etc_ssl_domain.append(etc_domain)
+
+    insert_command_master('CALL.GET_SSL_CERTI',
+                         [selected_agent_id],
+                         etc_domain.domain_name + ':' + etc_domain.port)
+
+    db.session.commit()
+
+    return True, "Call Connect SSL 명령이 생성되었습니다."
+
+def create_connect_ssl_real_ip(agent_id, domain_name, port, ip):
+    # JSON 파라미터 구성
+    param_dict = {
+        "domain_name": domain_name,
+        "port": str(port),
+        "ip": ip
+    }
+    json_param = json.dumps(param_dict)
+
+    insert_command_master('CALL.GET_SSL_CERTI',
+                         [agent_id],
+                         json_param)
+    db.session.commit()
+    return True, f"SSL 접수 완료 (Real IP: {ip})"
+
+def create_connect_ssl_real_ip_for_httplistener(item):
+    if getattr(item.ssl_yn, 'name', item.ssl_yn) != 'YES' or not item.domain_name:
+        return False, f"SSL 대상이 아니거나 도메인명이 설정되지 않았습니다. ({item.domain_name}:{item.listen_port})"
+
+    # Agent 찾기 로직
+    host_id = item.mw_was_instance.host_id.lower()
+    agents = get_agents()
+    if not agents:
+        return False, f"해당 서버({host_id})에 사용 가능한 Agent가 존재하지 않습니다."
+    
+    matched_agents = [ag for ag in agents if host_id in ag.agent_id.lower()]
+    if not matched_agents:
+        return False, f"해당 서버({host_id})에 사용 가능한 Agent가 존재하지 않습니다."
+    
+    jeus_agents = [ag for ag in matched_agents if "_jeus" in ag.agent_id.lower()]
+    if jeus_agents:
+        matched_agents = jeus_agents
+
+    matched_agents.sort(key=lambda x: x.agent_id)
+    selected_agent_id = matched_agents[0].agent_id
+
+    # `mw_etc_ssl_domain` 정보 확인 / 생성 (기존 로직 유지)
+    etc_domain = db.session.query(MwEtcSslDomain).filter_by(
+        host_id=host_id,
+        domain_name=item.domain_name,
+        port=str(item.listen_port)
+    ).first()
+
+    if not etc_domain:
+        etc_domain = MwEtcSslDomain(
+            host_id=host_id,
+            domain_name=item.domain_name,
+            port=str(item.listen_port),
+            managed_yn='YES',
+            use_yn='YES',
+            agent_id=selected_agent_id
+        )
+        db.session.add(etc_domain)
+
+    # Association
+    if etc_domain not in item.mw_etc_ssl_domain:
+        item.mw_etc_ssl_domain.append(etc_domain)
+
+    # Real IP 추출 (mw_was_instance -> mw_server -> ip_address)
+    real_ip = ""
+    if item.mw_was_instance and item.mw_was_instance.mw_server:
+        real_ip = item.mw_was_instance.mw_server.ip_address
+
+    return create_connect_ssl_real_ip(selected_agent_id, item.domain_name, item.listen_port, real_ip)
+
+def create_file_ssl(agent_id, certi_file):
+
+    agent_rec = get_agent(agent_id)
 
     if not agent_rec or not agent_rec.agent_sub_type:
         return 0, ''
@@ -87,9 +263,9 @@ def createFileSSL(agent_id, certi_file):
     else:
         command_type_id = 'RUN.FILE.SSL'
         
-    insertCommandMaster(command_type_id, [agent_rec.agent_id], certi_file, add_CID=True)
+    insert_command_master(command_type_id, [agent_rec.agent_id], certi_file, add_CID=True)
 
-def getAgent(agent_id, isApproved=False):
+def get_agent(agent_id, isApproved=False):
 
     rec = db.session.query(AgAgent)\
         .filter(func.lower(AgAgent.agent_id)==func.lower(agent_id)).first()
@@ -102,7 +278,7 @@ def getAgent(agent_id, isApproved=False):
     else:
         return None 
 
-def getAgents():
+def get_agents():
 
     recs = db.session.query(AgAgent)\
         .filter(AgAgent.approved_yn=='YES').all()
@@ -113,27 +289,32 @@ def getAgents():
         return None 
 
 def get_agent_stat():
+    now = datetime.now()
+    offline_min = current_app.config.get('AGENT_OFFLINE_MINUTES', 5)
+    gap_online = now - timedelta(minutes=offline_min)
+    gap_long_term = now - timedelta(hours=24)
 
-    gap = datetime.now() - timedelta(minutes=3)
-
-    results = db.session.query(\
-                AgAgent.landscape, 
-                func.sum(1).label('total'), 
-                func.sum(case([(AgAgent.last_checked_date<=gap,1)], else_=0)).label('offline')
-                )\
-                .filter(AgAgent.approved_yn=='YES')\
-                .group_by(AgAgent.landscape).all()
+    results = db.session.query(
+                AgAgent.landscape,
+                func.sum(1).label('total'),
+                func.sum(case([(AgAgent.last_checked_date > gap_online, 1)], else_=0)).label('online'),
+                func.sum(case([(and_(AgAgent.last_checked_date <= gap_online, AgAgent.last_checked_date > gap_long_term), 1)], else_=0)).label('offline'),
+                func.sum(case([(or_(AgAgent.last_checked_date <= gap_long_term, AgAgent.last_checked_date == None), 1)], else_=0)).label('long_term_unused')
+            )\
+            .filter(AgAgent.approved_yn == 'YES')\
+            .group_by(AgAgent.landscape).all()
     
-    recs = db.session.query(AgAgent)\
-            .filter(AgAgent.last_checked_date<=gap,AgAgent.approved_yn=='YES')\
+    offline_recs = db.session.query(AgAgent)\
+            .filter(AgAgent.last_checked_date <= gap_online, AgAgent.approved_yn == 'YES')\
+            .order_by(AgAgent.last_checked_date.desc())\
             .all()
 
     if results:
-        return results, recs
+        return results, offline_recs
     else:
         return None, None
 
-def getNextRepetitionSeq(command_id, agent_id):
+def get_next_repetition_seq(command_id, agent_id):
 
     result = db.session.query(func.max(AgCommandDetail.repetition_seq))\
                 .filter(AgCommandDetail.agent_id==agent_id, AgCommandDetail.command_id==command_id).first()
@@ -151,18 +332,18 @@ def finish_commands(command_ids):
             .where(AgCommandMaster.command_id.in_(command_ids)).values(publish_yn='YES')
     db.session.execute(stmt)
 
-def cancelCommands(command_ids):
+def cancel_commands(command_ids):
 
     stmt = update(AgCommandMaster)\
             .where(AgCommandMaster.command_id.in_(command_ids)).values(finished_yn='YES')
     db.session.execute(stmt)
 
-def getCommandsToSendNow():
+def get_commands_to_send_now():
 
     commandMaster_recs = db.session.query(AgCommandMaster)\
                     .filter(AgCommandMaster.agent_id==agent_id).all()
 
-def getCommandHelper(mapping_key, target_file_name, agent_id):
+def get_command_helper(mapping_key, target_file_name, agent_id):
 
     commandHelper_recs = db.session.query(AgCommandHelper)\
                     .filter(AgCommandHelper.mapping_key==mapping_key\
@@ -188,13 +369,18 @@ def finish_commands_by_scheduler():
 
     db.session.commit()
 
-def createCommandDetail(command_id):
+def create_command_detail(command):
 
-    logging.debug(f'Hennry createCommandDetail {command_id}')
+    logging.debug(f'Hennry create_command_detail {command}')
 
-    command_rec = db.session.query(AgCommandMaster)\
-                .filter(AgCommandMaster.command_id==command_id).first()
+    if isinstance(command, str):
+
+        command_rec = db.session.query(AgCommandMaster)\
+                    .filter(AgCommandMaster.command_id==command).first()
+    else:
   
+        command_rec = command
+        
     command_type_rec = db.session.query(AgCommandType)\
                 .filter(AgCommandType.command_type_id==command_rec.command_type_id).first()
 
@@ -210,10 +396,19 @@ def createCommandDetail(command_id):
             
     # Append all Agents and Agent groups of a command master into a list
     ags = []
+    
+    if command_rec.broadcast_callback:
+        # Call the registered broadcast callback function to get agents
+        callback_func = broadcast_callback_registry.get(command_rec.broadcast_callback)
+        if callback_func:
+            ags = callback_func()
+        else:
+            logging.error(f"Broadcast callback '{command_rec.broadcast_callback}' not found in registry.")
+            return 0, f"Broadcast callback '{command_rec.broadcast_callback}' not found."
+
     for agg in command_rec.ag_agent_group:
         for ag in agg.ag_agent:
             ags.append(ag)
-
     ags += command_rec.ag_agent
 
     # Remove duplicated agents by set func
@@ -230,7 +425,7 @@ def createCommandDetail(command_id):
         target_file_paths = []
         if befor_text:
 
-            after_texts = getCommandHelper(m[2], target_file_name, ag.agent_id)
+            after_texts = get_command_helper(m[2], target_file_name, ag.agent_id)
 
             if after_texts:
                 for after_text in after_texts:
@@ -243,7 +438,7 @@ def createCommandDetail(command_id):
         else:
             target_file_paths.append(target_file_path)
 
-        repetition_seq = getNextRepetitionSeq(command_rec.command_id, ag.agent_id)
+        repetition_seq = get_next_repetition_seq(command_rec.command_id, ag.agent_id)
         logging.info('AgCommandDetail KEY SET : [%s][%s][%d]',command_rec.command_id,ag.agent_id,repetition_seq)
 
         for i, t in enumerate(target_file_paths):
@@ -265,7 +460,7 @@ def createCommandDetail(command_id):
                     additional_params = command_rec.additional_params,
                     result_receiver   = command_rec.result_receiver.name,
                     target_object     = command_rec.target_object,
-                    result_hash       = getResultHash(ag.agent_id, command_rec.command_id, repetition_seq + i)
+                    result_hash       = get_result_hash(ag.agent_id, command_rec.command_id, repetition_seq + i)
                 )
 
                 rtn = kafka_producer.sendMessage(topic, message, key=key)
@@ -296,13 +491,13 @@ def createCommandDetail(command_id):
 
     return 1, 'OK'
 
-def createCommandDetail_bySch(command_id):
+def create_command_detail_by_sch(command_id):
 
-    logging.debug('Hennry createCommandDetail_bySch [%s]', command_id)
+    logging.debug('Hennry create_command_detail_by_sch [%s]', command_id)
 
     try:
 
-        createCommandDetail(command_id)
+        create_command_detail(command_id)
 
         db.session.commit()
 
@@ -313,15 +508,15 @@ def createCommandDetail_bySch(command_id):
 
     return 1, 'OK'
 
-def sendCommandImmediately(agent_id, command_type_id):
+def send_command_immediately(agent_id, command_type_id):
 
     return 0, ''
 
-def getOrInsertCommandType(command_class, target_file_path='', target_file_name=''):
+def get_or_insert_command_type(command_class, target_file_path='', target_file_name=''):
 
     return 0, ''
 
-def insertCommandMaster(command_type_id, agent_ids, additional_param='', add_CID=False, out_CID=False):
+def insert_command_master(command_type_id, agent_ids, additional_param='', add_CID=False, out_CID=False):
 
     command_id = get_uuid()
     insert_dict = dict(
@@ -357,7 +552,7 @@ def insertCommandMaster(command_type_id, agent_ids, additional_param='', add_CID
 
     commandMaster_rec.ag_agent = agent_recs
 
-    createCommandDetail(command_id)
+    create_command_detail(command_id)
 
     return 1, ''
 
@@ -429,7 +624,7 @@ def get_closeto_token_expiry_bysch(days):
 
     return 1, 'OK'
 
-def checkAgentAproved(agent_id):
+def check_agent_approved(agent_id):
 
     agent_rec = db.session.query(AgAgent)\
                     .filter(AgAgent.agent_id==agent_id).first()
@@ -441,19 +636,19 @@ def checkAgentAproved(agent_id):
     else:
         return 1, 'OK'
 
-def getLatestFile(agent_type, file_name):
+def get_latest_file(agent_type, file_name):
 
     q1 = db.session.query(func.max(AgFile.file_version))\
-                .filter(AgFile.agent_type==agent_type, AgFile.file_name==file_name)
+                .filter(AgFile.agent_type==agent_type, AgFile.file_name==file_name).scalar_subquery()
     result = db.session.query(AgFile).filter(AgFile.agent_type==agent_type, AgFile.file_name==file_name, AgFile.file_version==q1).first()
 
     return result.file if result else '' 
 
-def checkAgentUpdated(agent_version):
+def check_agent_updated(agent_version):
 
     return 1, 'OK'
 
-def updateResultStatus(id, status, message):
+def update_result_status(id, status, message):
 
     db.session.query(AgResult).filter(AgResult.id==id)\
                .update({AgResult.result_status:status\
@@ -462,7 +657,7 @@ def updateResultStatus(id, status, message):
 
     #db.session.commit()
 
-def updateExpiration(agent_id, expiration_date, refresh_token):
+def update_expiration(agent_id, expiration_date, refresh_token):
 
     rtn = db.session.query(AgAgent)\
                     .filter(AgAgent.agent_id==agent_id)\
@@ -476,7 +671,7 @@ def updateExpiration(agent_id, expiration_date, refresh_token):
 
     return 1, 'OK'
 
-def getResultHash(agent_id, command_id, repetition_seq):
+def get_result_hash(agent_id, command_id, repetition_seq):
 
     subquery = db.session.query(func.max(AgResult.repetition_seq))\
                     .filter(AgResult.command_id==command_id\
@@ -501,7 +696,9 @@ def getResultHash(agent_id, command_id, repetition_seq):
 
     return result_hash
 
-def sendCommands(agent_id, agent_version='', agent_type=''):
+def send_commands(agent_id, agent_version='', agent_type=''):
+
+    logging.debug(f"send_commands is called. agent_id : {agent_id} {agent_version} {agent_type}")
 
     data = []
     command_detail_recs = db.session.query(AgCommandDetail)\
@@ -509,7 +706,7 @@ def sendCommands(agent_id, agent_version='', agent_type=''):
 
     for r in command_detail_recs:
 
-        result_hash = getResultHash(agent_id, r.command_id, r.repetition_seq)
+        result_hash = get_result_hash(agent_id, r.command_id, r.repetition_seq)
 
         data.append(dict(
                     command_id        = r.command_id,
@@ -522,6 +719,8 @@ def sendCommands(agent_id, agent_version='', agent_type=''):
                     target_object     = r.ag_command_master.target_object,
                     result_hash       = result_hash
                 ))
+        
+    logging.debug(f"send_commands -> data : {data}")
 
     db.session.query(AgCommandDetail)\
                     .filter(AgCommandDetail.agent_id==agent_id, AgCommandDetail.command_status=='CREATE')\
@@ -539,7 +738,7 @@ def sendCommands(agent_id, agent_version='', agent_type=''):
 
     return 1, data
 
-def addAgent(agent_id, host_id, agent_type, ip_address, installation_path=''):
+def add_agent(agent_id, host_id, agent_type, ip_address, installation_path=''):
 
     insert_dict = dict(
                     agent_id   = agent_id,
@@ -563,7 +762,7 @@ def __getTag(agent_id, agent_type, host_id):
     tag_id = insertResourceTag('ag_agent', tag)
     return tag_id
 """
-def addResult(data):
+def add_result(data):
 
     result_status = 'FAILED' if data.get('is_normal') and data['is_normal'] == 'false' else 'CREATE'
     command_status = 'FAILED' if data.get('is_normal') and data['is_normal'] == 'false' else 'COMPLITED'
@@ -613,7 +812,7 @@ def addResult(data):
 
     return 1 if result_status == 'CREATE' else 0, result_id
 
-def getCommandMaster(command_id):
+def get_command_master(command_id):
 
     command_rec = db.session.query(AgCommandMaster)\
                     .filter(AgCommandMaster.command_id==command_id).first()
@@ -633,14 +832,14 @@ def get_commands():
 
     return command_recs
 
-def getLastRundatetime(command_id):
+def get_last_run_datetime(command_id):
 
     result = db.session.query(func.max(AgCommandDetail.create_on))\
                 .filter(AgCommandDetail.command_id==command_id).first()
 
     return result[0]
 
-def updateWasStatus(key_value2, result_text, host_id_of_agent):
+def update_was_status(key_value2, result_text, host_id_of_agent):
 
     logging.info("Hennry1 r_rec.key_value2 : [%s]",key_value2)
     logging.info("Hennry1 r_rec.result_text : [%s]",result_text)
@@ -669,15 +868,15 @@ def updateWasStatus(key_value2, result_text, host_id_of_agent):
         host_id = host_id_of_agent
     else:
         ip_address = url[:url.find(':')]
-        host_id = getHostId(ip_address)
+        host_id = get_host_id(ip_address)
 
         if host_id == ip_address:
             logging.error("IP Address dosen't exist in Servers : [%s]",host_id)
         
-    domain_id = getDomainIdAsPK(host_id, real_domain_id)
+    domain_id = get_domain_id_as_pk(host_id, real_domain_id)
 
-    #print('host_id, real_domain_id, domain_id of getDomainIdAsPK: ',host_id, real_domain_id, domain_id)
-    was_rec, _ = ('mw_was', {'was_id':domain_id})
+    #print('host_id, real_domain_id, domain_id of get_domain_id_as_pk: ',host_id, real_domain_id, domain_id)
+    was_rec, _ = select_row('mw_was', {'was_id':domain_id})
 
     if was_rec and was_rec.landscape:
         landscape = was_rec.landscape.name

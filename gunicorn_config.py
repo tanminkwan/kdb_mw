@@ -10,11 +10,11 @@ bind = get_env_variable('GUNICORN_BIND', '0.0.0.0:8000')
 
 # Worker Processes
 #workers = int(get_env_variable('GUNICORN_WORKERS', multiprocessing.cpu_count() * 2 + 1))
-workers = int(get_env_variable('GUNICORN_WORKERS', 2))
+workers = int(get_env_variable('GUNICORN_WORKERS', 1))
 threads = int(get_env_variable('GUNICORN_THREADS', 2))
 
 # Server Mechanics
-preload_app = bool(int(get_env_variable('GUNICORN_PRELOAD_APP', '1')))
+preload_app = bool(int(get_env_variable('GUNICORN_PRELOAD_APP', '0')))
 timeout = int(get_env_variable('GUNICORN_TIMEOUT', 120))
 
 # Debugging

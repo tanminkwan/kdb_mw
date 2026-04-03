@@ -1,35 +1,33 @@
 from flask import g, render_template, Flask, request, jsonify\
-     , send_file, redirect, url_for, render_template_string
+     , send_file, redirect, url_for, render_template_string, flash
 from flask_appbuilder.models.sqla.interface import SQLAInterface
 from flask_appbuilder import BaseView, ModelView, ModelRestApi, MultipleView, MasterDetailView
 from flask_appbuilder import expose, has_access
 from flask_appbuilder.actions import action
 from flask_appbuilder.api import ModelRestApi, BaseApi, expose, safe, rison, protect
 from flask_appbuilder.models.sqla.filters import get_field_setup_query, BaseFilter\
-    , FilterEqualFunction, FilterNotEqual, FilterInFunction, FilterStartsWith, FilterEqual
+    , FilterEqualFunction, FilterNotEqual, FilterInFunction, FilterStartsWith, FilterEqual, FilterGreater, FilterSmaller
 from app import appbuilder, db #, mongoClient, dbMongo, footprint, vv_P_secs
 #from .models import Server, JeusContainer, Host
 from app.models.was import MwServer, MwWas, MwWasInstance, MwWeb, MwWebVhost, MwWasHttpListener\
     , MwWasWebtobConnector, MwWebReverseproxy, MwDatasource, MwApplication, DailyReport\
     , MwWebServer, MwWebUri, MwWaschangeHistory, MwWebchangeHistory\
-    , MwBizCategory, MwAppMaster, MwDBMaster, MwWebDomain, MwWebSsl
+    , MwBizCategory, MwAppMaster, MwDBMaster, MwWebDomain, MwWebSsl\
+    , MwEtcSslDomain
 from app.models.knowledge import UtTag
-from app.sqls.was import get_next_old_was_text, get_next_old_web_text, getWasInstanceId, getLandscape\
-    , getWasRelationship, getWebRelationship
-from app.sqls.agent import createConnectSSL, createFileSSL, insertCommandMaster, getAgent
-from app.sqls.batch import create_domain_name_info, create_ssl_info
+from app.sqls.was import get_was_instance_id, get_landscape
+from app.sqls.relationship import get_was_relationship, get_web_relationship
+from app.sqls.agent import create_connect_ssl, create_file_ssl, insert_command_master, get_agent, get_agents, create_connect_ssl_for_httplistener, create_connect_ssl_real_ip_for_httplistener, create_connect_ssl_real_ip
+from app.sqls.batch import create_ssl_info, re_register_web_from_text, re_register_was_from_text
 from app.sqls.monitor import select_row, select_item, select_items
-from app.dmlsForAgent import AutorunResult
-from app.dmlsForJeus import JeusDomain, JeusDomainFactory, OldJeusDomain, NewJeusDomain
-from .common import FilterStartsWithFunction, get_mw_user, get_userid, ShowWithIds, ListAdvanced
+from .common import FilterStartsWithFunction, FilterNotNull, FilterIsNull, \
+    get_mw_user, get_userid, ShowWithIds, ListAdvanced
 
 import json
-import xmltodict
-from deepdiff import DeepDiff
 # Excel
 import pandas as pd
 from io import BytesIO
-import xlsxwriter
+from datetime import datetime, timedelta
 
 # Chart
 #import io
@@ -59,7 +57,7 @@ class DatasourceModelView(ModelView):
 
     search_columns = ['mw_was', 'db_user_id', 'db_dbms_id', 'db_server_name']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WaschangeHistoryModelView(ModelView):
     
@@ -84,7 +82,7 @@ class WaschangeHistoryModelView(ModelView):
     base_order = ('create_on', 'desc')
     base_permissions = ['can_list', 'can_show']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class ApplicationModelView(ModelView):
     
@@ -101,30 +99,71 @@ class ApplicationModelView(ModelView):
                     ,'deploy_type':'배포Type'}
 
     search_columns = ['mw_was']
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WasHttpListenerModelView(ModelView):
 
     datamodel = SQLAInterface(MwWasHttpListener)
 
+    list_template = 'listWithJson.html'
+    list_widget   = ListAdvanced
+
     list_title   = "WAS Http Listener 목록"    
-    list_columns = ['was_id', 'was_instance_id', 'host_id', 'webconnection_id', 'listen_port'\
-                    ,'min_thread_pool_count', 'max_thread_pool_count']
+    list_columns = ['was_id', 'was_instance_id', 'host_id', 'webconnection_id', 'listen_port', 'min_thread_pool_count', 'max_thread_pool_count', 'ssl_yn', 'domain_name'\
+                    ,'ssl_cn', 'ssl_notafter', 'ssl_update_dt']
     label_columns = {'was_id':'WAS Domain'
                     ,'was_instance_id':'MS intance id'
                     ,'host_id':'HOST ID'
                     ,'webconnection_id':'Web Connection ID'
                     ,'listen_port':'서비스Port'
+                    ,'ssl_yn':'SSL 여부'
+                    ,'domain_name':'도메인명'
+                    ,'ssl_cn': 'CN'
+                    ,'ssl_update_dt':'인증서 확인일'
+                    ,'ssl_notafter':'만료일'
                     ,'min_thread_pool_count':'Min Thread pool 개수'
                     ,'max_thread_pool_count':'Max Thread pool 개수'}
 
-    search_columns = ['was_id', 'mw_was_instance', 'webconnection_id']
+    search_columns = ['ssl_yn', 'was_id', 'mw_was_instance', 'webconnection_id']
 
     edit_exclude_columns = ['httplistener_object','create_on']
     add_exclude_columns = ['httplistener_object','create_on']
     search_exclude_columns = ['httplistener_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+    extra_args = {
+        'inputList':[
+         {'text':'WAS ID','id':'was-id','combind':'0','condition':'_flt_2_was_id=','size':20}
+        ],
+        'buttonList':[
+         {'text':'SSL만 조회','id':'toggle_bt1','bt_group':'1','onclick':'_flt_0_ssl_yn=YES'},
+        ],
+        }
+
+    @action("call_connect_ssl", "Call Connect SSL", "", "fa-rocket", single=False)
+    def callConnectSSL(self, items):
+        for item in items:
+            success, msg = create_connect_ssl_for_httplistener(item)
+            if not success:
+                flash(msg, 'warning')
+            else:
+                flash(f"{item.domain_name}:{item.listen_port} - {msg}", 'info')
+
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+    @action("call_connect_ssl_real_ip", "Call connect SSL(real ip)", "Are you sure you want to call connect SSL with Real IP?", "fa-lock", single=False)
+    def callConnectSSLRealIp(self, items):
+        for item in items:
+            success, msg = create_connect_ssl_real_ip_for_httplistener(item)
+            if not success:
+                flash(msg, 'warning')
+            else:
+                flash(f"{item.domain_name}:{item.listen_port} (IP: {item.mw_was_instance.mw_server.ip_address}) - {msg}", 'info')
+
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+
 
 class WasWebtobConnectorModelView(ModelView):
 
@@ -149,14 +188,14 @@ class WasWebtobConnectorModelView(ModelView):
     add_exclude_columns = ['webtobconnector_object','create_on']
     search_exclude_columns = ['webtobconnector_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WasInstanceModelView(ModelView):
 
     datamodel = SQLAInterface(MwWasInstance)
 
     list_title   = "WAS Instance 목록"    
-    list_columns = ['was_id', 'was_instance_id', 'landscape', 'newgeneration_yn', 'was_instance_port'\
+    list_columns = ['was_id', 'was_instance_id', 'landscape', 'was_instance_port'\
                     , 'host_id', 'c_os_type', 'c_ip_address','min_heap_size', 'max_heap_size', 'clustered_yn'\
                     , 'colored_apm_type', 'use_yn', 'mw_datasource', 'mw_application']
     label_columns = {'was_id':'WAS Domain'
@@ -180,10 +219,10 @@ class WasInstanceModelView(ModelView):
     search_columns = ['was_id', 'was_instance_id', 'host_id', 'apm_type'\
                     ,'min_heap_size', 'max_heap_size', 'clustered_yn']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
     related_views = [WasWebtobConnectorModelView, WasHttpListenerModelView]
 
-class WasModelView(ModelView):
+class WasCommonView(ModelView):
     
     datamodel = SQLAInterface(MwWas)
 
@@ -200,15 +239,13 @@ class WasModelView(ModelView):
         ],
         'selectList':[
          {'text':'Hostname','id':'host-selector','combind':'0','type':'parent'}
-        ,{'text':'시스템','id':'tag-selector','combind':'0','type':'parent','condition':{'operator':'and','column':'tag','value':'시스템'}}
         ],
         'inputList':[
          {'text':'WAS 이름','id':'was-name','combind':'0','condition':'_flt_2_was_name=','size':20}
         ]
         }
 
-    list_title   = "JEUS 목록"    
-    list_columns = ['c_was_id', 'newgeneration_yn', 'was_name', 'colored_landscape'\
+    list_columns = ['c_was_id', 'was_name', 'colored_landscape'\
                     , 'sys_user', 'located_host_id', 'c_os_type', 'link_ip_address', 'running_type', 'standby_host_id'\
                     , 'view_domaininfo','view_relationship']
     label_columns = {'c_was_id':'WAS Domain'
@@ -230,29 +267,23 @@ class WasModelView(ModelView):
     edit_exclude_columns = ['cluster_object','was_object','license_update_date','jeus_properties_update_date','create_on']
     add_exclude_columns = ['cluster_object','was_object','license_update_date','jeus_properties_update_date','create_on']
     search_exclude_columns = ['cluster_object','was_object']
+    show_exclude_columns = ['cluster_object', 'was_object']
+    base_order = ('c_was_id', 'asc')
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]
-                    ,['use_yn', FilterEqual, 'YES']]
-    base_order = ('c_was_id', 'asc')    
-
+class WasModelView(WasCommonView):
+    list_title   = "JEUS 목록"    
+    base_filters = [['use_yn', FilterEqual, 'YES']]
     related_views = [WasInstanceModelView, ApplicationModelView, DatasourceModelView, WaschangeHistoryModelView]
 
     @action("call_filtered_info","Update Findings in App","","fa-rocket",single=False)
     def callFilteredInfo(self, items):
-
         for item in items:
-
-            agent_rec = getAgent(item.agent_id)
-
+            agent_rec = get_agent(item.agent_id)
             if not agent_rec:
                 continue
-
             recs, _ = select_items('mw_application', 'application_home', dict(was_id=item.was_id))
-
             for rec in recs:
-
                 addparam = item.was_id
-
                 if rec.application_home.endswith(".war"):
                     addparam += ' ' + rec.application_home
                 elif rec.application_home.endswith(".jar"):
@@ -260,25 +291,46 @@ class WasModelView(ModelView):
                 else:
                     addparam += ' ' + rec.application_home
 
-                #JEUS7, JEUS8 인 경우 ExeScript 실행
                 if item.mw_server.os_type.name == 'WINDOWS':
                     addparam += ' ' + '^.*log4.*.jar'
-                    insertCommandMaster('EXE.FILTER4WIN', [agent_rec.agent_id], addparam)
-                #elif item.mw_server.os_type.name == 'HPUX' and item.newgeneration_yn.name == 'NO':
+                    insert_command_master('EXE.FILTER4WIN', [agent_rec.agent_id], addparam)
                 elif item.mw_server.os_type.name == 'HPUX':
                     addparam += ' ' + '*log4*.jar'
-                    insertCommandMaster('RUN.FILTER', [agent_rec.agent_id], addparam, out_CID=True)
+                    insert_command_master('RUN.FILTER', [agent_rec.agent_id], addparam, out_CID=True)
                 else:
                     filter_dict = dict(was_id=item.was_id
                                     , application_home=rec.application_home)
                     appRec, _ = \
                             select_item('mw_application', 'application_id', filter_dict)
                     addparam += ' ' + '*log4*.jar' + ' ' + appRec.application_id
-                    insertCommandMaster('EXE.FILTER', [agent_rec.agent_id], addparam)
+                    insert_command_master('EXE.FILTER', [agent_rec.agent_id], addparam)
 
         db.session.commit()
-
         self.update_redirect()
+        return redirect(self.get_redirect())
+
+    @action("re_register","Was Text 기반 재등록","진짜로?","fa-rocket",single=False)
+    def re_register(self, items):
+        for item in items:
+            rtn, msg = re_register_was_from_text('UI_ACTION', item.id)
+            if rtn > 0:
+                flash(f"WAS '{item.was_id}' re-registered successfully.", "success")
+            else:
+                flash(f"WAS '{item.was_id}' re-registration failed: {msg}", "danger")
+            db.session.commit()
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+class WasDisusedModelView(WasCommonView):
+    list_title   = "JEUS 불용 목록"
+    base_filters = [['use_yn', FilterEqual, 'NO']]
+
+    @action("activate", "사용 전환", "정말 사용으로 전환하시겠습니까?", "fa-play", single=False)
+    def activate(self, items):
+        for item in items:
+            item.use_yn = 'YES'
+            db.session.add(item)
+        db.session.commit()
         return redirect(self.get_redirect())
 
 class WasLinkView(ModelView):
@@ -300,8 +352,7 @@ class WasLinkView(ModelView):
 
     search_exclude_columns = ['cluster_object','was_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]
-                    ,['landscape', FilterEqual, 'PROD']
+    base_filters = [['landscape', FilterEqual, 'PROD']
                     ,['newgeneration_yn', FilterEqual, 'YES']
                     ]
     base_order = ('was_id', 'asc')    
@@ -361,7 +412,7 @@ class WasLicenseView(ModelView):
                         ,'license_issue_date': lambda x:x.strftime('%Y-%m-%d') if x else ''
                         ,'license_due_date': lambda x:x.strftime('%Y-%m-%d') if x else ''}
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
     base_order = ('was_id', 'asc')    
     base_permissions = ['can_list','can_show']
 
@@ -375,7 +426,7 @@ class WasLicenseView(ModelView):
             else:
                 agent_id = item.located_host_id + '_' + item.sys_user + '_J'
 
-            agent_rec = getAgent(agent_id)
+            agent_rec = get_agent(agent_id)
 
             if not agent_rec:
                 continue
@@ -394,11 +445,11 @@ class WasLicenseView(ModelView):
 
             #JEUS7, JEUS8 인 경우 ExeScript 실행
             if item.mw_server.os_type.name == 'WINDOWS':
-                insertCommandMaster('EXE.JEUS.LICENSE4WIN', [agent_rec.agent_id], addparam)
+                insert_command_master('EXE.JEUS.LICENSE4WIN', [agent_rec.agent_id], addparam)
             elif item.mw_server.os_type.name == 'HPUX':
-                insertCommandMaster('RUN.JEUS.LICENSE', [agent_rec.agent_id], addparam, out_CID=True)
+                insert_command_master('RUN.JEUS.LICENSE', [agent_rec.agent_id], addparam, out_CID=True)
             else:
-                insertCommandMaster('EXE.JEUS.LICENSE', [agent_rec.agent_id], addparam)
+                insert_command_master('EXE.JEUS.LICENSE', [agent_rec.agent_id], addparam)
 
         db.session.commit()
 
@@ -462,8 +513,8 @@ class WebLicenseView(ModelView):
                         ,'license_issue_date': lambda x:x.strftime('%Y-%m-%d') if x else ''
                         ,'license_due_date': lambda x:x.strftime('%Y-%m-%d') if x else ''}
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
-    base_order = ('host_id', 'asc')    
+
+    base_order = ('host_id', 'asc')
     base_permissions = ['can_list','can_show']
 
     @action("call_file_webtob_license","Update Webtob License","","fa-rocket",single=False)
@@ -471,7 +522,7 @@ class WebLicenseView(ModelView):
 
         for item in items:
 
-            agent_rec = getAgent(item.agent_id)
+            agent_rec = get_agent(item.agent_id)
 
             if not agent_rec:
                 continue
@@ -481,11 +532,11 @@ class WebLicenseView(ModelView):
             #HPUX 인 경우 ExeScript 의 stdout을 못가져옴
             if item.mw_server.os_type.name == 'WINDOWS':
                 addparam = addparam.replace('/','\\')
-                insertCommandMaster('EXE.WEBTOB.LICENSE4WIN', [agent_rec.agent_id], addparam)
+                insert_command_master('EXE.WEBTOB.LICENSE4WIN', [agent_rec.agent_id], addparam)
             elif item.mw_server.os_type.name == 'HPUX':
-                insertCommandMaster('RUN.WEBTOB.LICENSE', [agent_rec.agent_id], addparam, out_CID=True)
+                insert_command_master('RUN.WEBTOB.LICENSE', [agent_rec.agent_id], addparam, out_CID=True)
             else:
-                insertCommandMaster('EXE.WEBTOB.LICENSE', [agent_rec.agent_id], addparam)
+                insert_command_master('EXE.WEBTOB.LICENSE', [agent_rec.agent_id], addparam)
 
         db.session.commit()
 
@@ -515,19 +566,19 @@ class WebVhostModelView(ModelView):
     add_exclude_columns = ['uri_object','create_on']
     search_exclude_columns = ['uri_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     @action("call_url_rewrite","Call URL Rewrite","","fa-rocket",single=False)
     def callUrlRewrote(self, items):
 
         for item in items:
 
-            agent_rec = getAgent(item.mw_web.agent_id)
+            agent_rec = get_agent(item.mw_web.agent_id)
 
             if not agent_rec:
                 continue
 
-            insertCommandMaster('READ.URLREWRITE', [agent_rec.agent_id]\
+            insert_command_master('READ.URLREWRITE', [agent_rec.agent_id]\
                     , item.urlrewrite_config)
 
         db.session.commit()
@@ -555,8 +606,8 @@ class WebSslModelView(ModelView):
                     ,'update_dt':'확인일시'
                     }
     search_columns = ['host_id', 'notafter', 'update_dt', 'ssl_certi']
-                    
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+    formatters_columns={'update_dt': lambda x: x.strftime('%Y.%m.%d %H:%M') if x else ''}         
+
 
     extra_args = {
         'inputList':[
@@ -569,12 +620,12 @@ class WebSslModelView(ModelView):
 
         for item in items:
 
-            agent_rec = getAgent(item.mw_web.agent_id)
+            agent_rec = get_agent(item.mw_web.agent_id)
 
             if not agent_rec:
                 continue
 
-            insertCommandMaster('CALL.GET_SSL_CERTIFILE', [agent_rec.agent_id], item.ssl_certi)
+            insert_command_master('CALL.GET_SSL_CERTIFILE', [agent_rec.agent_id], item.ssl_certi)
 
         db.session.commit()
 
@@ -585,6 +636,12 @@ class WebDomainModelView(ModelView):
 
     datamodel = SQLAInterface(MwWebDomain)
 
+    def almost_expired():
+        now = datetime.now()
+        plus_15 = now + timedelta(days=30)
+        filter_str = f'_flt_1_notafter={now.strftime("%m/%d/%Y")}&_flt_2_notafter={plus_15.strftime("%m/%d/%Y")}'
+        return filter_str
+    
     list_template = 'listWithJson.html'
     list_widget   = ListAdvanced
 
@@ -603,13 +660,24 @@ class WebDomainModelView(ModelView):
                     }
     search_columns = ['host_id', 'ssl_yn', 'domain_name','notafter'\
                     , 'update_dt', 'ssl_certi']
-                    
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
-
+    formatters_columns={'update_dt': lambda x:x.strftime('%Y.%m.%d %H:%M') if x is not None else ""}             
+    base_filters = []
+    
+    search_form_query_rel_fields = {}
+    
+    search_filters = {
+        'notafter': [FilterIsNull, FilterGreater, FilterSmaller],
+        'update_dt': [FilterIsNull, FilterGreater, FilterSmaller]
+    }
+    
     extra_args = {
         'inputList':[
          {'text':'HOSTNAME','id':'host-name','combind':'0','condition':'_flt_2_host_id=','size':20}
-        ]
+        ],
+        'buttonList':[
+         {'text':'SSL만 조회','id':'toggle_bt1','bt_group':'1','onclick':'_flt_0_ssl_yn=YES'},
+         {'text':'SSL만료 임박','id':'toggle_bt2','bt_group':'2','onclick':almost_expired()}
+        ],
         }
 
     @action("call_connect_ssl","Call Connect SSL","","fa-rocket",single=False)
@@ -619,15 +687,34 @@ class WebDomainModelView(ModelView):
 
             if item.ssl_yn.name == 'YES':
 
-                agent_rec = getAgent(item.mw_web_vhost.mw_web.agent_id)
+                agent_rec = get_agent(item.mw_web_vhost.mw_web.agent_id)
 
                 if not agent_rec:
                     continue
 
-                insertCommandMaster('CALL.GET_SSL_CERTI', [agent_rec.agent_id], item.domain_name+':'+item.port)
+                insert_command_master('CALL.GET_SSL_CERTI', [agent_rec.agent_id], item.domain_name+':'+item.port)
 
         db.session.commit()
 
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+    @action("call_connect_ssl_real_ip", "Call connect SSL(real ip)", "Are you sure you want to call connect SSL with Real IP?", "fa-lock", single=False)
+    def callConnectSSLRealIp(self, items):
+        for item in items:
+            if item.ssl_yn.name == 'YES':
+                agent_rec = get_agent(item.mw_web_vhost.mw_web.agent_id)
+                if not agent_rec:
+                    continue
+
+                # Real IP 추출
+                real_ip = ""
+                if item.mw_web_vhost and item.mw_web_vhost.mw_web and item.mw_web_vhost.mw_web.mw_server:
+                    real_ip = item.mw_web_vhost.mw_web.mw_server.ip_address
+
+                create_connect_ssl_real_ip(agent_rec.agent_id, item.domain_name, item.port, real_ip)
+
+        db.session.commit()
         self.update_redirect()
         return redirect(self.get_redirect())
 
@@ -639,7 +726,7 @@ class WebDomainModelView(ModelView):
             print('Get Connect SSL : ', item.ssl_yn.name, item.mw_web_vhost, item.mw_web_vhost.mw_web, item.mw_web_vhost.mw_web.sys_user)
             if item.ssl_yn.name == 'YES':
 
-                createConnectSSL(item.mw_web_vhost.mw_web.agent_id, item.domain_name, item.port)
+                create_connect_ssl(item.mw_web_vhost.mw_web.agent_id, item.domain_name, item.port)
 
         db.session.commit()
 
@@ -663,7 +750,7 @@ class WebServerModelView(ModelView):
     edit_exclude_columns = ['monitor_now', 'monitor_history', 'create_on']
     add_exclude_columns = ['monitor_now', 'monitor_history', 'create_on']
     search_exclude_columns = ['monitor_now', 'monitor_history'] 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WebUriModelView(ModelView):
     
@@ -681,7 +768,7 @@ class WebUriModelView(ModelView):
     edit_exclude_columns = ['create_on']
     add_exclude_columns = ['create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WebReverseproxyModelView(ModelView):
     
@@ -705,7 +792,7 @@ class WebReverseproxyModelView(ModelView):
     edit_exclude_columns = ['create_on']
     add_exclude_columns = ['create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class WebchangeHistoryModelView(ModelView):
     
@@ -730,9 +817,9 @@ class WebchangeHistoryModelView(ModelView):
     search_columns = ['mw_web','create_on']
     base_order = ('create_on', 'desc')
     base_permissions = ['can_list', 'can_show']
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
 
-class WebModelView(ModelView):
+
+class WebCommonView(ModelView):
     
     datamodel = SQLAInterface(MwWeb)
 
@@ -750,19 +837,18 @@ class WebModelView(ModelView):
         ],
         'selectList':[
          {'text':'Hostname','id':'host-selector','combind':'0','type':'parent'}
-        ,{'text':'시스템','id':'tag-selector','combind':'0','type':'parent','condition':{'operator':'and','column':'tag','value':'시스템'}}
         ],
         'inputList':[
          {'text':'WEB 이름','id':'web-name','combind':'0','condition':'_flt_2_web_name=','size':20}
         ]
         }
 
-    list_title   = "WEBTOB 목록"    
-    list_columns = ['c_host_id', 'c_ip_address', 'jsv_port', 'colored_landscape','newgeneration_yn'\
-                    , 'web_name','colored_built_type', 'sys_user', 'c_ssl_yn', 'dependent_was_id'\
-                    , 'service_port', 'c_domainInfo_yn', 'view_relationship', 'view_webinfo']
+    list_columns = ['c_host_id', 'c_ip_address', 'jsv_port', 'colored_landscape','newgeneration_yn', 'linked_was'\
+                    , 'web_name','colored_built_type', 'sys_user', 'c_ssl_yn' \
+                    , 'service_port', 'view_relationship', 'view_webinfo']
     label_columns = {'c_host_id':'Host ID'
                     ,'jsv_port':'JSV Port'
+                    ,'linked_was':'연결 WAS'
                     ,'newgeneration_yn':'차세대여부'
                     ,'colored_landscape':'Landscape'
                     ,'web_name':'설명'
@@ -771,9 +857,8 @@ class WebModelView(ModelView):
                     ,'c_ip_address':'IP'
                     ,'colored_built_type':'내장/외장'
                     ,'c_ssl_yn':'SSL설치여부'
-                    ,'c_domainInfo_yn':'Domain정보생성'
                     ,'sys_user':'서버계정'
-                    ,'dependent_was_id':'WAS Domain'
+                    ,'mw_was':'연결 WAS'
                     ,'view_relationship':'구성도'
                     ,'view_webinfo':'http.m' }
 
@@ -783,76 +868,187 @@ class WebModelView(ModelView):
             , 'proxy_ssl_object', 'tcpgw_object', 'httpm_object', 'ext_object', 'license_object', 'create_on']
     search_exclude_columns = ['ssl_object', 'logging_object', 'errordocument_object'\
             , 'proxy_ssl_object', 'tcpgw_object', 'httpm_object', 'ext_object', 'license_object']
+    show_exclude_columns = ['ssl_object', 'logging_object', 'errordocument_object'\
+            , 'proxy_ssl_object', 'tcpgw_object', 'httpm_object', 'ext_object', 'license_object']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+    base_order = ('host_id', 'asc')
 
-    base_order = ('host_id', 'asc')    
-
+class WebModelView(WebCommonView):
+    list_title   = "WEBTOB 목록"    
+    base_filters = [['use_yn', FilterEqual, 'YES']]
     related_views = [WebServerModelView, WebVhostModelView, WebUriModelView, WebReverseproxyModelView]
 
     @action("call_file_ssl","Call File SSL","","fa-rocket",single=False)
     def callFileSSL(self, items):
-
         for item in items:
-
             if item.ssl_object and item.sys_user:
-
-                agent_rec = getAgent(item.agent_id)
-
+                agent_rec = get_agent(item.agent_id)
                 if not agent_rec:
                     continue
-
                 for ssl in item.ssl_object:
-                    insertCommandMaster('CALL.GET_SSL_CERTIFILE', [agent_rec.agent_id], ssl['CERTIFICATEFILE'])
-
+                    insert_command_master('CALL.GET_SSL_CERTIFILE', [agent_rec.agent_id], ssl['CERTIFICATEFILE'])
         db.session.commit()
-
         self.update_redirect()
         return redirect(self.get_redirect())
 
-
     @action("get_file_ssl","Get File SSL","","fa-rocket",single=False)
     def getFileSSL(self, items):
-
         for item in items:
-
             if item.ssl_object and item.sys_user:
-
                 for ssl in item.ssl_object:
-                    createFileSSL(item.agent_id, ssl['CERTIFICATEFILE'])
-
+                    create_file_ssl(item.agent_id, ssl['CERTIFICATEFILE'])
         db.session.commit()
-
         self.update_redirect()
         return redirect(self.get_redirect())
 
     @action("multi","Excel Download","","fa-rocket",single=False)
     def myaction(self, items):
         output = BytesIO()
-    
         df = pd.read_sql(sql = "select * from mw_web", con = db.session.bind)
-
         writer = pd.ExcelWriter(output, engine="xlsxwriter")
         df.to_excel(writer, 'data', index=False)
         writer.save()
         output.seek(0)
-        return send_file(output, attachment_filename='mw_web.xlsx', as_attachment=True)
+        return send_file(output, download_name='mw_web.xlsx', as_attachment=True)
 
-    @action("create_domain","Create Domain Info","","fa-rocket",single=False)
-    def createDomainNameInfo(self, items):
 
+    @action("re_register","Web Text 기반 재등록","진짜로?","fa-rocket",single=False)
+    def re_register(self, items):
         for item in items:
-            host_id = item.host_id
-            port    = item.port
-            webInfo = {'host_id':host_id, 'port':port}
-
-            create_ssl_info(webInfo)
-            create_domain_name_info(webInfo)
-
+            rtn, msg = re_register_web_from_text('UI_ACTION', item.id)
+            if rtn > 0:
+                flash(f"Web '{item.host_id}' re-registered successfully.", "success")
+            else:
+                flash(f"Web '{item.host_id}' re-registration failed: {msg}", "danger")
             db.session.commit()
-
         self.update_redirect()
         return redirect(self.get_redirect())
+
+class WebDisusedModelView(WebCommonView):
+    list_title   = "WEBTOB 불용 목록"
+    base_filters = [['use_yn', FilterEqual, 'NO']]
+
+    @action("activate", "사용 전환", "정말 사용으로 전환하시겠습니까?", "fa-play", single=False)
+    def activate(self, items):
+        for item in items:
+            item.use_yn = 'YES'
+            db.session.add(item)
+        db.session.commit()
+        return redirect(self.get_redirect())
+
+
+class EtcSslDomainCommonView(ModelView):
+
+    datamodel = SQLAInterface(MwEtcSslDomain)
+
+    def almost_expired():
+        now = datetime.now()
+        plus_30 = now + timedelta(days=30)
+        filter_str = f'_flt_1_notafter={now.strftime("%m/%d/%Y")}&_flt_2_notafter={plus_30.strftime("%m/%d/%Y")}'
+        return filter_str
+
+    list_template = 'listWithJson.html'
+    list_widget   = ListAdvanced
+
+    list_columns = ['host_id', 't__domain', 'notbefore', 'notafter',
+                    't__cn', 'managed_yn', 'description', 'update_dt']
+    label_columns = {
+        'host_id': 'Host ID',
+        't__domain': 'URL',
+        'notbefore': '시작일',
+        'notafter': '만료일',
+        't__cn': 'CN',
+        'managed_yn': 'MW관리대상',
+        'description': '설명',
+        'update_dt': '확인일시',
+        'use_yn': '사용여부',
+        'agent_id': 'Agent ID',
+        'domain_name': 'Domain',
+        'port': 'Port',
+    }
+
+    edit_columns = ['host_id', 'domain_name', 'port', 'description',
+                    'use_yn', 'managed_yn']
+    add_columns  = ['host_id', 'domain_name', 'port', 'description',
+                    'use_yn', 'managed_yn']
+
+    search_columns = ['host_id', 'domain_name', 'notafter', 'update_dt',
+                      'managed_yn']
+
+    search_filters = {
+        'notafter': [FilterIsNull, FilterGreater, FilterSmaller],
+        'update_dt': [FilterIsNull, FilterGreater, FilterSmaller]
+    }
+
+    formatters_columns = {
+        'update_dt': lambda x: x.strftime('%Y.%m.%d %H:%M') if x else '',
+        'notafter': lambda x: x.strftime('%Y-%m-%d') if x else '',
+        'notbefore': lambda x: x.strftime('%Y-%m-%d') if x else '',
+    }
+
+    extra_args = {
+        'inputList': [
+            {'text': 'HOSTNAME', 'id': 'host-name', 'combind': '0',
+             'condition': '_flt_2_host_id=', 'size': 20}
+        ],
+        'buttonList': [
+            {'text': 'SSL만료 임박', 'id': 'toggle_bt1', 'bt_group': '1',
+             'onclick': almost_expired()}
+        ],
+    }
+
+    base_order = ('host_id', 'asc')
+
+    @action("call_connect_ssl", "Call Connect SSL", "", "fa-rocket", single=False)
+    def callConnectSSL(self, items):
+        for item in items:
+            if not item.agent_id:
+                continue
+
+            agent_rec = get_agent(item.agent_id)
+
+            if not agent_rec:
+                continue
+
+            insert_command_master('CALL.GET_SSL_CERTI',
+                                 [agent_rec.agent_id],
+                                 item.domain_name + ':' + item.port)
+
+        db.session.commit()
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+    @action("call_connect_ssl_real_ip", "Call connect SSL(real ip)", "Are you sure you want to call connect SSL with Real IP?", "fa-lock", single=False)
+    def callConnectSSLRealIp(self, items):
+        for item in items:
+            if not item.agent_id:
+                continue
+
+            agent_rec = get_agent(item.agent_id)
+            if not agent_rec:
+                continue
+
+            # Real IP 추출
+            real_ip = ""
+            if item.mw_server:
+                real_ip = item.mw_server.ip_address
+
+            create_connect_ssl_real_ip(agent_rec.agent_id, item.domain_name, item.port, real_ip)
+
+        db.session.commit()
+        self.update_redirect()
+        return redirect(self.get_redirect())
+
+
+class EtcSslDomainModelView(EtcSslDomainCommonView):
+    list_title = "기타 SSL Domain"
+    base_filters = [['use_yn', FilterEqual, 'YES']]
+
+
+class EtcSslDomainDisusedModelView(EtcSslDomainCommonView):
+    list_title = "불용 기타 SSL Domain"
+    base_filters = [['use_yn', FilterEqual, 'NO']]
+    base_permissions = ['can_list', 'can_show', 'can_edit', 'can_delete']
 
 
 class BizCategoryModelView(ModelView):
@@ -870,7 +1066,7 @@ class BizCategoryModelView(ModelView):
     edit_exclude_columns = ['create_on']
     add_exclude_columns = ['create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
     related_views = [WasModelView, WebModelView]
 
 class DBMasterModelView(ModelView):
@@ -891,7 +1087,7 @@ class DBMasterModelView(ModelView):
     edit_exclude_columns = ['create_on']
     add_exclude_columns = ['create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
 class AppMasterModelView(ModelView):
     
@@ -925,8 +1121,7 @@ class AppMasterModelView(ModelView):
     edit_exclude_columns = ['create_on']
     add_exclude_columns = ['create_on']
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]
-                    ,['app_id', FilterNotEqual, 'NOAPP']
+    base_filters = [['app_id', FilterNotEqual, 'NOAPP']
                     ]
 
 class ServerModelView(ModelView):
@@ -951,21 +1146,24 @@ class ServerModelView(ModelView):
                     ,'mw_was_instance':'WAS'
                     ,'web_yn':'WEB Y/N'
                     ,'was_yn':'WAS Y/N'
+                    ,'ut_tag':'업무 도메인'
+                    ,'ut_tag_itdep':'업무부서'
+                    ,'ut_tag_bizdep':'IT부서'
                      }
 
     edit_columns = ['host_id', 'server_name', 'landscape', 'os_type'\
                     , 'encoding', 'ip_address', 'vip_address', 'jdk_version'\
-                    ,'running_type', 'primary_host_id']
+                    ,'running_type', 'primary_host_id', 'ut_tag', 'ut_tag_itdep', 'ut_tag_bizdep']
 
     add_columns = ['host_id', 'server_name', 'landscape', 'os_type'\
                     , 'encoding', 'ip_address', 'vip_address', 'jdk_version'\
-                    ,'running_type', 'primary_host_id']
+                    ,'running_type', 'primary_host_id', 'ut_tag', 'ut_tag_itdep', 'ut_tag_bizdep']
 
     search_columns = ['host_id', 'ip_address', 'vip_address', 'landscape', 'running_type']
 
     base_order = ('host_id', 'asc')    
 
-    base_filters = [['user_id', FilterStartsWithFunction, get_mw_user]]
+
 
     related_views = [WasModelView, WebModelView]
 
@@ -979,7 +1177,7 @@ class ServerModelView(ModelView):
         df.to_excel(writer, 'data', index=False)
         writer.save()
         output.seek(0)
-        return send_file(output, attachment_filename='mw_server.xlsx', as_attachment=True)
+        return send_file(output, download_name='mw_server.xlsx', as_attachment=True)
 
 class MasterDetailViews(MasterDetailView):
     datamodel = SQLAInterface(MwWas)
@@ -996,139 +1194,23 @@ class ShortQueries(BaseApi):
         print (host_id, app_id)
         return jsonify({'return_code':1}), 201
 
-class MWConfiguration(BaseApi):
 
-    resource_name = 'config'
 
-    @expose('/httpm', methods=['POST'])
-    @protect()
-    def httpm_config(self, **kwargs):
-
-        data = json.loads(request.data)
-
-        if not data.get('content'):
-            return jsonify({'return_code':-2,'message':'content must be included'}), 401
-        elif not data.get('host_id'):
-            return jsonify({'return_code':-2,'message':'host_id must be included'}), 401
-    
-        content   = data['content']
-        host_id   = data['host_id']
-        sys_user = data['sys_user'] if data.get('sys_user') else ''
-
-        rtn, msg = AutorunResult()._update_httpm(host_id, content, sys_user=sys_user)
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'msg':msg}), 201
-
-    @expose('/jeusdomain', methods=['POST'])
-    @protect()
-    def jeusDomainConfig(self, **kwargs):
-
-        data = json.loads(request.data)
-
-        if not data.get('content'):
-            return jsonify({'return_code':-2,'message':'content must be included'}), 401
-        elif not data.get('host_id'):
-            return jsonify({'return_code':-2,'message':'host_id must be included'}), 401
-        elif not data.get('domain_id'):
-            return jsonify({'return_code':-2,'message':'domain_id must be included'}), 401
-    
-        content   = data['content']
-        host_id   = data['host_id']
-        domain_id = data['domain_id']
-        sys_user = data['sys_user'] if data.get('sys_user') else ''
-        
-        domain_info = dict(
-            host_id = host_id,
-            domain_id = domain_id,
-            content = content,
-            sys_user = sys_user,
-            agent_id = '',
-        )
-
-        rtn, msg = AutorunResult.update_domain(domain_info)
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'msg':msg}), 201
-
-    @expose('/webmain', methods=['POST'])
-    @protect()
-    def webmainConfig(self, **kwargs):
-
-        data = json.loads(request.data)
-
-        if not data.get('content'):
-            return jsonify({'return_code':-2,'message':'content must be included'}), 401
-        elif not data.get('host_id'):
-            return jsonify({'return_code':-2,'message':'host_id must be included'}), 401
-        elif not data.get('domain_id'):
-            return jsonify({'return_code':-2,'message':'domain_id must be included'}), 401
-        elif not data.get('was_instance_id'):
-            return jsonify({'return_code':-2,'message':'was_instance_id must be included'}), 401
-    
-        content   = data['content']
-        host_id   = data['host_id']
-        domain_id = data['domain_id']
-        was_instance_id = data['was_instance_id']
-        
-        rtn, msg = AutorunResult()._updateWebMain(host_id, domain_id, was_instance_id, content)
-        db.session.commit()
-
-        return jsonify({'return_code':rtn, 'msg':msg}), 201
-
-class MwDiff(BaseApi):
-
-    route_base = '/diff'
-
-    @expose('/was/<id>', methods=['GET'])
-    @has_access
-    def diff_was(self, id):
-
-        row, _ = select_row('mw_was_change_history',{'id':id})
-        title = f'{row.mw_was} updated at {row.create_on.strftime("%Y-%m-%d %H:%M:%S")}'
-
-        old_domain, new_domain = get_next_old_was_text(id=id)
-
-        return render_template('diff.html'\
-            , title=title
-            , text1=old_domain
-            , text2=new_domain
-            , base_template=appbuilder.base_template
-            , appbuilder=appbuilder
-            )
-
-    @expose('/web/<id>', methods=['GET'])
-    @has_access
-    def diff_web(self, id):
-
-        row, _ = select_row('mw_web_change_history',{'id':id})
-        title = f'{row.mw_web} updated at {row.create_on.strftime("%Y-%m-%d %H:%M:%S")}'
-
-        old_httpm, new_httpm = get_next_old_web_text(id=id)
-
-        return render_template('diff.html'\
-            , title=title
-            , text1=old_httpm
-            , text2=new_httpm
-            , base_template=appbuilder.base_template
-            , appbuilder=appbuilder
-            )
-
-class FootPrintApi(BaseApi):
-
-    resource_name = 'footprint'
-
-    @expose('/footprint', methods=['POST'])
-#    @protect(allow_browser_login=True)
-    def postFootPrint(self, **kwargs):
-        data = json.loads(request.data)
-        records = data['payLoad']
-        [r.update({'ip':request.remote_addr}) for r in records]
-        print(records)
-        rtn = footprint.insert_many(records)
-        print('rtn:',rtn.inserted_ids)
-        if rtn:
-            return jsonify({'return_code':1}), 201
+# class FootPrintApi(BaseApi):
+# 
+#     resource_name = 'footprint'
+# 
+#     @expose('/footprint', methods=['POST'])
+# #    @protect(allow_browser_login=True)
+#     def postFootPrint(self, **kwargs):
+#         data = json.loads(request.data)
+#         records = data['payLoad']
+#         [r.update({'ip':request.remote_addr}) for r in records]
+#         print(records)
+#         rtn = footprint.insert_many(records)
+#         print('rtn:',rtn.inserted_ids)
+#         if rtn:
+#             return jsonify({'return_code':1}), 201
 
 #class DailyReportModelView(flask_appbuilder.views.ModelView):
 class DailyReportModelView(ModelView):
@@ -1140,10 +1222,6 @@ class DailyReportModelView(ModelView):
     list_columns = ["file_name", "download", "report_date"]
     show_columns = ["file_name", "download", "report_date"]
 
-class ServerModelApi(ModelRestApi):
-    
-    resource_name = 'Server'
-    datamodel = SQLAInterface(MwServer)
 
 class JsonView(BaseView):
 
@@ -1157,7 +1235,7 @@ class JsonView(BaseView):
         html, _ = select_item(table_name, column_name, {'id':key})
         title, _ = select_item(table_name, tcolumn_name, {'id':key})
 
-        return jsonify({'html':html, 'title':title})
+        return jsonify({'html':html[0], 'title':title[0]})
 
     @expose('/jsonviewer/<category>/<key>', methods=['GET'])
     @has_access
@@ -1169,17 +1247,17 @@ class JsonView(BaseView):
             host_id, port = key.split('__')
             item, _ = select_item('mw_web', 'httpm_object', {'host_id':host_id,'port':port})
 
-        return jsonify({'json':item})
+        return jsonify({'json':item[0]})
 
     @expose('/relationship/<category>/<key>', methods=['GET'])
     @has_access
     def relationship(self, category, key):
 
         if category == 'WAS':
-            json = getWasRelationship(key)
+            json = get_was_relationship(key)
         elif category == 'WEB':
             host_id, port = key.split('__')
-            json = getWebRelationship(host_id, int(port))
+            json = get_web_relationship(host_id, int(port))
 
         return jsonify({'json':json})
 
@@ -1254,6 +1332,42 @@ def page_not_found(e):
     )
 
 db.create_all()
+
+# ---------------------------------------------------------
+# 미사용(use_yn='NO') 도메인에 속한 데이터 조회 제한 로직 (Ver 2.0)
+# ---------------------------------------------------------
+# 1-hop 관계는 점(.) 표기법 사용, 2-hop 이상은 FilterInFunction을 사용하여 조인 오류 방지
+def get_active_was_ids():
+    return [r.was_id for r in db.session.query(MwWas.was_id).filter(MwWas.use_yn == 'YES').all()]
+
+def get_active_web_ids():
+    return [r.id for r in db.session.query(MwWeb.id).filter(MwWeb.use_yn == 'YES').all()]
+
+def get_active_vhost_ids():
+    return [r.id for r in db.session.query(MwWebVhost.id).join(MwWeb).filter(MwWeb.use_yn == 'YES').all()]
+
+was_filter_targets = [
+    (WasInstanceModelView, 'mw_was.use_yn', FilterEqual, 'YES'),
+    (DatasourceModelView, 'mw_was.use_yn', FilterEqual, 'YES'),
+    (ApplicationModelView, 'mw_was.use_yn', FilterEqual, 'YES'),
+    (WasHttpListenerModelView, 'was_id', FilterInFunction, get_active_was_ids),
+    (WasWebtobConnectorModelView, 'was_id', FilterInFunction, get_active_was_ids)
+]
+
+web_filter_targets = [
+    (WebServerModelView, 'mw_web.use_yn', FilterEqual, 'YES'),
+    (WebUriModelView, 'mw_web.use_yn', FilterEqual, 'YES'),
+    (WebReverseproxyModelView, 'mw_web.use_yn', FilterEqual, 'YES'),
+    (WebVhostModelView, 'mw_web.use_yn', FilterEqual, 'YES'),
+    (WebSslModelView, 'mw_web.use_yn', FilterEqual, 'YES'),
+    (WebDomainModelView, 'mw_web_vhost_id', FilterInFunction, get_active_vhost_ids)
+]
+
+for view, path, flt, val in was_filter_targets + web_filter_targets:
+    if not hasattr(view, 'base_filters') or view.base_filters is None:
+        view.base_filters = []
+    view.base_filters.append([path, flt, val])
+
 
 appbuilder.add_view(
     ServerModelView,
@@ -1336,6 +1450,12 @@ appbuilder.add_view(
     category="Was"
 )
 appbuilder.add_view(
+    WasDisusedModelView,
+    "JEUS 불용 목록",
+    icon="fa-trash-o",
+    category="Was"
+)
+appbuilder.add_view(
     WasLinkView,
     "JEUS WebAdmin Link(차세대-운영)",
     icon="fa-folder-open-o",
@@ -1398,6 +1518,25 @@ appbuilder.add_view(
     icon="fa-folder-open-o",
     category="Web"
 )
+appbuilder.add_view(
+    WebDisusedModelView,
+    "WEBTOB 불용 목록",
+    icon="fa-trash-o",
+    category="Web"
+)
+appbuilder.add_separator("Web")
+appbuilder.add_view(
+    EtcSslDomainModelView,
+    "기타 SSL Domain",
+    icon="fa-globe",
+    category="Web"
+)
+appbuilder.add_view(
+    EtcSslDomainDisusedModelView,
+    "불용 기타 SSL Domain",
+    icon="fa-trash-o",
+    category="Web"
+)
 
 """
 appbuilder.add_view(
@@ -1408,13 +1547,9 @@ appbuilder.add_view(
 )
 appbuilder.add_api(HostModelApi)
 appbuilder.add_api(JeusContainerModelApi)
-appbuilder.add_api(ServerModelApi)
 """
-appbuilder.add_api(MWConfiguration)
 appbuilder.add_api(ExampleApi)
-appbuilder.add_api(FootPrintApi)
+# appbuilder.add_api(FootPrintApi)
 appbuilder.add_api(DailyReportApi)
-appbuilder.add_api(ServerModelApi)
 appbuilder.add_api(ShortQueries)
 appbuilder.add_api(JsonView)
-appbuilder.add_api(MwDiff)
