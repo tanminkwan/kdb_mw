@@ -9,7 +9,7 @@ from app.mail_sender import send_mail, convert_md_to_html
 
 class CommonApi(BaseApi):
 
-    resource_name = 'common'
+    route_base = '/common'
 
     @expose('/health', methods=['GET'])
     def health(self):
