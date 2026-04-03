@@ -112,9 +112,17 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 """
 from . import models
 from app.views import was, agent, monitor, knowledge, git, itam
+from app.views.common import TokenView
 from app.sqls import was, agent, monitor, knowledge, batch, server, itam_compare
 from app.api import was_api, agent_api, common_api, model_api, grid_api, batch_api, itam_compare_api
 from . import jobs
+
+# Add API Documentation (Swagger) to Security menu
+appbuilder.add_link("API Documentation", href="/swagger/v1", category="Security", category_icon="fa-lock")
+
+# Add API Token Management to '나의 정보' (My Info) menu, visible to general users
+# Use add_view with category to ensure sync_role_permissions can collect all PVMs correctly
+appbuilder.add_view(TokenView(), "개인 인증 토큰 발급", icon="fa-user", category="나의 정보")
 
 scheduler.init_app(app)
 scheduler.start()

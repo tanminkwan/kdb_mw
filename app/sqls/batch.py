@@ -389,6 +389,7 @@ MENU_CATEGORY_TO_ROLE = {
     '지식관리':       'knowledge_rgroup',
     'ITAM 대사':     'itam_rgroup',
     'Tools':         'tools_rgroup',
+    '나의 정보':       'api_rgroup',
 }
 
 # 모든 유저가 기본적으로 가져야 할 공통 권한 (Home, 프로필 등)

@@ -18,6 +18,7 @@ gzip mwm-base.tar
 ```bash
 # 3. 3개 파일로 분할 (숫자 접미사, 3자리)
 split -n 3 -d -a 3 mwm-base.tar.gz mwm-base.tar.gz.
+split -n 2 -d -a 3 kdb_mw-ref_1st.zip.gz kdb_mw-ref_1st.zip.gz.
 
 # 4. 전송용 확장자(.gsd) 추가
 for f in mwm-base.tar.gz.*; do mv "$f" "${f%.*}.gsd"; done

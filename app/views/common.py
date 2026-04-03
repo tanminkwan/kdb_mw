@@ -1,4 +1,5 @@
 from flask import g
+from flask_appbuilder import BaseView, expose, has_access
 from flask_appbuilder.models.sqla.filters import BaseFilter, get_field_setup_query
 from flask_appbuilder.fieldwidgets import BS3TextFieldWidget
 from flask_appbuilder.widgets import ShowWidget, ListWidget
@@ -282,3 +283,12 @@ class TagMustContains(object):
             t = ','.join(self.tagtypes)
             message = field.gettext("다음 tag type들을 추가하시기 바랍니다. '%s'.") % t
             raise ValidationError(message)
+
+class TokenView(BaseView):
+    route_base = "/token"
+    default_view = "manage"
+    
+    @expose("/manage")
+    @has_access
+    def manage(self):
+        return self.render_template("token_manage.html")
