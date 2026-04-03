@@ -5,12 +5,23 @@
 
 ## 🚀 주요 기능 (Features)
 
-- **OIDC (OpenID Connect) 지원**: (New) RS256 서명 기반 ID Token 발급, Discovery 엔드포인트 및 JWKS 지원.
-- **REST API 보안 (API Key)**: (New) Bearer 토큰(mwm_sk_...) 기반의 관리자 전용 API 보안 레이어 구축.
-- **통합 관리자 콘솔 (Admin Console)**: (New) `/admin/settings` 경로를 통한 클라이언트 관리, API Key 갱신, 사용자 조회 및 수동 동기화 통합 제어.
+- **OIDC (OpenID Connect) 지원**: RS256 서명 기반 ID Token 발급, Discovery 엔드포인트 및 JWKS 지원.
+- **REST API 보안 (API Key)**: `mwm_sk_...` 기반의 **IDP 관리용** API 보안 레이어 제공.
 - **OAuth2 Authorization Server**: `authorization_code` 및 `refresh_token` Grant Type 지원 (Authlib 기반).
 - **사용자 데이터 동기화 (Sync)**: `mwm-app` DB의 최신 정보를 수동/자동으로 가져오는 Pull 기반 동기화 서비스.
 - **Session-Based SSO**: `Flask-Login`과 세션 관리를 통해 멀티 클라이언트 로그인 시 재로그인 불필요.
+
+## 🔐 시스템 인증 체계 가이드
+
+리발소(MWM) 시스템은 용도에 따라 두 가지 인증 방식을 제공합니다.
+
+| 구분 | 인증 방식 | 용도 | 발급 위치 |
+| :--- | :--- | :--- | :--- |
+| **IDP 관리용** | API Key (`mwm_sk_...`) | IDP 설정 관리, 사용자 동기화 제어 | IDP Admin Console |
+| **서비스 연동용** | **개인 API Token (JWT)** | Email 발송 API 등 공통 서비스 연동 | `mwm-app` > 나의 정보 |
+
+> [!IMPORTANT]
+> 외부 어플리케이션(스크립트 등)에서 **Email 발송 API** 등을 사용하려면 `mwm-app`의 **'개인 인증 토큰 발급'** 메뉴를 통해 1년(365일) 유효 토큰을 발급받아야 합니다.
 
 ## 📁 프로젝트 구조 (Architecture)
 
@@ -39,11 +50,10 @@ idp/
 - **대상**: `Admin` 또는 `PowerUser` 역할(Role)을 가진 사용자만 접근 가능.
 - **기능**:
   - OAuth2 클라이언트 등록 및 MinIO OIDC 정책 매핑 (Policy Mapping).
-  - 사용자별 REST API Key 발급/갱신 (Rotate Key).
   - 전체 사용자 목록 및 역할 정보 (Read-only) 모니터링.
 
-### 2. REST API 보안 사용 (API Key)
-관리자 전용 REST API 호출 시 헤더에 발급받은 API Key를 포함해야 합니다.
+### 2. IDP 관리 API 보안 (Internal API Key)
+관리자 전용 IDP 내부 API 호출 시 헤더에 `mwm_sk_...` 형태의 키를 포함해야 합니다.
 ```bash
 curl -k -X GET https://idp.mwm.local:20443/api/userinfo \
      -H "Authorization: Bearer <mwm_sk_your_key_here>"
@@ -66,4 +76,4 @@ docker compose up -d --build --force-recreate mwm-idp
 ```
 
 ---
-*본 문서는 2026-03-28 최종 업데이트 되었습니다.*
+*본 문서는 2026-04-03 최종 업데이트 되었습니다.*
