@@ -215,7 +215,7 @@ def convert_md_to_html(md_content, kroki_url):
     # Replace HTML image src src="/common/download/..."
     md_content = re.sub(r'src=["\']/common/download/([^"\'\s]+)["\']', s3_html_image_replacer, md_content)
 
-    md_content = re.sub(r'```mermaid\s+(.*?)\s+```', mermaid_replacer, md_content, flags=re.DOTALL)
+    md_content = re.sub(r'(?m)^\s*```mermaid\s*\n(.*?)\n\s*```', mermaid_replacer, md_content, flags=re.DOTALL)
 
     html_content = markdown.markdown(
         md_content,
