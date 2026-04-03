@@ -82,7 +82,7 @@ CSRF_ENABLED = True
 # GLOBALS FOR APP Builder
 # ------------------------------
 # Uncomment to setup Your App name
-APP_NAME = "리발소(VER:20260402.007)"
+APP_NAME = "리발소(VER:20260403.010)"
 PREFERRED_URL_SCHEME = 'https'
 
 # Uncomment to setup Setup an App icon
@@ -167,10 +167,9 @@ FAB_API_SHOW_STACKTRACE = True
 # APP_THEME = "readable.css"
 # APP_THEME = "simplex.css"
 # APP_THEME = "slate.css"
-# APP_THEME = "spacelab.css"
+APP_THEME = "spacelab.css"
 # APP_THEME = "united.css"
 # APP_THEME = "yeti.css"
-# APP_THEME = "flatly.css"
 
 # ---------------------------------------------------
 # Constant Values (moved from app/__init__.py con_val)
