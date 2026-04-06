@@ -299,19 +299,40 @@ def select_rows2(table_name, column_name=None, condition=None, join_conditions=N
         flt_q = base_q
     
     if join_conditions:
-        join_q  = flt_q
-        for join_table_name, join_condition in join_conditions.items():
-            mn_column = getattr(table, join_table_name)
-            real_joined_table_name = get_target_table_name(table_name, join_table_name)
-            
-            join_table = table_dict[real_joined_table_name]
-            aliased_table = aliased(join_table)
-            join_flt = _get_condition(aliased_table, join_condition)
+        join_q = flt_q
+        for join_path, join_condition in join_conditions.items():
+            path_parts = join_path.split('.')
+            current_model = table
+            # Keep track of the last joined entity/alias to join from and filter on
+            last_alias = table 
 
-            join_q  = join_q.join(aliased_table, mn_column)\
-                        .filter(*join_flt)
+            for i, part in enumerate(path_parts):
+                # Get the relationship attribute from the current model
+                rel_attr = getattr(current_model, part)
+                
+                # Get the target model from the relationship
+                # Use inspection to find the target model properly
+                mapper = rel_attr.property.mapper
+                target_model = mapper.class_
+                
+                # Create an alias for joining (to avoid conflicts if the same table is joined multiple times or joined back to itself)
+                new_alias = aliased(target_model)
+                
+                # Join to the new alias using the relationship attribute from the PREVIOUS alias/model
+                # Wait, rel_attr was from current_model. We need the one from last_alias if it's an alias.
+                # In SQLAlchemy, if last_alias is an alias of current_model, last_alias.part is the correct attribute.
+                join_attr = getattr(last_alias, part)
+                join_q = join_q.join(new_alias, join_attr)
+                
+                # Update for the next iteration
+                current_model = target_model
+                last_alias = new_alias
+
+            # Apply filters on the LAST joined table in the path
+            join_flt = _get_condition(last_alias, join_condition)
+            join_q = join_q.filter(*join_flt)
     else:
-        join_q     = flt_q
+        join_q = flt_q
 
     if sort_condition:
         sort = []

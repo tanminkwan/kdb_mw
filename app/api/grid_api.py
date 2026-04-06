@@ -169,19 +169,17 @@ class GridApi(BaseApi):
 
                     val2 = cond['column'].split('.')
 
-                    if len(val2)>2:
-                        return jsonify({'msg':'Column:'+cond['column']+' is invalid.'}), 500
-
-                    join_table_name = val2[0]
+                    # join_path is all but the last element (the column name)
+                    join_path = '.'.join(val2[:-1])
                     v_dict = dict(
                              operator = cond['operator']
-                            ,column   = val2[1]
+                            ,column   = val2[-1]
                             ,value    = cond['value']
                             ) 
-                    if join_conditions.get(join_table_name):
-                        join_conditions[join_table_name].append(v_dict)
+                    if join_conditions.get(join_path):
+                        join_conditions[join_path].append(v_dict)
                     else:
-                        join_conditions[join_table_name] = [v_dict]
+                        join_conditions[join_path] = [v_dict]
 
                 else:
                     condition.append(cond)
@@ -196,19 +194,17 @@ class GridApi(BaseApi):
                 if '.' in val[1]:
                     val2 = val[1].split('.')
 
-                    if len(val2)>2:
-                        return jsonify({'msg':'Column:'+val[1]+' is invalid.'}), 500
-
-                    join_table_name = val2[0]
+                    # join_path is all but the last element (the column name)
+                    join_path = '.'.join(val2[:-1])
                     v_dict = dict(
                              operator = val[0]
-                            ,column   = val2[1]
+                            ,column   = val2[-1]
                             ,value    = request.args[arg]
                             ) 
-                    if join_conditions.get(join_table_name):
-                        join_conditions[join_table_name].append(v_dict)
+                    if join_conditions.get(join_path):
+                        join_conditions[join_path].append(v_dict)
                     else:
-                        join_conditions[join_table_name] = [v_dict]
+                        join_conditions[join_path] = [v_dict]
                 else:
                     condition.append(
                         dict(

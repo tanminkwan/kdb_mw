@@ -217,7 +217,7 @@
   </div>
   <button id="export" class="btn-search" style="display:none; background: #2d6a4f;">EXCEL 내보내기</button>
 </div>
-
+{% if param %}
 <div class="filter-container" id="condition">
   {% if condition %}
     {% for cd in condition %}
@@ -243,9 +243,10 @@
         </div>
       </div>
     {% endfor %}
-    <button id="get-grid" class="btn-search" onclick="getGridData()">조회 실행</button>
   {% endif %}
+  <button id="get-grid" class="btn-search" onclick="getGridData()">조회 실행</button>
 </div>
+{% endif %}
 
 <div class="grid-wrapper">
   <table id="list_jq"></table>

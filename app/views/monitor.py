@@ -163,14 +163,31 @@ class MonitorApi(BaseApi):
             for c, label in zip(conditions, cond_labels):
                 
                 if '.' in c:
-                    val = c.split('.')
-                    target_table_name = get_target_table_name(table_name, val[0])
-                    cond_list.append(dict(
-                        name = c
-                       ,label = label
-                       ,type = get_column_type(target_table_name, val[1])
-                       ,operations=self.condtype_map[get_column_type(target_table_name, val[1])])
-                    )
+                    path_parts = c.split('.')
+                    target_table = table_name
+                    
+                    try:
+                        # Traverse all relationships to find the final table
+                        for i in range(len(path_parts) - 1):
+                            target_table = get_target_table_name(target_table, path_parts[i])
+                        
+                        col_name = path_parts[-1]
+                        col_type = get_column_type(target_table, col_name)
+                        
+                        cond_list.append(dict(
+                            name = c
+                           ,label = label
+                           ,type = col_type
+                           ,operations=self.condtype_map[col_type])
+                        )
+                    except (AttributeError, StopIteration, KeyError):
+                        # Fallback if path is invalid
+                        cond_list.append(dict(
+                            name = c
+                           ,label = label
+                           ,type = 'str'
+                           ,operations=self.condtype_map['str'])
+                        )
                 else:
                     cond_list.append(dict(
                         name = c
