@@ -29,34 +29,44 @@ def register_broadcast_callback(name):
     return decorator
 
 @register_broadcast_callback('get_all_agents')
-def get_all_agents():
-    """Approved 된 전체 agent 목록을 return"""
-    agents = db.session.query(AgAgent)\
-        .filter(AgAgent.approved_yn == 'YES').all()
+def get_all_agents(landscape=None):
+    """Approved 된 전체 agent 목록을 return (landscape 필터링 지원)"""
+    query = db.session.query(AgAgent).filter(AgAgent.approved_yn == 'YES')
+    if landscape:
+        query = query.filter(AgAgent.landscape == landscape)
+    agents = query.all()
     return agents if agents else []
 
 @register_broadcast_callback('get_was_agents')
-def get_was_agents():
-    """WAS(use_yn=YES)를 등록한 전체 approved agent 목록을 return"""
+def get_was_agents(landscape=None):
+    """WAS(use_yn=YES)를 등록한 전체 approved agent 목록을 return (landscape 필터링 지원)"""
     was_agent_ids = db.session.query(MwWas.agent_id)\
         .filter(MwWas.use_yn == 'YES', MwWas.agent_id != None, MwWas.agent_id != '').distinct().all()
     agent_id_list = [r[0] for r in was_agent_ids]
     if not agent_id_list:
         return []
-    agents = db.session.query(AgAgent)\
-        .filter(AgAgent.approved_yn == 'YES', AgAgent.agent_id.in_(agent_id_list)).all()
+    
+    query = db.session.query(AgAgent).filter(AgAgent.approved_yn == 'YES', AgAgent.agent_id.in_(agent_id_list))
+    if landscape:
+        query = query.filter(AgAgent.landscape == landscape)
+        
+    agents = query.all()
     return agents if agents else []
 
 @register_broadcast_callback('get_web_agents')
-def get_web_agents():
-    """WEB(use_yn=YES)를 등록한 전체 approved agent 목록을 return"""
+def get_web_agents(landscape=None):
+    """WEB(use_yn=YES)를 등록한 전체 approved agent 목록을 return (landscape 필터링 지원)"""
     web_agent_ids = db.session.query(MwWeb.agent_id)\
         .filter(MwWeb.use_yn == 'YES', MwWeb.agent_id != None, MwWeb.agent_id != '').distinct().all()
     agent_id_list = [r[0] for r in web_agent_ids]
     if not agent_id_list:
         return []
-    agents = db.session.query(AgAgent)\
-        .filter(AgAgent.approved_yn == 'YES', AgAgent.agent_id.in_(agent_id_list)).all()
+    
+    query = db.session.query(AgAgent).filter(AgAgent.approved_yn == 'YES', AgAgent.agent_id.in_(agent_id_list))
+    if landscape:
+        query = query.filter(AgAgent.landscape == landscape)
+        
+    agents = query.all()
     return agents if agents else []
 
 def get_error_results(create_on=None):
@@ -398,13 +408,28 @@ def create_command_detail(command):
     ags = []
     
     if command_rec.broadcast_callback:
+        # Parse broadcast_callback name and parameters: e.g. "func_name(param1, param2)"
+        cb_str = command_rec.broadcast_callback.strip()
+        cb_name = cb_str
+        cb_params_list = []
+        
+        if '(' in cb_str and cb_str.endswith(')'):
+            cb_name = cb_str[:cb_str.find('(')].strip()
+            params_raw = cb_str[cb_str.find('(')+1:-1].strip()
+            if params_raw:
+                cb_params_list = [p.strip() for p in params_raw.split(',')]
+
         # Call the registered broadcast callback function to get agents
-        callback_func = broadcast_callback_registry.get(command_rec.broadcast_callback)
+        callback_func = broadcast_callback_registry.get(cb_name)
         if callback_func:
-            ags = callback_func()
+            if cb_params_list:
+                # 지금은 첫번째 파라미터를 landscape로 넘김 (나중에 함수별로 상세화 가능)
+                ags = callback_func(landscape=cb_params_list[0])
+            else:
+                ags = callback_func()
         else:
-            logging.error(f"Broadcast callback '{command_rec.broadcast_callback}' not found in registry.")
-            return 0, f"Broadcast callback '{command_rec.broadcast_callback}' not found."
+            logging.error(f"Broadcast callback '{cb_name}' not found in registry.")
+            return 0, f"Broadcast callback '{cb_name}' not found."
 
     for agg in command_rec.ag_agent_group:
         for ag in agg.ag_agent:

@@ -187,7 +187,8 @@ def convert_md_to_html(md_content, kroki_url):
             s3_fm = S3FileManager()
             file_content = s3_fm.get_file(file_path)
             s3_image_counter[0] += 1
-            cid = f"s3img_{s3_image_counter[0]}"
+            ext = file_path.split('.')[-1].lower() if '.' in file_path else 'png'
+            cid = f"s3img_{s3_image_counter[0]}.{ext}"
             inline_images.append((cid, file_content))
             return f"{prefix}cid:{cid}"
         except Exception as e:
@@ -202,7 +203,8 @@ def convert_md_to_html(md_content, kroki_url):
             s3_fm = S3FileManager()
             file_content = s3_fm.get_file(file_path)
             s3_image_counter[0] += 1
-            cid = f"s3img_{s3_image_counter[0]}"
+            ext = file_path.split('.')[-1].lower() if '.' in file_path else 'png'
+            cid = f"s3img_{s3_image_counter[0]}.{ext}"
             inline_images.append((cid, file_content))
             return f'src="cid:{cid}"'
         except Exception as e:
