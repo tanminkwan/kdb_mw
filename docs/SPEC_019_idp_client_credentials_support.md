@@ -400,7 +400,56 @@ curl -X GET http://mw-app:8000/api/v1/was/list \
 4. App은 기존 로직과 동일하게 사용자 권한 확인 후 API 응답
 ```
 
-> **핵심**: App 입장에서는 OIDC 로그인 토큰이든 client_credentials 토큰이든 **완전히 동일하게 처리**된다. 구분할 필요가 없다.
+> **핵심**: App 입장에서는 OIDC 로그인으로 받은 토큰이든 `client_credentials`로 받은 토큰이든 **완전히 동일하게 처리**된다. 구분할 필요가 없다.
+
+### 11.5. 클라이언트 자격 증명 관리 가이드 (Best Practice)
+
+각 클라이언트 App이나 스크립트에서 Credential을 안전하게 관리하기 위해 다음과 같은 방식을 권장한다.
+
+#### 1) Credential 파일 사용 (`.mwm-credential`)
+클라이언트 실행 경로 또는 홈 디렉토리에 JSON 형식으로 저장한다.
+
+**파일명**: `.mwm-credential` (숨김 파일)
+```json
+{
+    "client_id": "svc_collector",
+    "client_secret": "mwm_sk_xR7kL9..."
+}
+```
+
+#### 2) 보안 권한 설정
+비밀키 노출 방지를 위해 파일 권한을 소유자 전용으로 제한한다.
+```bash
+chmod 600 .mwm-credential
+```
+
+#### 3) Git 관리 주의
+실수로 소스 코드 저장소에 업로드되지 않도록 `.gitignore`에 반드시 등록한다.
+
+#### 4) 구현 예시 (Python)
+환경 변수를 우선 조회하고, 없을 경우 파일을 읽는 방식이 가장 유연하다.
+
+```python
+import os
+import json
+
+def load_credentials():
+    # 1. 환경 변수 우선 조회
+    cid = os.getenv("MWM_CLIENT_ID")
+    secret = os.getenv("MWM_CLIENT_SECRET")
+    
+    if cid and secret:
+        return cid, secret
+        
+    # 2. 파일에서 조회
+    cred_path = ".mwm-credential"
+    if os.path.exists(cred_path):
+        with open(cred_path, "r") as f:
+            data = json.load(f)
+            return data.get("client_id"), data.get("client_secret")
+            
+    raise Exception("Credential missing (Env or .mwm-credential)")
+```
 
 ---
 
