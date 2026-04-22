@@ -126,12 +126,24 @@ class OAuthService:
         if not user:
             raise ValueError("User not found")
 
+        # 클라이언트의 policy_mapping 적용
+        roles = user.roles or []
+        client = self.oauth_repo.get_client_by_id(token.client_id)
+        policy_mapping = client.policy_mapping if client else None
+        mapped_roles = [
+            (policy_mapping or {}).get(r, r) for r in roles
+        ]
+
         return {
+            "sub": user.username,
             "username": user.username,
+            "preferred_username": user.username,
             "email": user.email,
             "first_name": user.first_name,
             "last_name": user.last_name,
-            "roles": user.roles or [],
+            "given_name": user.first_name,
+            "family_name": user.last_name,
+            "groups": list(dict.fromkeys(roles + mapped_roles)),
         }
 
     # ── Client Management CRUD ──

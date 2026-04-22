@@ -101,8 +101,10 @@ class OIDCService:
             "email": user.email,
             "given_name": user.first_name,
             "family_name": user.last_name,
-            "groups": user.roles or [],
-            "policy": [ (policy_mapping or {}).get(r, r) for r in (user.roles or []) ]
+            "groups": list(dict.fromkeys(
+                (user.roles or []) +
+                [ (policy_mapping or {}).get(r, r) for r in (user.roles or []) ]
+            ))
         }
 
         if nonce:
