@@ -33,6 +33,7 @@ Discovery 엔드포인트를 사용하면 아래 정보를 자동으로 가져�
 | **Token** | `/oauth/token` | Authorization Code를 Access/ID Token으로 교환 |
 | **JWKS (Public Key)** | `/oauth/jwks` | 발급된 ID Token의 서명을 검증하기 위한 공개키 집합 |
 | **UserInfo** | `/api/userinfo` | Access Token을 사용하여 세부 사용자 프로필 획득 |
+| **Logout** | `/logout` | RP-Initiated Logout (IDP 세션 종료 및 리다이렉트) |
 
 ---
 
@@ -64,6 +65,22 @@ client_secret={YOUR_CLIENT_SECRET}
 ```
 
 ---
+
+## 5. 로그아웃 (RP-Initiated Logout)
+
+Client(RP)는 사용자를 IDP의 로그아웃 엔드포인트로 리다이렉트시켜 IDP 세션을 종료하고 다시 Client로 돌아오게 할 수 있습니다.
+
+### 로그아웃 요청 (Logout Request)
+```http
+GET https://idp.mwm.local:20443/logout?
+    id_token_hint={ID_TOKEN}&
+    post_logout_redirect_uri={REGISTERED_REDIRECT_URI}&
+    state={STATE}
+```
+
+*   **`id_token_hint`**: (옵션) 클라이언트가 보유한 유효한 ID Token입니다.
+*   **`post_logout_redirect_uri`**: 로그아웃 후 돌아갈 주소입니다. 반드시 Client의 `redirect_uris` 목록에 포함되어 있어야 합니다.
+*   **`state`**: 리다이렉트 시 그대로 전달되는 상태 값입니다.
 
 ## 5. ID Token 및 클레임 활용법 (Claims & ID Token)
 

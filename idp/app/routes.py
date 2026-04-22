@@ -327,7 +327,44 @@ def client_delete(id):
 
 @auth_bp.route("/logout")
 def logout():
+    """
+    RP-Initiated Logout (OIDC Standard) 및 일반 로그아웃 처리.
+    지원 파라미터:
+    - id_token_hint: (옵션) 클라이언트가 보유한 ID Token
+    - post_logout_redirect_uri: (옵션) 로그아웃 후 리다이렉트할 URL
+    - state: (옵션) 상태 값 유지
+    """
+    post_logout_redirect_uri = request.args.get("post_logout_redirect_uri")
+    state = request.args.get("state")
+    
+    # 1. IDP 세션 종료
     logout_user()
+    
+    # 2. 리다이렉트 처리
+    if post_logout_redirect_uri:
+        # 보안을 위해 등록된 클라이언트의 redirect_uris 중 하나와 일치하는지 확인
+        # (별도 필드가 없으므로 기존 redirect_uris 목록을 활용)
+        from app.models import OAuth2Client
+        clients = OAuth2Client.query.all()
+        is_valid_uri = False
+        for client in clients:
+            if client.check_redirect_uri(post_logout_redirect_uri):
+                is_valid_uri = True
+                break
+        
+        if is_valid_uri:
+            params = {}
+            if state:
+                params["state"] = state
+            
+            from urllib.parse import urlencode
+            target_url = post_logout_redirect_uri
+            if params:
+                sep = "&" if "?" in target_url else "?"
+                target_url += f"{sep}{urlencode(params)}"
+            
+            return redirect(target_url)
+
     flash("Successfully logged out.", "success")
     return redirect(url_for("auth.index"))
 
@@ -397,6 +434,7 @@ def openid_configuration():
         "token_endpoint": f"{base_url}/oauth/token",
         "userinfo_endpoint": f"{base_url}/api/userinfo",
         "jwks_uri": f"{base_url}/oauth/jwks",
+        "end_session_endpoint": f"{base_url}/logout",
         "response_types_supported": ["code"],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256"],

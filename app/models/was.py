@@ -567,6 +567,7 @@ class MwWeb(Model):
     host_id          = Column(String(30), ForeignKey('mw_server.host_id'), nullable=False, comment='HOST ID')
     port             = Column(Integer, nullable=False, comment='Port') # port (auto)
     jsv_port         = Column(Integer, nullable=False, comment='JSV Port') # JSV port (auto)
+    hth_count        = Column(Integer, default=1, comment='HTH 개수') # HTH 개수 (auto)
     built_type       = Column(Enum(BuiltEnum), info={'enum_class':BuiltEnum}, comment='Built Type') #외장형/내장형 구분 (manual)
     landscape        = Column(Enum(LocationEnum), info={'enum_class':LocationEnum}, comment='Landscape') #운영/이관/개발/DR 구분 (manual)
     newgeneration_yn = Column(Enum(YnEnum), info={'enum_class':YnEnum}, comment='차세대여부') #차세대 구분 (manual)

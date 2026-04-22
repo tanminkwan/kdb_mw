@@ -747,7 +747,7 @@ def get_cert_expiry_stat_jeus():
         .join(MwWasInstance, MwWasHttpListener.mw_was_instance)\
         .join(MwWas, MwWasInstance.mw_was)\
         .outerjoin(MwWasHttpListener.mw_etc_ssl_domain)\
-        .filter(MwWas.use_yn == YnEnum.YES, MwWasHttpListener.ssl_yn == YnEnum.YES)\
+        .filter(MwWas.use_yn == YnEnum.YES, MwWasInstance.use_yn != YnEnum.NO, MwWasHttpListener.ssl_yn == YnEnum.YES)\
         .group_by(status_case, MwWas.landscape)
     
     results = query.all()

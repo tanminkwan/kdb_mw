@@ -32,6 +32,7 @@
 | `token_endpoint` | 토큰 교환 URL | `/oauth/token` |
 | `userinfo_endpoint` | 사용자 정보 조회 URL | `/api/userinfo` |
 | `jwks_uri` | 공개키 목록 URL | `/oauth/jwks` |
+| `end_session_endpoint` | 로그아웃 URL | `/logout` |
 | `response_types_supported` | 지원 응답 타입 | `["code"]` |
 | `subject_types_supported` | 지원 서브젝트 타입 | `["public"]` |
 | `id_token_signing_alg_values_supported` | 서명 알고리즘 | `["RS256"]` |

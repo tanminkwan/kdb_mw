@@ -37,12 +37,17 @@ def get_all_agents(landscape=None):
     agents = query.all()
     return agents if agents else []
 
-@register_broadcast_callback('get_was_agents')
-def get_was_agents(landscape=None):
-    """WAS(use_yn=YES)를 등록한 전체 approved agent 목록을 return (landscape 필터링 지원)"""
+def _get_filtered_was_agents(landscape=None, newgeneration_only=False):
+    """WAS 에이전트 목록을 가져오는 공통 내부 함수"""
     was_agent_ids = db.session.query(MwWas.agent_id)\
-        .filter(MwWas.use_yn == 'YES', MwWas.agent_id != None, MwWas.agent_id != '').distinct().all()
+        .filter(MwWas.use_yn == 'YES', MwWas.agent_id != None, MwWas.agent_id != '')
+    
+    if newgeneration_only:
+        was_agent_ids = was_agent_ids.filter(MwWas.newgeneration_yn == 'YES')
+
+    was_agent_ids = was_agent_ids.distinct().all()
     agent_id_list = [r[0] for r in was_agent_ids]
+    
     if not agent_id_list:
         return []
     
@@ -52,6 +57,16 @@ def get_was_agents(landscape=None):
         
     agents = query.all()
     return agents if agents else []
+
+@register_broadcast_callback('get_was_agents')
+def get_was_agents(landscape=None):
+    """WAS(use_yn=YES)를 등록한 전체 approved agent 목록을 return (landscape 필터링 지원)"""
+    return _get_filtered_was_agents(landscape=landscape, newgeneration_only=False)
+
+@register_broadcast_callback('get_was_agents_newgen')
+def get_was_agents_newgen(landscape=None):
+    """차세대 WAS(newgeneration_yn=YES)를 등록한 approved agent 목록을 return (landscape 필터링 지원)"""
+    return _get_filtered_was_agents(landscape=landscape, newgeneration_only=True)
 
 @register_broadcast_callback('get_web_agents')
 def get_web_agents(landscape=None):

@@ -14,4 +14,4 @@ ENV PYTHONPATH=/workspace
 
 EXPOSE 5000
 
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "2", "app.run:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "1", "app.run:app"]

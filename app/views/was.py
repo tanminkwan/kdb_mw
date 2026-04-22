@@ -80,7 +80,7 @@ class WaschangeHistoryModelView(ModelView):
 
     search_columns = ['mw_was','create_on']
     base_order = ('create_on', 'desc')
-    base_permissions = ['can_list', 'can_show']
+    base_permissions = ['can_list', 'can_show', 'can_delete']
 
 
 
@@ -816,7 +816,7 @@ class WebchangeHistoryModelView(ModelView):
 
     search_columns = ['mw_web','create_on']
     base_order = ('create_on', 'desc')
-    base_permissions = ['can_list', 'can_show']
+    base_permissions = ['can_list', 'can_show', 'can_delete']
 
 
 class WebCommonView(ModelView):
@@ -967,10 +967,10 @@ class EtcSslDomainCommonView(ModelView):
         'port': 'Port',
     }
 
-    edit_columns = ['host_id', 'domain_name', 'port', 'description',
-                    'use_yn', 'managed_yn']
-    add_columns  = ['host_id', 'domain_name', 'port', 'description',
-                    'use_yn', 'managed_yn']
+    edit_columns = ['host_id', 'domain_name', 'port', 'agent_id', 'description',
+                    'use_yn']
+    add_columns  = ['host_id', 'domain_name', 'port', 'agent_id', 'description',
+                    'use_yn']
 
     search_columns = ['host_id', 'domain_name', 'notafter', 'update_dt',
                       'managed_yn']

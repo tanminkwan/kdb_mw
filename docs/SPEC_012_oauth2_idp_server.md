@@ -156,6 +156,7 @@ GRANT ALL PRIVILEGES ON DATABASE idp TO tiffanie;
 | POST | `/oauth/authorize` | 사용자 인증 처리 및 Code 발급 |
 | POST | `/oauth/token` | Authorization Code → Access Token 교환 |
 | GET | `/api/userinfo` | Access Token으로 사용자 정보 조회 |
+| GET | `/logout` | RP-Initiated Logout (OIDC 세션 종료) |
 
 **사용자 관리 API:**
 
