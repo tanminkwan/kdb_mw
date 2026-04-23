@@ -16,18 +16,20 @@ class OAuthRepository:
         return OAuth2Client.query.all()
 
     def get_client_by_pk(self, client_id_pk):
-        return OAuth2Client.query.get(client_id_pk)
+        return db.session.get(OAuth2Client, client_id_pk)
 
     def create_client(self, client_id, client_secret, client_name, redirect_uris,
                     grant_types="authorization_code refresh_token",
-                    scope="openid profile email"):
+                    scope="openid profile email",
+                    policy_mapping=None):
         client = OAuth2Client(
             client_id=client_id,
             client_secret=client_secret,
             client_name=client_name,
             redirect_uris=redirect_uris,
             grant_types=grant_types,
-            scope=scope
+            scope=scope,
+            policy_mapping=policy_mapping or {}
         )
         db.session.add(client)
         db.session.flush()

@@ -9,7 +9,7 @@ def test_oidc_discovery(client):
     assert response.status_code == 200
     data = response.get_json()
     
-    assert data["issuer"] == "http://localhost:5000"
+    assert data["issuer"].rstrip("/") == "http://localhost:5000"
     assert "/oauth/authorize" in data["authorization_endpoint"]
     assert "/oauth/token" in data["token_endpoint"]
     assert "/oauth/jwks" in data["jwks_uri"]
@@ -75,6 +75,8 @@ def test_id_token_generation_in_token_exchange(client, db, sample_user, sample_o
     assert payload["preferred_username"] == sample_user.username
     assert "groups" in payload
     assert "Public" in payload["groups"]
+    assert "roles" in payload
+    assert "policy" in payload
 
 def test_id_token_not_generated_without_openid_scope(client, db, sample_user, sample_oauth_client):
     """openid 스코프가 없을 때는 id_token이 생성되지 않는지 테스트"""

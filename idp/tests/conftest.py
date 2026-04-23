@@ -63,6 +63,7 @@ def sample_oauth_client(db):
         redirect_uris="http://localhost/callback",
         grant_types="authorization_code refresh_token",
         scope="openid profile email",
+        policy_mapping={}
     )
     db.session.add(oauth_client)
     db.session.commit()

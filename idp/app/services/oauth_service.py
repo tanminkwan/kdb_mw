@@ -143,7 +143,9 @@ class OAuthService:
             "last_name": user.last_name,
             "given_name": user.first_name,
             "family_name": user.last_name,
+            "roles": roles,
             "groups": list(dict.fromkeys(roles + mapped_roles)),
+            "policy": list(dict.fromkeys(roles + mapped_roles)),
         }
 
     # ── Client Management CRUD ──

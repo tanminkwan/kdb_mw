@@ -6,7 +6,7 @@ class UserRepository:
     """IdpUser 테이블에 대한 CRUD 연산"""
 
     def get_by_id(self, user_id):
-        return IdpUser.query.get(user_id)
+        return db.session.get(IdpUser, user_id)
 
     def get_by_username(self, username):
         return IdpUser.query.filter_by(username=username).first()
