@@ -9,6 +9,8 @@ from app.sqls.monitor import select_row
 from app.models.was import MwServer
 from app.sqls.agent_dml import AutorunResult
 import json
+import difflib
+from datetime import datetime
 
 class MwServerApi(BaseApi):
     resource_name = 'mw_server'
@@ -172,12 +174,30 @@ class MWConfigurationApi(BaseApi):
         return jsonify({'return_code':rtn, 'msg':msg}), 201
 
 class MwDiffApi(BaseApi):
-
+    resource_name = 'diff'
     route_base = '/diff'
 
     @expose('/was/<id>', methods=['GET'])
     @has_access
     def diff_was(self, id):
+        """WAS 변경 이력을 비교하여 결과를 반환합니다.
+        ---
+        get:
+          summary: WAS 변경 이력 비교
+          description: 특정 변경 이력 ID를 기반으로 이전 설정과 현재 설정을 비교하는 HTML 페이지를 반환합니다.
+          parameters:
+          - name: id
+            in: path
+            description: WAS 변경 이력(mw_was_change_history) 레코드 ID
+            required: true
+            schema:
+              type: integer
+          responses:
+            200:
+              description: 비교 결과 페이지 (HTML)
+            404:
+              description: 해당 ID의 이력을 찾을 수 없음
+        """
 
         row, _ = select_row('mw_was_change_history',{'id':id})
         title = f'{row.mw_was} updated at {row.create_on.strftime("%Y-%m-%d %H:%M:%S")}'
@@ -195,6 +215,24 @@ class MwDiffApi(BaseApi):
     @expose('/web/<id>', methods=['GET'])
     @has_access
     def diff_web(self, id):
+        """WEB 변경 이력을 비교하여 결과를 반환합니다.
+        ---
+        get:
+          summary: WEB 변경 이력 비교
+          description: 특정 변경 이력 ID를 기반으로 이전 설정과 현재 설정을 비교하는 HTML 페이지를 반환합니다.
+          parameters:
+          - name: id
+            in: path
+            description: WEB 변경 이력(mw_web_change_history) 레코드 ID
+            required: true
+            schema:
+              type: integer
+          responses:
+            200:
+              description: 비교 결과 페이지 (HTML)
+            404:
+              description: 해당 ID의 이력을 찾을 수 없음
+        """
 
         row, _ = select_row('mw_web_change_history',{'id':id})
         title = f'{row.mw_web} updated at {row.create_on.strftime("%Y-%m-%d %H:%M:%S")}'
@@ -212,3 +250,279 @@ class MwDiffApi(BaseApi):
 appbuilder.add_api(MwServerApi)
 appbuilder.add_api(MWConfigurationApi)
 appbuilder.add_api(MwDiffApi)
+
+class MwDiffDataApi(BaseApi):
+    resource_name = 'diff_data'
+    route_base = '/diff_data'
+
+    @expose('/was/list', methods=['GET'])
+    @has_access
+    def get_was_diff_list(self):
+        """WAS 변경 이력 리스트를 조회합니다.
+        ---
+        get:
+          summary: WAS 변경 이력 리스트 조회
+          description: 일자 구간 및 WAS 도메인 ID를 기반으로 변경 이력 목록을 조회합니다.
+          parameters:
+          - name: start_date
+            in: query
+            description: 시작일 (YYYY-MM-DD)
+            required: false
+            schema:
+              type: string
+          - name: end_date
+            in: query
+            description: 종료일 (YYYY-MM-DD)
+            required: false
+            schema:
+              type: string
+          - name: domain_id
+            in: query
+            description: WAS 도메인 ID
+            required: false
+            schema:
+              type: string
+          responses:
+            200:
+              description: 변경 이력 목록 (JSON)
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        domain_id:
+                          type: string
+                        create_on:
+                          type: string
+        """
+        from app.models.was import MwWas, MwWaschangeHistory
+        
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        domain_id = request.args.get('domain_id')
+
+        query = db.session.query(MwWaschangeHistory).join(MwWas)
+
+        if start_date_str:
+            query = query.filter(MwWaschangeHistory.create_on >= datetime.strptime(start_date_str, '%Y-%m-%d'))
+        if end_date_str:
+            # 종료일 포함을 위해 23:59:59까지 설정하거나 다음날 00:00:00 이전으로 설정
+            query = query.filter(MwWaschangeHistory.create_on <= datetime.strptime(end_date_str + ' 23:59:59', '%Y-%m-%d %H:%M:%S'))
+        if domain_id:
+            query = query.filter(MwWas.was_id == domain_id)
+
+        results = query.order_by(MwWaschangeHistory.create_on.desc()).all()
+        
+        return self.response(200, data=[
+            {
+                'id': r.id,
+                'domain_id': r.mw_was.was_id,
+                'create_on': r.create_on.strftime("%Y-%m-%d %H:%M:%S")
+            } for r in results
+        ])
+
+    @expose('/web/list', methods=['GET'])
+    @has_access
+    def get_web_diff_list(self):
+        """WEB 변경 이력 리스트를 조회합니다.
+        ---
+        get:
+          summary: WEB 변경 이력 리스트 조회
+          description: 일자 구간 및 WEB 호스트 ID를 기반으로 변경 이력 목록을 조회합니다.
+          parameters:
+          - name: start_date
+            in: query
+            description: 시작일 (YYYY-MM-DD)
+            required: false
+            schema:
+              type: string
+          - name: end_date
+            in: query
+            description: 종료일 (YYYY-MM-DD)
+            required: false
+            schema:
+              type: string
+          - name: host_id
+            in: query
+            description: WEB 호스트 ID
+            required: false
+            schema:
+              type: string
+          responses:
+            200:
+              description: 변경 이력 목록 (JSON)
+              content:
+                application/json:
+                  schema:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        host_id:
+                          type: string
+                        port:
+                          type: integer
+                        create_on:
+                          type: string
+        """
+        from app.models.was import MwWeb, MwWebchangeHistory
+        
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        host_id = request.args.get('host_id')
+
+        query = db.session.query(MwWebchangeHistory).join(MwWeb)
+
+        if start_date_str:
+            query = query.filter(MwWebchangeHistory.create_on >= datetime.strptime(start_date_str, '%Y-%m-%d'))
+        if end_date_str:
+            query = query.filter(MwWebchangeHistory.create_on <= datetime.strptime(end_date_str + ' 23:59:59', '%Y-%m-%d %H:%M:%S'))
+        if host_id:
+            query = query.filter(MwWeb.host_id == host_id)
+
+        results = query.order_by(MwWebchangeHistory.create_on.desc()).all()
+        
+        return self.response(200, data=[
+            {
+                'id': r.id,
+                'host_id': r.mw_web.host_id,
+                'port': r.mw_web.port,
+                'create_on': r.create_on.strftime("%Y-%m-%d %H:%M:%S")
+            } for r in results
+        ])
+
+    @expose('/was/<id>', methods=['GET'])
+    @has_access
+    def get_was_diff_data(self, id):
+        """WAS 변경 이력 데이터를 JSON으로 반환합니다. (Unified Diff 포함)
+        ---
+        get:
+          summary: WAS 변경 이력 데이터 조회
+          description: 특정 변경 이력 ID를 기반으로 이전 설정, 현재 설정 및 Unified Diff 데이터를 JSON으로 반환합니다.
+          parameters:
+          - name: id
+            in: path
+            description: WAS 변경 이력(mw_was_change_history) 레코드 ID
+            required: true
+            schema:
+              type: integer
+          responses:
+            200:
+              description: 변경 이력 데이터 및 Diff (JSON)
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      domain_id:
+                        type: string
+                        description: WAS 도메인 ID
+                      old:
+                        type: string
+                        description: 이전 설정 텍스트
+                      new:
+                        type: string
+                        description: 현재 설정 텍스트
+                      create_on:
+                        type: string
+                        description: 변경 일시
+                      unified_diff:
+                        type: string
+                        description: Unified Diff 결과
+            404:
+              description: 해당 ID의 이력을 찾을 수 없음
+        """
+        row, _ = select_row('mw_was_change_history', {'id': id})
+        if not row:
+            return self.response(404, message="History not found")
+
+        old_text, new_text = get_next_old_was_text(id=id)
+        
+        diff = difflib.unified_diff(
+            (old_text or "").splitlines(), 
+            (new_text or "").splitlines(), 
+            fromfile='previous', tofile='current', lineterm=''
+        )
+        unified_diff = "\n".join(list(diff))
+        
+        return self.response(200, 
+            domain_id=row.mw_was.was_id,
+            old=old_text, 
+            new=new_text, 
+            create_on=row.create_on.strftime("%Y-%m-%d %H:%M:%S"),
+            unified_diff=unified_diff
+        )
+
+    @expose('/web/<id>', methods=['GET'])
+    @has_access
+    def get_web_diff_data(self, id):
+        """WEB 변경 이력 데이터를 JSON으로 반환합니다. (Unified Diff 포함)
+        ---
+        get:
+          summary: WEB 변경 이력 데이터 조회
+          description: 특정 변경 이력 ID를 기반으로 이전 설정, 현재 설정 및 Unified Diff 데이터를 JSON으로 반환합니다.
+          parameters:
+          - name: id
+            in: path
+            description: WEB 변경 이력(mw_web_change_history) 레코드 ID
+            required: true
+            schema:
+              type: integer
+          responses:
+            200:
+              description: 변경 이력 데이터 및 Diff (JSON)
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      host_id:
+                        type: string
+                        description: WEB 서버 Host ID
+                      port:
+                        type: integer
+                        description: WEB 서비스 Port
+                      old:
+                        type: string
+                        description: 이전 설정 텍스트
+                      new:
+                        type: string
+                        description: 현재 설정 텍스트
+                      create_on:
+                        type: string
+                        description: 변경 일시
+                      unified_diff:
+                        type: string
+                        description: Unified Diff 결과
+            404:
+              description: 해당 ID의 이력을 찾을 수 없음
+        """
+        row, _ = select_row('mw_web_change_history', {'id': id})
+        if not row:
+            return self.response(404, message="History not found")
+
+        old_text, new_text = get_next_old_web_text(id=id)
+        
+        diff = difflib.unified_diff(
+            (old_text or "").splitlines(), 
+            (new_text or "").splitlines(), 
+            fromfile='previous', tofile='current', lineterm=''
+        )
+        unified_diff = "\n".join(list(diff))
+        
+        return self.response(200, 
+            host_id=row.mw_web.host_id,
+            port=row.mw_web.port,
+            old=old_text, 
+            new=new_text, 
+            create_on=row.create_on.strftime("%Y-%m-%d %H:%M:%S"),
+            unified_diff=unified_diff
+        )
+
+appbuilder.add_api(MwDiffDataApi)

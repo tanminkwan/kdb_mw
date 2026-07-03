@@ -208,5 +208,58 @@ class EmailApi(BaseApi):
         else:
             return jsonify({"error": message}), 500
 
+class MarkdownApi(BaseApi):
+    resource_name = 'markdown'
+
+    @expose('/to_html', methods=['POST'])
+    @protect()
+    def to_html(self):
+        """Markdown을 HTML로 변환하는 API
+        ---
+        post:
+          summary: Markdown을 HTML로 변환
+          description: Markdown 콘텐츠를 HTML로 변환(Mermaid, S3 이미지 포함)하여 반환합니다. (인증 필요 - JWT/Session)
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    content:
+                      type: string
+                      description: 변환할 Markdown 본문
+                      example: "# 제목\n\n- 내용\n\n```mermaid\ngraph TD; A-->B;\n```"
+          responses:
+            200:
+              description: 변환 성공
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      html:
+                        type: string
+                        description: 변환된 HTML
+                        example: "<h1>제목</h1><p>내용</p>"
+            400:
+              description: 필수 파라미터 누락
+            500:
+              description: 변환 오류
+        """
+        data = request.json or {}
+        content_md = data.get('content')
+
+        if not content_md:
+            return jsonify({"error": "Missing required parameter: content"}), 400
+
+        try:
+            kroki_url = current_app.config.get('KROKI_URL', 'http://mwm-kroki:8000').rstrip('/')
+            inlined_html, _ = convert_md_to_html(content_md, kroki_url)
+            return jsonify({"html": inlined_html}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
 appbuilder.add_api(CommonApi)
 appbuilder.add_api(EmailApi)
+appbuilder.add_api(MarkdownApi)

@@ -41,9 +41,17 @@ def setup_admin_user():
 @pytest.fixture(scope='module')
 def app():
     # TESTING 설정을 활성화합니다.
+    import os
+    print("DEBUG: os.environ MWM_DATABASE_URI =", os.environ.get("MWM_DATABASE_URI"))
+    db_uri = os.getenv("MWM_DATABASE_URI", "postgresql://tiffanie:1q2w3e4r!!@localhost:25432/mw")
+    if db_uri.endswith("/mw"):
+        db_uri = db_uri[:-3] + "/mw_test"
+    elif db_uri.endswith("/mw/"):
+        db_uri = db_uri[:-4] + "/mw_test"
+
     flask_app.config.update({
         "TESTING": True,
-        "SQLALCHEMY_DATABASE_URI": 'postgresql://tiffanie:1q2w3e4r!!@localhost:25432/mw_test',
+        "SQLALCHEMY_DATABASE_URI": db_uri,
         "SCHEDULER_API_ENABLED": True,
     })
     
