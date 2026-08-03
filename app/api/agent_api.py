@@ -19,6 +19,8 @@ from app.sqls.agent import (
     get_latest_file,
     update_expiration
 )
+from app.models.agent import AgCommandMaster, AgAgent, AgAgentGroup
+from app.models.common import PeriodicTypeEnum, YnEnum, TargetToSendEnum, get_uuid
 
 class CommandApi(BaseApi):
 
@@ -210,3 +212,71 @@ class AgentApi(BaseApi):
 
 appbuilder.add_api(CommandApi)
 appbuilder.add_api(AgentApi)
+
+class CommandMasterApi(BaseApi):
+
+    resource_name = 'command_master'
+
+    @expose('/create', methods=['POST'])
+    @protect()
+    def create(self):
+        try:
+            data = json.loads(request.data) if request.data else request.json
+        except Exception:
+            return jsonify({'return_code': -1, 'message': 'Invalid JSON'}), 400
+
+        if not data:
+            return jsonify({'return_code': -1, 'message': 'Empty payload'}), 400
+
+        command_type_id = data.get('command_type_id')
+        if not command_type_id:
+            return jsonify({'return_code': -2, 'message': 'command_type_id is required'}), 400
+
+        broadcast_callback = data.get('broadcast_callback')
+        target_agent_id = data.get('target_agent_id')
+        target_agent_group_id = data.get('target_agent_group_id')
+
+        if not (broadcast_callback or target_agent_id or target_agent_group_id):
+            return jsonify({'return_code': -2, 'message': 'Target must be specified (broadcast_callback, target_agent_id, or target_agent_group_id)'}), 400
+
+        parameters = data.get('parameters')
+        if isinstance(parameters, (dict, list)):
+            parameters = json.dumps(parameters)
+
+        new_command_id = get_uuid()
+
+        cmd_master = AgCommandMaster(
+            command_id=new_command_id,
+            command_type_id=command_type_id,
+            periodic_type=PeriodicTypeEnum.IMMEDIATE,
+            additional_params=parameters,
+            publish_yn=YnEnum.YES,
+            cancel_yn=YnEnum.NO,
+            finished_yn=YnEnum.NO,
+            command_sender=TargetToSendEnum.SERVER,
+            result_receiver=TargetToSendEnum.SERVER,
+            broadcast_callback=broadcast_callback
+        )
+
+        if target_agent_id:
+            agent_ids = [target_agent_id] if isinstance(target_agent_id, str) else target_agent_id
+            agents = db.session.query(AgAgent).filter(AgAgent.agent_id.in_(agent_ids)).all()
+            if agents:
+                cmd_master.ag_agent.extend(agents)
+                
+        if target_agent_group_id:
+            group_ids = [target_agent_group_id] if isinstance(target_agent_group_id, str) else target_agent_group_id
+            groups = db.session.query(AgAgentGroup).filter(AgAgentGroup.agent_group_id.in_(group_ids)).all()
+            if groups:
+                cmd_master.ag_agent_group.extend(groups)
+
+        try:
+            db.session.add(cmd_master)
+            db.session.commit()
+            return jsonify({'return_code': 1, 'message': 'OK', 'command_id': new_command_id}), 201
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f'Error creating CommandMaster: {str(e)}')
+            return jsonify({'return_code': -1, 'message': 'Internal Server Error'}), 500
+
+appbuilder.add_api(CommandMasterApi)
