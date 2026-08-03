@@ -19,7 +19,7 @@ from app.sqls.agent import (
     get_latest_file,
     update_expiration
 )
-from app.models.agent import AgCommandMaster, AgAgent, AgAgentGroup
+from app.models.agent import AgCommandMaster, AgAgent, AgAgentGroup, AgCommandType
 from app.models.common import PeriodicTypeEnum, YnEnum, TargetToSendEnum, get_uuid
 
 class CommandApi(BaseApi):
@@ -235,7 +235,7 @@ class CommandMasterApi(BaseApi):
                     command_type_id:
                       type: string
                       description: 실행할 명령어 타입 ID
-                      example: "CMD_UPDATE_CONFIG"
+                      example: "NEWGEN.Read.http.m"
                     broadcast_callback:
                       type: string
                       description: 브로드캐스트용 콜백 함수명 (선택)
@@ -285,6 +285,10 @@ class CommandMasterApi(BaseApi):
         if not command_type_id:
             return jsonify({'return_code': -2, 'message': 'command_type_id is required'}), 400
 
+        command_type = db.session.query(AgCommandType).filter_by(command_type_id=command_type_id).first()
+        if not command_type:
+            return jsonify({'return_code': -2, 'message': f'Invalid command_type_id: {command_type_id}'}), 400
+
         broadcast_callback = data.get('broadcast_callback')
         target_agent_id = data.get('target_agent_id')
         target_agent_group_id = data.get('target_agent_group_id')
@@ -300,7 +304,7 @@ class CommandMasterApi(BaseApi):
 
         cmd_master = AgCommandMaster(
             command_id=new_command_id,
-            command_type_id=command_type_id,
+            ag_command_type=command_type,
             periodic_type=PeriodicTypeEnum.IMMEDIATE,
             additional_params=parameters,
             publish_yn=YnEnum.YES,
