@@ -296,8 +296,10 @@ class CommandMasterApi(BaseApi):
         if not (broadcast_callback or target_agent_id or target_agent_group_id):
             return jsonify({'return_code': -2, 'message': 'Target must be specified (broadcast_callback, target_agent_id, or target_agent_group_id)'}), 400
 
-        parameters = data.get('parameters')
-        if isinstance(parameters, (dict, list)):
+        parameters = data.get('parameters', '')
+        if parameters is None:
+            parameters = ''
+        elif isinstance(parameters, (dict, list)):
             parameters = json.dumps(parameters)
 
         new_command_id = get_uuid()
