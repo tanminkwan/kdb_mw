@@ -220,6 +220,59 @@ class CommandMasterApi(BaseApi):
     @expose('/create', methods=['POST'])
     @protect()
     def create(self):
+        """즉시 실행 가능한 CommandMaster 데이터를 생성합니다. (API Key 인증 지원)
+        ---
+        post:
+          summary: CommandMaster 즉시 실행 명령 생성
+          description: 외부 시스템에서 API Key를 사용하여 즉시 실행 가능한 명령어(CommandMaster)를 생성합니다.
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    command_type_id:
+                      type: string
+                      description: 실행할 명령어 타입 ID
+                      example: "CMD_UPDATE_CONFIG"
+                    broadcast_callback:
+                      type: string
+                      description: 브로드캐스트용 콜백 함수명 (선택)
+                    target_agent_id:
+                      type: array
+                      items:
+                        type: string
+                      description: 대상 에이전트 ID 목록 (선택, 단일 문자열도 가능)
+                    target_agent_group_id:
+                      type: array
+                      items:
+                        type: string
+                      description: 대상 에이전트 그룹 ID 목록 (선택, 단일 문자열도 가능)
+                    parameters:
+                      type: object
+                      description: 명령어 실행 시 필요한 추가 파라미터 (JSON 객체 또는 문자열)
+                      example: {"module": "nginx", "restart": true}
+          responses:
+            201:
+              description: 생성 성공
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      return_code:
+                        type: integer
+                        example: 1
+                      message:
+                        type: string
+                        example: "OK"
+                      command_id:
+                        type: string
+                        description: 생성된 명령어의 UUID
+            400:
+              description: 필수 파라미터 누락 등 잘못된 요청
+        """
         try:
             data = json.loads(request.data) if request.data else request.json
         except Exception:
