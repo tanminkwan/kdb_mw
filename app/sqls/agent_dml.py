@@ -15,6 +15,9 @@ import json
 import xmltodict
 import sys
 import re
+import csv
+from io import StringIO
+from sqlalchemy.dialects.postgresql import insert
 
 class AutorunResult:
 
@@ -924,4 +927,49 @@ class AutorunResult:
 
         update_rows('ag_result', update_dict, filter_dict)
 
+    def update_gc_parsed_log(self):
+        result = self.result
+        content = result.result_text
+        host_id = result.host_id.lower()
+        
+        if not content:
+            return 0, 'No data found'
+            
+        f = StringIO(content)
+        reader = csv.reader(f)
+        try:
+            next(reader) # 헤더 스킵
+        except StopIteration:
+            return -1, 'Empty CSV'
 
+        insert_data_list = []
+        for row in reader:
+            if len(row) < 4:
+                continue
+                
+            was_instance_id = row[0]
+            try:
+                start_date = datetime.strptime(row[1], "%Y-%m-%dT%H:%M:%S.%f")
+                duration = float(row[2])
+                end_date = datetime.strptime(row[3], "%Y-%m-%dT%H:%M:%S.%f")
+            except ValueError:
+                continue
+            
+            insert_data_list.append({
+                'host_id': host_id,
+                'was_instance_id': was_instance_id,
+                'start_date': start_date,
+                'duration': duration,
+                'end_date': end_date
+            })
+            
+        if not insert_data_list:
+            return 0, 'No valid data to insert'
+            
+        from app.models.monitor import MoGcParsedLog
+        stmt = insert(MoGcParsedLog).values(insert_data_list)
+        do_nothing_stmt = stmt.on_conflict_do_nothing(
+            index_elements=['host_id', 'was_instance_id', 'start_date']
+        )
+        db.session.execute(do_nothing_stmt)
+        return 1, 'OK'

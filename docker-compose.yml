@@ -140,26 +140,26 @@ services:
     container_name: mwm-kroki-mermaid
     image: yuzutech/kroki-mermaid:latest
 
-  mwm-metabase:
-    container_name: mwm-metabase
-    image: metabase/metabase:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - MB_DB_TYPE=postgres
-      - MB_DB_DBNAME=metabase
-      - MB_DB_PORT=5432
-      - MB_DB_USER=tiffanie
-      - MB_DB_PASS=1q2w3e4r!!
-      - MB_DB_HOST=mwm-db
-      - TZ=Asia/Seoul
-    depends_on:
-      - mwm-db
+#  mwm-metabase:
+#    container_name: mwm-metabase
+#    image: metabase/metabase:latest
+#    ports:
+#      - "3000:3000"
+#    environment:
+#      - MB_DB_TYPE=postgres
+#      - MB_DB_DBNAME=metabase
+#      - MB_DB_PORT=5432
+#      - MB_DB_USER=tiffanie
+#      - MB_DB_PASS=1q2w3e4r!!
+#      - MB_DB_HOST=mwm-db
+#      - TZ=Asia/Seoul
+#    depends_on:
+#      - mwm-db
 
   mwm-nginx:
     container_name: mwm-nginx
     image: nginx:stable-alpine
-    restart: always
+#    restart: always
     ports:
       - "20080:80"
       - "20443:443"

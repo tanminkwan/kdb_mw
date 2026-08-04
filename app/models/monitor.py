@@ -4,7 +4,7 @@ from flask_appbuilder import Model
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy import Column, Integer, String, ForeignKey\
 , DateTime, Enum, UniqueConstraint, ForeignKeyConstraint\
-, Table, Date
+, Table, Date, Float
 from sqlalchemy.types import ARRAY
 from sqlalchemy.orm import relationship
 import enum
@@ -312,3 +312,21 @@ class MoWasStatusReport(Model):
     @renders('wi_25')
     def c_wi_25(self):
         return Markup(self.getColoredBackGround(self.wi_25_stat, self.wi_25))
+
+class MoGcParsedLog(Model):
+    __tablename__ = "mo_gc_parsed_log"
+    t__table_comment = {"comment":"GC 파싱 로그"}
+    function_comments = {}
+
+    id               = Column(Integer, primary_key=True, nullable=False)
+    host_id          = Column(String(30), nullable=False)
+    was_instance_id  = Column(String(30), nullable=False)
+    start_date       = Column(DateTime(), nullable=False, index=True)
+    duration         = Column(Float)
+    end_date         = Column(DateTime())
+    create_on        = Column(DateTime(), default=datetime.now, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('host_id', 'was_instance_id', 'start_date', name='uq_gc_parsed_log'),
+        t__table_comment,
+    )

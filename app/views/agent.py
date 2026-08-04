@@ -244,45 +244,11 @@ class ResultModelView(ModelView):
 
             ar = AutorunResult(result=result)
 
-            msg = ''
-            if file_name in ['domain.xml','JEUSMain.xml']:
-                rtn, msg = ar.update_jeus_domain()
-            elif file_name == 'http.m':
-                rtn, msg = ar.update_httpm()
-            elif file_name == 'WEBMain.xml':
-                rtn, msg = ar.update_web_main()
-            elif file_name == 'urlrewrite_config':
-                rtn, msg = ar.update_url_rewrite()
-            elif file_name == 'get_server_stat':
-                rtn, msg = ar.update_was_status()
-            elif file_name == 'get_ssl_certi':
-                rtn, msg = ar.update_connect_ssl_by_api()
-            elif file_name == 'webtob.version.sh':
-                rtn, msg = ar.update_webtob_version()
-            elif file_name == 'webtob.monitor.sh':
-                rtn, msg = ar.update_webtob_monitor()
-            elif file_name == 'get_ssl_certifile':
-                rtn, msg = ar.update_file_ssl_by_api()
-            elif file_name.startswith('fileSSL.out'):
-                rtn, msg = ar.update_file_ssl()
-            elif file_name.startswith('connectSSL.out'):
-                rtn, msg = ar.update_connect_ssl()
-            elif file_name == 'webtob.license.sh' or file_name == 'webtob.license.bat' or file_name.startswith('RUN.WEBTOB.LICENSE.out'):
-                rtn, msg = ar.update_webtob_license_info()
-            elif file_name == 'jeus.license.sh' or file_name == 'jeus.license.bat' or file_name.startswith('RUN.JEUS.LICENSE.out'):
-                rtn, msg = ar.update_jeus_license_info()
-            elif file_name == 'get_find_cmd.sh' or file_name == 'get_find_cmd.bat' or file_name.startswith('RUN.FIND.CMD.out'):
-                rtn, msg = ar.update_filtered_info()
-            elif file_name in ['jeus.properties','jeus.properties.cmd']:
-                rtn, msg = ar.update_jeus_properties()
-            elif file_name in ['mwmanager.jar','mwmanager4j6.jar','mwmanager4j7.jar']:
-                continue
-            else:
-                rtn = -1
-                msg = 'Invalid file_name :' + file_name
+            rtn, msg = ar.call_autorun_func()
             
-            ar.update_result_status('COMPLITED' if rtn > 0 else 'NOCHANGE' if rtn==0 else 'ERROR', msg)
-            
+            if rtn == 0 and msg == 'No Autorun':
+                ar.update_result_status('ERROR', 'Autorun mapping not found for: ' + file_name)
+                
             db.session.commit()
 
         self.update_redirect()

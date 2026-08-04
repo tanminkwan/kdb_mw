@@ -221,10 +221,10 @@
 <div class="filter-container" id="condition">
   {% if condition %}
     {% for cd in condition %}
-      <div class="filter-group" id="cond_g_{{cd['name']}}">
+      <div class="filter-group" id="cond_g_{{loop.index0}}">
         <label>{{cd['label']}}</label>
         <div class="filter-inputs">
-          <select id="cond_d_{{cd['name']}}" column="{{cd['name']}}">
+          <select id="cond_d_{{loop.index0}}" column="{{cd['name']}}">
             <option value=""></option>
             {% for op in cd['operations'] %}
               <option value="{{op}}">{{op}}</option>
@@ -239,7 +239,7 @@
           {% else %}
             {% set input_type = 'text' %}
           {% endif %}
-          <input type="{{input_type}}" id="cond_t_{{cd['name']}}" placeholder="검색어 입력">
+          <input type="{{input_type}}" id="cond_t_{{loop.index0}}" placeholder="검색어 입력">
         </div>
       </div>
     {% endfor %}
@@ -377,15 +377,16 @@
   function makeParam(){
     var param_cond = ''
     $("[id^='cond_d_']").each(function(){
-        var col = this.getAttribute('column')
+        var idx = this.id.replace('cond_d_', '');
+        var col = this.getAttribute('column');
         if (this.value){
-          var param = this.value+'__'+col+'='+document.getElementById('cond_t_'+col).value;
+          var param = this.value+'__'+col+'='+document.getElementById('cond_t_'+idx).value;
           if (param_cond){
             param_cond = param_cond + '&' + param;
           }else{ 
             param_cond = param;
           }
-          console.log('oper:',this.value+"__"+this.getAttribute('column'))
+          console.log('oper:',this.value+"__"+col);
         }
     });
     if(param_cond){

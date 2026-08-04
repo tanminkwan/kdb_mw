@@ -126,9 +126,10 @@ class AutorunResult:
 ```
 
 ### 3.3. 수동 실행 (Update Config Action) 구조 개선(리팩토링)
-현재 `app/views/agent.py` 내의 `update_config` 액션은 DB의 자동실행 매핑(`AgAutorunResult`)을 참조하지 않고 하드코딩된 `if-elif` 분기를 타고 있습니다. 자동 실행(백그라운드)과 수동 실행(UI 버튼) 간의 로직 파편화를 막기 위해, 수동 실행 시에도 **DB 매핑을 우선 확인하도록 리팩토링**합니다.
+현재 `app/views/agent.py` 내의 `update_config` 액션은 DB의 자동실행 매핑(`AgAutorunResult`)을 참조하지 않고 하드코딩된 `if-elif` 분기를 타고 있습니다. 
+하드코딩된 과거 분기들을 과감하게 모두 삭제하고, 수동 실행 시에도 **오직 DB 매핑을 통해서만 확인하도록 전면 리팩토링**합니다.
 
-`app/views/agent.py` 내 `ResultModelView`의 `update_config` 메서드를 다음과 같이 수정하여, `gc_parsed.csv`를 비롯한 향후 추가될 기능들이 하드코딩 없이 동작하게 만듭니다.
+`app/views/agent.py` 내 `ResultModelView`의 `update_config` 메서드를 다음과 같이 수정하여, 앞으로 모든 기능들이 하드코딩 없이 DB 매핑으로만 동작하게 만듭니다.
 
 ```python
 # app/views/agent.py
@@ -141,28 +142,15 @@ class ResultModelView(ModelView):
                 continue
 
             file_name = result.key_value1
-            rtn = 0
             ar = AutorunResult(result=result)
 
-            # [리팩토링 적용] 1. 동적 매핑(DB 테이블) 기반 함수 호출 우선 시도
+            # [리팩토링 적용] 동적 매핑(DB 테이블) 기반 함수 호출만 시도
             rtn, msg = ar.call_autorun_func()
             
-            # 동적 매핑을 찾아 실행을 완료한 경우 (성공 또는 에러 처리 완료됨)
-            if rtn != 0 or msg != 'No Autorun':
-                db.session.commit()
-                continue
+            # 동적 매핑을 찾지 못한 경우 명시적 에러 처리
+            if rtn == 0 and msg == 'No Autorun':
+                ar.update_result_status('ERROR', 'Autorun mapping not found for: ' + file_name)
                 
-            # [기존 로직 유지] 2. DB에 매핑이 없는 과거 기능들에 대한 하드코딩 Fallback
-            msg = ''
-            if file_name in ['domain.xml','JEUSMain.xml']:
-                rtn, msg = ar.update_jeus_domain()
-            elif file_name == 'http.m':
-            # ... (중략 - 기존 elif 유지) ...
-            else:
-                rtn = -1
-                msg = 'Invalid file_name :' + file_name
-            
-            ar.update_result_status('COMPLITED' if rtn > 0 else 'NOCHANGE' if rtn==0 else 'ERROR', msg)
             db.session.commit()
 ```
 
