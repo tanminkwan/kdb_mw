@@ -123,6 +123,13 @@ class MoWasStatusReportModelView(ModelView):
         self.update_redirect()
         return redirect(self.get_redirect())
 
+class SslCertStatusView(BaseView):
+    default_view = 'index'
+
+    @expose('/')
+    def index(self):
+        return self.render_template('ssl_cert_status.html')
+
 class MonitorApi(BaseApi):
 
     route_base = '/monitor'
@@ -471,17 +478,6 @@ class MonitorApi(BaseApi):
             recent_knowledge_list.sort(key=lambda x: x["update_on"], reverse=True)
         return jsonify({'recent_knowledge_list':recent_knowledge_list})
 
-    @expose('/cert_expiry_stat', methods=['GET'])
-    @has_access
-    def cert_expiry_stat(self):
-        result = get_cert_expiry_stat()
-        return jsonify({'cert_expiry_stat': result})
-
-    @expose('/cert_expiry_stat_jeus', methods=['GET'])
-    @has_access
-    def cert_expiry_stat_jeus(self):
-        result = get_cert_expiry_stat_jeus()
-        return jsonify({'cert_expiry_stat_jeus': result})
 
     @expose('/get_changed_configs', methods=['GET'])
     @has_access
@@ -587,3 +583,10 @@ appbuilder.add_link(
     category="System"
 )
 appbuilder.add_api(MonitorApi)
+
+appbuilder.add_view(
+    SslCertStatusView,
+    "SSL인증서 만료 현황",
+    category="Monitor",
+    category_icon="fa-desktop"
+)

@@ -114,7 +114,7 @@ from . import models
 from app.views import was, agent, monitor, knowledge, git, itam
 from app.views.common import TokenView
 from app.sqls import was, agent, monitor, knowledge, batch, server, itam_compare
-from app.api import was_api, agent_api, common_api, model_api, grid_api, batch_api, itam_compare_api
+from app.api import was_api, agent_api, common_api, model_api, grid_api, batch_api, itam_compare_api, monitor_api
 from . import jobs
 
 # Add API Documentation (Swagger) to Security menu

@@ -253,14 +253,11 @@
             <div class="card" id="ssl-card">
                 <div class="card-title">
                     <h3>[SSL인증서 만료 현황]</h3>
+                    <a href="/sslcertstatusview/" class="btn" style="font-size: 14px; padding: 0.3rem 0.8rem;">전체 현황 보기</a>
                 </div>
                 <div class="table-wrapper">
-                    <h4>1) webtob 집계</h4>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">* 상세 내역(JEUS 및 중간인증서)은 우측 상단의 '전체 현황 보기'를 클릭하세요.</p>
                     <table id="certStat"></table>
-                </div>
-                <div class="table-wrapper" style="margin-top: 2rem;">
-                    <h4>2) jeus https 집계</h4>
-                    <table id="certStatJeus"></table>
                 </div>
             </div>
 
@@ -522,7 +519,7 @@
     }
 
     $.ajax({
-        url: "/monitor/cert_expiry_stat",
+        url: "/api/v1/monitor/cert_expiry_stat",
         success: function (data) {
             if (!data || !data.cert_expiry_stat) {
                 console.log("No cert_expiry_stat data found");
@@ -530,17 +527,6 @@
             }
             renderExpiryTable('certStat', data.cert_expiry_stat, 'webtob');
             checkTableAndHide('certStat', 'ssl-card');
-        }
-    });
-
-    $.ajax({
-        url: "/monitor/cert_expiry_stat_jeus",
-        success: function (data) {
-            if (!data || !data.cert_expiry_stat_jeus) {
-                console.log("No cert_expiry_stat_jeus data found");
-                return;
-            }
-            renderExpiryTable('certStatJeus', data.cert_expiry_stat_jeus, 'jeus');
         }
     });
 
