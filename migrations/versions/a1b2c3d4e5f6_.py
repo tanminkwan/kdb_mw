@@ -17,7 +17,7 @@ depends_on = None
 
 def upgrade():
     # PostgreSQL specific enum alteration
-    op.execute("ALTER TYPE commandclassenum ADD VALUE IF NOT EXISTS 'LogExtractor'")
+    op.execute("ALTER TYPE commandclassenum ADD VALUE IF NOT EXISTS 'ExtractLog'")
 
 def downgrade():
     # PostgreSQL doesn't easily support dropping an enum value.
