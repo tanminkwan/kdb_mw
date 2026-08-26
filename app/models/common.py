@@ -106,6 +106,7 @@ class CommandClassEnum(enum.Enum):
     DownloadFile   = 'File Download'
     UploadFile     = 'File Upload'
     GetRefreshToken= 'Update인증Token'
+    LogExtractor   = 'Log Extractor'
 
 class CommandStatusEnum(enum.Enum):
     CREATE     = 'Command 생성'
