@@ -239,111 +239,115 @@
 
     <div class="dashboard-grid">
         {% if g.user.is_authenticated %}
-            <!-- Agent Stat Section (Col 1, Top) -->
-            <div class="card" id="agent-stat-card">
-                <div class="card-title">
-                    <h3>[Agent 상태 현황]</h3>
-                </div>
-                <div class="table-wrapper" id="agent-stat-content">
-                    <table id="agentStat"></table>
+        <!-- Agent Stat Section (Col 1, Top) -->
+        <div class="card" id="agent-stat-card">
+            <div class="card-title">
+                <h3>[Agent 상태 현황]</h3>
+            </div>
+            <div class="table-wrapper" id="agent-stat-content">
+                <table id="agentStat"></table>
+            </div>
+        </div>
+
+        <!-- SSL Section (Col 2, Top) -->
+        <div class="card" id="ssl-card">
+            <div class="card-title">
+                <h3>[SSL인증서 만료 현황]</h3>
+                <a href="/sslcertstatusview/" class="btn" style="font-size: 14px; padding: 0.3rem 0.8rem;">전체 현황 보기</a>
+            </div>
+            <div class="table-wrapper">
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">* 상세 내역(JEUS 및 중간인증서)은 우측 상단의
+                    '전체 현황 보기'를 클릭하세요.</p>
+                <table id="certStat"></table>
+            </div>
+        </div>
+
+        <!-- Offline Agent Section (Col 1, Bottom) -->
+        <div class="card" id="offline-agent-card">
+            <div class="card-title">
+                <h3>[미접속/장기미사용 Agent 목록]</h3>
+            </div>
+            <div class="table-wrapper" id="offline-content">
+                <table id="offline"></table>
+            </div>
+        </div>
+
+        <!-- WAS Section (Col 2, Bottom) -->
+        <div class="card" id="was-card">
+            <div class="card-title">
+                <h3>[WAS 상태]</h3>
+                <div>
+                    <button class="btn" id="btn-load-was" onclick="loadWasStatus()"
+                        style="margin-right: 5px; background-color: var(--secondary-color);">조회</button>
+                    <button class="btn" onclick="recheckStatus()">상태 업데이트</button>
                 </div>
             </div>
-
-            <!-- SSL Section (Col 2, Top) -->
-            <div class="card" id="ssl-card">
-                <div class="card-title">
-                    <h3>[SSL인증서 만료 현황]</h3>
-                    <a href="/sslcertstatusview/" class="btn" style="font-size: 14px; padding: 0.3rem 0.8rem;">전체 현황 보기</a>
-                </div>
+            <div id="recheck-container">
+                <div id="recheck-message"></div>
+                <div id="recheck-trace"></div>
+            </div>
+            <div id="was-status-content" style="display:none;">
+                <h4>1) 상태 Check 불가 WAS List</h4>
                 <div class="table-wrapper">
-                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">* 상세 내역(JEUS 및 중간인증서)은 우측 상단의 '전체 현황 보기'를 클릭하세요.</p>
-                    <table id="certStat"></table>
+                    <table id="uncheckedWasList"></table>
+                </div>
+                <h4>2) 비정상 WAS Instance List</h4>
+                <div class="table-wrapper">
+                    <table id="notRunnigWasList"></table>
                 </div>
             </div>
+        </div>
 
-            <!-- Offline Agent Section (Col 1, Bottom) -->
-            <div class="card" id="offline-agent-card">
-                <div class="card-title">
-                    <h3>[미접속/장기미사용 Agent 목록]</h3>
+        <!-- Config Changes Section -->
+        <div class="card full-width" id="config-card">
+            <div class="card-title">
+                <h3>[Configuration 변경 소식]</h3>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                <div>
+                    <h4>1) WAS Config 변경 List</h4>
+                    <table id="changedWASList"></table>
                 </div>
-                <div class="table-wrapper" id="offline-content">
-                    <table id="offline"></table>
+                <div>
+                    <h4>2) WEB Config 변경 List</h4>
+                    <table id="changedWEBList"></table>
                 </div>
             </div>
+        </div>
 
-            <!-- WAS Section (Col 2, Bottom) -->
-            <div class="card" id="was-card">
-                <div class="card-title">
-                    <h3>[WAS 상태]</h3>
-                    <div>
-                        <button class="btn" id="btn-load-was" onclick="loadWasStatus()" style="margin-right: 5px; background-color: var(--secondary-color);">조회</button>
-                        <button class="btn" onclick="recheckStatus()">상태 업데이트</button>
-                    </div>
-                </div>
-                <div id="recheck-container">
-                    <div id="recheck-message"></div>
-                    <div id="recheck-trace"></div>
-                </div>
-                <div id="was-status-content" style="display:none;">
-                    <h4>1) 상태 Check 불가 WAS List</h4>
-                    <div class="table-wrapper">
-                        <table id="uncheckedWasList"></table>
-                    </div>
-                    <h4>2) 비정상 WAS Instance List</h4>
-                    <div class="table-wrapper">
-                        <table id="notRunnigWasList"></table>
-                    </div>
-                </div>
+        <!-- Knowledge Section -->
+        <div class="card full-width" id="knowledge-card">
+            <div class="card-title">
+                <h3>[신규 지식 등록 소식]</h3>
             </div>
+            <table id="recent_knowledge_list"></table>
+        </div>
 
-            <!-- Config Changes Section -->
-            <div class="card full-width" id="config-card">
-                <div class="card-title">
-                    <h3>[Configuration 변경 소식]</h3>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
-                    <div>
-                        <h4>1) WAS Config 변경 List</h4>
-                        <table id="changedWASList"></table>
-                    </div>
-                    <div>
-                        <h4>2) WEB Config 변경 List</h4>
-                        <table id="changedWEBList"></table>
-                    </div>
-                </div>
+        <!-- Failure Section -->
+        <div class="card full-width" id="failure-card">
+            <div class="card-title">
+                <h3>[수행 실패 및 오류 소식]</h3>
             </div>
-
-            <!-- Knowledge Section -->
-            <div class="card full-width" id="knowledge-card">
-                <div class="card-title">
-                    <h3>[신규 지식 등록 소식]</h3>
-                </div>
-                <table id="recent_knowledge_list"></table>
-            </div>
-
-            <!-- Failure Section -->
-            <div class="card full-width" id="failure-card">
-                <div class="card-title">
-                    <h3>[수행 실패 및 오류 소식]</h3>
-                </div>
-                <h4>1) Config 파일 Error List</h4>
-                <table id="configFilesList"></table>
-                <h4 style="margin-top: 2rem;">2) WAS 상태 조회 Error List</h4>
-                <table id="erroWasList"></table>
-            </div>
+            <h4>1) Config 파일 Error List</h4>
+            <table id="configFilesList"></table>
+            <h4 style="margin-top: 2rem;">2) WAS 상태 조회 Error List</h4>
+            <table id="erroWasList"></table>
+        </div>
         {% else %}
-            <!-- Not Logged In Message -->
-            <div class="card full-width" style="text-align: center; padding: 5rem;">
-                <h3 style="color: var(--text-muted); margin-bottom: 1.5rem;">서비스를 이용하시려면 로그인이 필요합니다.</h3>
-                <div style="display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap;">
-                    <a href="/idp/login" class="btn" style="display: inline-block; text-decoration: none; padding: 1.2rem 2.5rem; font-size: 1.3rem; background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); font-weight: 700;">
-                        🔐 MWM IDP 계정으로 로그인
-                    </a>
-                    <a href="/login/" class="btn" style="display: inline-block; text-decoration: none; padding: 1.2rem 2.5rem; font-size: 1.3rem; background-color: #64748b; color: white; border-radius: 12px;">
-                        ID / PW로 Login 하기
-                    </a>
-                </div>
+        <!-- Not Logged In Message -->
+        <div class="card full-width" style="text-align: center; padding: 5rem;">
+            <h3 style="color: var(--text-muted); margin-bottom: 1.5rem;">서비스를 이용하시려면 로그인이 필요합니다.</h3>
+            <div style="display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap;">
+                <a href="/idp/login" class="btn"
+                    style="display: inline-block; text-decoration: none; padding: 1.2rem 2.5rem; font-size: 1.3rem; background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); font-weight: 700;">
+                    🔐 MWM IDP 계정으로 로그인
+                </a>
+                <a href="/login/" class="btn"
+                    style="display: inline-block; text-decoration: none; padding: 1.2rem 2.5rem; font-size: 1.3rem; background-color: #64748b; color: white; border-radius: 12px;">
+                    ID / PW로 Login 하기
+                </a>
             </div>
+        </div>
         {% endif %}
     </div>
 </div>
@@ -416,7 +420,7 @@
         var now = new Date();
         var d7 = new Date(); d7.setDate(now.getDate() + 7);
         var d30 = new Date(); d30.setDate(now.getDate() + 30);
-        
+
         var date_flt = "";
         var col_name = (type === 'webtob') ? "notafter" : "mw_etc_ssl_domain.notafter";
 
@@ -444,7 +448,7 @@
             }
             var stats = data.agent_stat;
             var offlines = data.offline_agents || [];
-            
+
             // Build the Agent Stat Table
             var landscapes = ['PROD', 'TEST', 'DEV'];
             var rows = [
@@ -460,7 +464,7 @@
             rows.forEach(row => {
                 var tr = $("<tr><td>" + row.label + "</td></tr>");
                 var rowTotal = 0;
-                
+
                 landscapes.forEach(l => {
                     var val = 0;
                     var found = stats.find(s => s.landscape === l);
@@ -469,7 +473,7 @@
                     rowTotal += val;
                 });
                 tr.append("<td style='text-align:right; font-weight:bold;'>" + rowTotal + "</td>");
-                
+
                 if (row.id === 'total') tr.addClass('total-row');
                 $('#agentStat').append(tr);
             });
@@ -481,7 +485,7 @@
                 }
                 $('#offline').append("<tr><td>" + item.landscape + "</td><td>" + item.agent_id + "</td><td>" + item.agent_name + "</td><td>" + item.last_checked_date + "</td></tr>");
             });
-            
+
             checkTableAndHide('offline', 'offline-agent-card');
         }
     });
@@ -489,7 +493,7 @@
     function renderExpiryTable(tableId, stats, type) {
         var landscapes = ['PROD', 'TEST', 'DEV'];
         var statuses = ['정상', '주의', '임박', '만료', '미확인', '전체'];
-        
+
         var header = "<tr><th>상태</th>" + landscapes.map(l => "<th style='text-align:right;'>" + l + "</th>").join('') + "<th style='text-align:right;'>전체</th></tr>";
         $('#' + tableId).html(header);
 
@@ -504,15 +508,15 @@
             var isTotal = (status === '전체');
             var rowClass = isTotal ? "class='total-row'" : "";
             var rowStyle = isTotal ? "" : "style='cursor:pointer;'";
-            
+
             var row = $("<tr " + rowClass + " " + rowStyle + "><td>" + status + "</td><td style='text-align:right;'>" + item.PROD + "</td><td style='text-align:right;'>" + item.TEST + "</td><td style='text-align:right;'>" + item.DEV + "</td><td style='text-align:right;'>" + item.total + "</td></tr>");
-            
+
             if (!isTotal) {
-                row.click(function() { gotoSSLList(status, type); });
+                row.click(function () { gotoSSLList(status, type); });
             }
             $('#' + tableId).append(row);
         });
-        
+
         if (tableId === 'certStatJeus') {
             $('#' + tableId).after("<div id='certStatJeusNote' style='font-size:12px;color:gray;margin-top:5px;'>* 임박: 만료 7일 이내, 주의: 만료 30일 이내</div>");
         }
@@ -530,10 +534,10 @@
         }
     });
 
-        function loadWasStatus() {
+    function loadWasStatus() {
         $('#btn-load-was').hide();
         $('#was-status-content').show();
-        
+
         $.ajax({
             url: "/monitor/get_not_running_was_list",
             success: function (data) {
@@ -556,7 +560,7 @@
                     }
                     $('#notRunnigWasList').append("<tr><td>" + item.domain_id + "</td><td>" + item.was_instance_group + "</td><td>" + item.was_instance_id + "</td><td>" + item.was_instance_stat + "</td></tr>");
                 });
-                
+
                 if ($('#uncheckedWasList tr').length <= 1 && $('#notRunnigWasList tr').length <= 1) {
                     $('#was-card').hide();
                 } else {
@@ -586,7 +590,7 @@
                 }
                 $('#erroWasList').append("<tr><td><a href=\"/resultmodelview/show/" + item.id + "\" target=\"_blank\">" + item.command_id + "</a></td><td>" + item.agent_id + "</td><td>" + item.host_id + "</td><td>" + item.key_value2 + "</td><td>" + item.result_status + "</td><td>" + item.result_text + "</td><td>" + item.create_on + "</td></tr>");
             });
-            
+
             if ($('#configFilesList tr').length <= 1 && $('#erroWasList tr').length <= 1) {
                 $('#failure-card').hide();
             } else {
@@ -615,7 +619,7 @@
                 }
                 $('#changedWEBList').append("<tr><td><a href=\"/diff/web/" + item.id + "\" target=\"_blank\">" + item.host_id + "</a></td><td>" + item.port + "</td><td>" + item.landscape + "</td><td>" + item.web_name + "</td><td>" + item.create_on + "</td></tr>");
             });
-            
+
             if ($('#changedWASList tr').length <= 1 && $('#changedWEBList tr').length <= 1) {
                 $('#config-card').hide();
             } else {

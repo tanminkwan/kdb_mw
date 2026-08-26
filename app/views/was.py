@@ -647,7 +647,7 @@ class WebDomainModelView(ModelView):
 
     list_title   = "WEBTOB Domain 목록"    
     list_columns = ['host_id', 'mw_web_vhost.mw_web.web_name', 't__domain', 'ssl_yn'\
-                    ,'t__ssl_certi','notbefore','notafter','t__cn','update_dt']
+                    ,'t__ssl_certi','notbefore','notafter','notbefore_ca','notafter_ca','t__cn','update_dt']
     label_columns = {'host_id':'Host ID'
                     ,'mw_web_vhost.mw_web.web_name':'Web서버'
                     ,'t__domain':'URL'
@@ -655,10 +655,12 @@ class WebDomainModelView(ModelView):
                     ,'t__ssl_certi':'SSL Certificate File'
                     ,'notbefore':'시작일'
                     ,'notafter':'만료일'
+                    ,'notbefore_ca':'시작일(ICA)'
+                    ,'notafter_ca':'만료일(ICA)'
                     ,'t__cn':'CN'
                     ,'update_dt':'확인일시'
                     }
-    search_columns = ['host_id', 'ssl_yn', 'domain_name','notafter'\
+    search_columns = ['host_id', 'ssl_yn', 'domain_name','notafter', 'notafter_ca'\
                     , 'update_dt', 'ssl_certi']
     formatters_columns={'update_dt': lambda x:x.strftime('%Y.%m.%d %H:%M') if x is not None else ""}             
     base_filters = []
@@ -667,6 +669,7 @@ class WebDomainModelView(ModelView):
     
     search_filters = {
         'notafter': [FilterIsNull, FilterGreater, FilterSmaller],
+        'notafter_ca': [FilterIsNull, FilterGreater, FilterSmaller],
         'update_dt': [FilterIsNull, FilterGreater, FilterSmaller]
     }
     
