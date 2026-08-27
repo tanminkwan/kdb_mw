@@ -6,7 +6,7 @@
 ## 2. API 명세
 - **Endpoint**: `/api/v1/command_master/extract_log` (또는 등록된 Blueprint 경로 기준)
 - **Method**: `POST`
-- **인증**: API Key 방식 또는 JWT Token (`@protect()`)
+- **인증**: API Key 방식 또는 Web Session (`@protect(allow_browser_login=True)`)
 - **입력 파라미터 (JSON Body)**:
   - `host_id` (필수): 대상 서버 ID
   - `was_instance_id` (필수): WAS 인스턴스 ID

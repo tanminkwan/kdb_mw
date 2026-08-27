@@ -339,7 +339,7 @@ class CommandMasterApi(BaseApi):
             return jsonify({'return_code': -1, 'message': 'Internal Server Error'}), 500
 
     @expose('/extract_log', methods=['POST'])
-    @protect()
+    @protect(allow_browser_login=True)
     def extract_log(self):
         """특정 조건에 맞는 로그 추출 Command 등록
         ---
