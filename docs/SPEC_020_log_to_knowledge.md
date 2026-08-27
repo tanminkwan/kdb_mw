@@ -6,7 +6,7 @@ Agent의 Command 실행 결과를 파싱하여 Markdown 형식으로 변환 후,
 ## 2. 요구사항
 - Command 처리 결과로 수신되는 JSON/JSONL 형식의 데이터를 Markdown으로 자동 변환해야 합니다.
 - 변환된 Markdown 텍스트는 `ut_md_content` (지식정보-Markdown 형식) 테이블에 새로운 항목으로 자동 Insert 되어야 합니다.
-- 자동 실행을 위해 맵핑할 신규 함수명은 `log_2_knoledge`로 지정합니다.
+- 자동 실행을 위해 맵핑할 신규 함수명은 `log_2_knowledge`로 지정합니다.
 
 ## 3. 상세 구현 방안
 
@@ -16,7 +16,7 @@ Agent의 Command 실행 결과를 파싱하여 Markdown 형식으로 변환 후,
 ### 3.2. Autorun 함수 개발
 - **대상 파일**: `app/sqls/agent_dml.py`
 - **클래스**: `AutorunResult`
-- **추가 함수**: `log_2_knoledge(self)`
+- **추가 함수**: `log_2_knowledge(self)`
 - **동작 로직**:
   1. `self.result` 객체로부터 `result_text` (결과 데이터 원문) 추출
   2. 데이터 파싱 및 본문 구성
@@ -58,4 +58,4 @@ Agent의 Command 실행 결과를 파싱하여 Markdown 형식으로 변환 후,
 웹 관리자 UI의 **Agent&Command > Command 처리결과 자동 반영 설정(Result 자동실행 목록)**에서 룰 등록:
 - **자동실행 Type**: `FILENAME`
 - **대상 파일 이름**: 처리할 로그 파일명의 정규식 패턴 (예: `.*\.log$`)
-- **자동실행 기능(autorun_func)**: `log_2_knoledge` 입력
+- **자동실행 기능(autorun_func)**: `log_2_knowledge` 입력

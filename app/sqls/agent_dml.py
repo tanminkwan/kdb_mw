@@ -974,7 +974,7 @@ class AutorunResult:
         db.session.execute(do_nothing_stmt)
         return 1, 'OK'
 
-    def log_2_knoledge(self):
+    def log_2_knowledge(self):
         from app.common import jsonl_to_markdown
         from app.models.common import get_date
         import json

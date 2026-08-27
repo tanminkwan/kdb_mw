@@ -338,4 +338,172 @@ class CommandMasterApi(BaseApi):
             logging.error(f'Error creating CommandMaster: {str(e)}')
             return jsonify({'return_code': -1, 'message': 'Internal Server Error'}), 500
 
+    @expose('/extract_log', methods=['POST'])
+    @protect()
+    def extract_log(self):
+        """특정 조건에 맞는 로그 추출 Command 등록
+        ---
+        post:
+          summary: WAS 에러 로그 추출 명령 등록
+          description: 특정 날짜, 시간, 키워드 등의 조건에 맞는 WAS 에러 로그를 추출하도록 CommandMaster를 생성하고 에이전트에 하달합니다.
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  required:
+                    - host_id
+                    - was_instance_id
+                    - date
+                    - time_from
+                    - time_to
+                  properties:
+                    host_id:
+                      type: string
+                      description: 대상 서버 ID
+                      example: "uok01a"
+                    was_instance_id:
+                      type: string
+                      description: 대상 WAS 인스턴스 ID
+                      example: "uok01a_servlet_engine1"
+                    date:
+                      type: string
+                      description: 추출 기준 날짜 (yyyymmdd 형식)
+                      example: "20260825"
+                    time_from:
+                      type: string
+                      description: 추출 시작 시간 (hhmmss 형식)
+                      example: "140439"
+                    time_to:
+                      type: string
+                      description: 추출 종료 시간 (hhmmss 형식)
+                      example: "150000"
+                    file_name:
+                      type: string
+                      description: 대상 로그 파일명. (선택) 입력하지 않을 경우 시스템이 날짜에 맞춰 자동 생성합니다. 'file' 이라는 키로도 입력 가능.
+                    keywords:
+                      type: array
+                      items:
+                        type: string
+                      description: 검색할 키워드 목록 (선택) 기본값은 ["Exception", "Fail"] 입니다.
+                      example: ["Exception", "Fail", "Error"]
+          responses:
+            201:
+              description: 생성 성공
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      return_code:
+                        type: integer
+                        example: 1
+                      message:
+                        type: string
+                        example: "OK"
+                      command_id:
+                        type: string
+                        description: 생성된 명령어의 UUID
+            400:
+              description: 필수 파라미터 누락, 유효하지 않은 포맷 등 잘못된 요청
+            500:
+              description: 서버 내부 에러
+        """
+        try:
+            data = json.loads(request.data) if request.data else request.json
+        except Exception:
+            return jsonify({'return_code': -1, 'message': 'Invalid JSON'}), 400
+
+        if not data:
+            return jsonify({'return_code': -1, 'message': 'Empty payload'}), 400
+
+        host_id = data.get('host_id')
+        was_instance_id = data.get('was_instance_id')
+        date = data.get('date') # yyyymmdd
+        time_from = data.get('time_from') # hhmmss
+        time_to = data.get('time_to') # hhmmss
+        file_name = data.get('file_name', data.get('file', ''))
+        keywords = data.get('keywords', ["Exception", "Fail"])
+
+        if not all([host_id, was_instance_id, date, time_from, time_to]):
+            return jsonify({'return_code': -2, 'message': 'Missing required parameters (host_id, was_instance_id, date, time_from, time_to)'}), 400
+
+        # 1. 파일명 생성 로직
+        if not file_name:
+            today_str = datetime.now().strftime("%Y%m%d")
+            if date == today_str:
+                file_name = f"/log/jeus/{was_instance_id}/JeusServer.log"
+            else:
+                file_name = f"/log/jeus/{was_instance_id}/JeusServer_{date}.log"
+        
+        # 2. 날짜 포맷 변환 (start, end)
+        try:
+            start = f"{date[:4]}.{date[4:6]}.{date[6:8]} {time_from[:2]}:{time_from[2:4]}:{time_from[4:6]}"
+            end = f"{date[:4]}.{date[4:6]}.{date[6:8]} {time_to[:2]}:{time_to[2:4]}:{time_to[4:6]}"
+        except IndexError:
+            return jsonify({'return_code': -1, 'message': 'Invalid date or time format'}), 400
+
+        # 3. Target Agent 찾기
+        target_agent = None
+        cand_agents = [
+            f"{host_id}_jeus_J",
+            f"{host_id}_webtob_J"
+        ]
+        
+        for cand in cand_agents:
+            agent = db.session.query(AgAgent).filter(AgAgent.agent_id == cand, AgAgent.approved_yn == 'YES').first()
+            if agent:
+                target_agent = agent
+                break
+                
+        if not target_agent:
+            agent = db.session.query(AgAgent).filter(AgAgent.agent_id.like(f"{host_id}_%_J"), AgAgent.approved_yn == 'YES').first()
+            if agent:
+                target_agent = agent
+
+        if not target_agent:
+            return jsonify({'return_code': -1, 'message': f'Approved agent not found for host: {host_id}'}), 400
+
+        # 4. Command Type 검증
+        command_type_id = "EXTRACT.LOG"
+        command_type = db.session.query(AgCommandType).filter_by(command_type_id=command_type_id).first()
+        if not command_type:
+            return jsonify({'return_code': -2, 'message': f'Invalid command_type_id: {command_type_id}'}), 400
+
+        # 5. Parameters (추가 파라미터 구성)
+        parameters = {
+            "file": file_name,
+            "start": start,
+            "end": end,
+            "keywords": keywords,
+            "dateRegex": "\\[(\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2})\\](?:\\s*\\[[^\\]]*\\]){1,2}",
+            "abbreviatePrefix": "\tat "
+        }
+        
+        new_command_id = get_uuid()
+
+        cmd_master = AgCommandMaster(
+            command_id=new_command_id,
+            ag_command_type=command_type,
+            periodic_type=PeriodicTypeEnum.IMMEDIATE,
+            additional_params=json.dumps(parameters),
+            publish_yn=YnEnum.YES,
+            cancel_yn=YnEnum.NO,
+            finished_yn=YnEnum.NO,
+            command_sender=TargetToSendEnum.SERVER,
+            result_receiver=TargetToSendEnum.SERVER
+        )
+        
+        cmd_master.ag_agent.append(target_agent)
+
+        try:
+            db.session.add(cmd_master)
+            db.session.commit()
+            return jsonify({'return_code': 1, 'message': 'OK', 'command_id': new_command_id}), 201
+        except Exception as e:
+            db.session.rollback()
+            logging.error(f'Error creating CommandMaster EXTRACT.LOG: {str(e)}')
+            return jsonify({'return_code': -1, 'message': 'Internal Server Error'}), 500
+
 appbuilder.add_api(CommandMasterApi)
