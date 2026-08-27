@@ -973,3 +973,112 @@ class AutorunResult:
         )
         db.session.execute(do_nothing_stmt)
         return 1, 'OK'
+
+    def log_2_knoledge(self):
+        from app.common import jsonl_to_markdown
+        from app.models.common import get_date
+        import json
+        
+        result = self.result
+        content = result.result_text
+        
+        if not content:
+            return 0, 'No data found'
+            
+        try:
+            jsonl_md = jsonl_to_markdown(content)
+        except Exception as e:
+            return -1, f"Markdown conversion failed: {str(e)}"
+            
+        # 파라미터 파싱
+        file_val = ''
+        start_val = ''
+        end_val = ''
+        keywords_val = ''
+        try:
+            if result.ag_command_detail and result.ag_command_detail.additional_params:
+                params = json.loads(result.ag_command_detail.additional_params)
+                file_val = params.get('file', '')
+                start_val = params.get('start', '')
+                end_val = params.get('end', '')
+                keywords_val = params.get('keywords', '')
+        except Exception:
+            pass
+
+        # DB에서 WAS 정보 조회
+        from app.models.was import MwWasInstance
+        host_id = result.host_id.lower() if result.host_id else ''
+        file_path = result.key_value2 or ''
+        # 파일경로에서 최하위 디렉토리명 추출
+        parts = file_path.rstrip('/').rstrip('\\').replace('\\', '/').split('/')
+        was_instance_id = parts[-1] if parts else ''
+        
+        was_name = ''
+        was_id = ''
+        located_host_id = ''
+        instance_id = ''
+        instance_host_id = ''
+        
+        if host_id and was_instance_id:
+            # 여러건이 나올 경우 첫번째 row만 취함
+            instance = db.session.query(MwWasInstance).filter_by(
+                host_id=host_id, was_instance_id=was_instance_id
+            ).first()
+            
+            if instance:
+                instance_id = instance.was_instance_id or ''
+                instance_host_id = instance.host_id or ''
+                if instance.mw_was:
+                    was_name = instance.mw_was.was_name or ''
+                    was_id = instance.mw_was.was_id or ''
+                    located_host_id = instance.mw_was.located_host_id or ''
+
+        # content_md 구성
+        markdown_text = f"""## Log 추출 기준
+- WAS 이름: {was_name} 
+- WAS Domain id : {was_id}
+- WAS 설치 서버 : {located_host_id}
+- WAS instance id : {instance_id}
+- WAS instance 실행 서버 : {instance_host_id}
+- Log 파일 : {file_val}
+- 발생 기간 : {start_val} ~ {end_val}
+- 추출 문자열 : {keywords_val}
+## Log 추출 내용
+{jsonl_md}"""
+
+        # content_name 구성
+        formatted_start = start_val
+        if len(start_val) >= 12:
+            try:
+                # ex) 202608271230 -> 2026.08.27 12:30
+                dt_str = start_val[:14].replace(' ', '').replace('-','').replace(':','')
+                if len(dt_str) >= 12:
+                    from datetime import datetime
+                    dt = datetime.strptime(dt_str[:12], "%Y%m%d%H%M")
+                    formatted_start = dt.strftime("%Y.%m.%d %H:%M")
+            except Exception:
+                pass
+
+        content_name = f"Log Extracted - {host_id} - {was_instance_id} - {formatted_start}"
+        search_tags = f"command_id={result.command_id}"
+        
+        insert_dict = dict(
+            content_name = content_name,
+            content_md = markdown_text,
+            search_tags = search_tags
+        )
+        
+        from app.sqls.monitor import insert_row
+        rtn, msg = insert_row('ut_md_content', insert_dict)
+        
+        # 지식유형-LOG추출 태그 맵핑
+        if rtn > 0:
+            from app.models.knowledge import UtTag, UtMdContent
+            target_tag = db.session.query(UtTag).filter_by(tag='지식유형-LOG추출').first()
+            if target_tag:
+                md_content = db.session.query(UtMdContent).get(rtn)
+                if md_content:
+                    md_content.ut_tag.append(target_tag)
+                    db.session.commit()
+
+        return rtn, msg
