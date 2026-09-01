@@ -999,8 +999,17 @@ class AutorunResult:
             if result.ag_command_detail and result.ag_command_detail.additional_params:
                 params = json.loads(result.ag_command_detail.additional_params)
                 file_val = params.get('file', '')
-                start_val = params.get('start', '')
-                end_val = params.get('end', '')
+                
+                target_date = params.get('targetDate', '')
+                if target_date:
+                    start_time = params.get('startTime', '')
+                    end_time = params.get('endTime', '')
+                    start_val = target_date + start_time
+                    end_val = target_date + end_time
+                else:
+                    start_val = params.get('start', '')
+                    end_val = params.get('end', '')
+                    
                 keywords_val = params.get('keywords', '')
         except Exception:
             pass

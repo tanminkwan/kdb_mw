@@ -31,7 +31,7 @@ Agent의 Command 실행 결과를 파싱하여 Markdown 형식으로 변환 후,
        - WAS instance id : {mw_was_instance.was_instance_id}
        - WAS instance 실행 서버 : {mw_was_instance.host_id}
        - Log 파일 : {additional_params 의 'file' 값}
-       - 발생 기간 : {additional_params 의 'start' 값} ~ {additional_params 의 'end' 값}
+       - 발생 기간 : {additional_params 의 시작 일시(targetDate+startTime 또는 start) 값} ~ {additional_params 의 종료 일시(targetDate+endTime 또는 end) 값}
        - 추출 문자열 : {additional_params 의 'keywords' 값}
        ## Log 추출 내용
        {jsonl_to_markdown 변환 결과값}
