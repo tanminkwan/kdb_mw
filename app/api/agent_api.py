@@ -21,6 +21,8 @@ from app.sqls.agent import (
 )
 from app.models.agent import AgCommandMaster, AgAgent, AgAgentGroup, AgCommandType
 from app.models.common import PeriodicTypeEnum, YnEnum, TargetToSendEnum, get_uuid
+from app.models.was import MwWasInstance
+from app.models.knowledge import UtTag
 
 class CommandApi(BaseApi):
 
@@ -388,6 +390,11 @@ class CommandMasterApi(BaseApi):
                         type: string
                       description: 검색할 키워드 목록 (선택) 기본값은 ["Exception", "Fail"] 입니다.
                       example: ["Exception", "Fail", "Error"]
+                    dateRegex:
+                      type: array
+                      items:
+                        type: object
+                      description: 날짜 포맷 정규식 배열 (선택). 입력하지 않을 경우 시스템에 등록된 태그에서 동적으로 조회합니다.
           responses:
             201:
               description: 생성 성공
@@ -425,6 +432,7 @@ class CommandMasterApi(BaseApi):
         time_to = data.get('time_to') # hhmmss
         file_name = data.get('file_name', data.get('file', ''))
         keywords = data.get('keywords', ["Exception", "Fail"])
+        date_regex_param = data.get('dateRegex')
 
         if not all([host_id, was_instance_id, date, time_from, time_to]):
             return jsonify({'return_code': -2, 'message': 'Missing required parameters (host_id, was_instance_id, date, time_from, time_to)'}), 400
@@ -437,14 +445,7 @@ class CommandMasterApi(BaseApi):
             else:
                 file_name = f"/log/jeus/{was_instance_id}/JeusServer_{date}.log"
         
-        # 2. 날짜 포맷 변환 (start, end)
-        try:
-            start = f"{date[:4]}.{date[4:6]}.{date[6:8]} {time_from[:2]}:{time_from[2:4]}:{time_from[4:6]}"
-            end = f"{date[:4]}.{date[4:6]}.{date[6:8]} {time_to[:2]}:{time_to[2:4]}:{time_to[4:6]}"
-        except IndexError:
-            return jsonify({'return_code': -1, 'message': 'Invalid date or time format'}), 400
-
-        # 3. Target Agent 찾기
+        # 2. Target Agent 찾기
         target_agent = None
         cand_agents = [
             f"{host_id}_jeus_J",
@@ -465,19 +466,43 @@ class CommandMasterApi(BaseApi):
         if not target_agent:
             return jsonify({'return_code': -1, 'message': f'Approved agent not found for host: {host_id}'}), 400
 
-        # 4. Command Type 검증
+        # 3. Command Type 검증
         command_type_id = "EXTRACT.LOG"
         command_type = db.session.query(AgCommandType).filter_by(command_type_id=command_type_id).first()
         if not command_type:
             return jsonify({'return_code': -2, 'message': f'Invalid command_type_id: {command_type_id}'}), 400
 
+        # 4. 로그 포맷 정규식 (dateRegex) 추출 로직
+        if date_regex_param:
+            date_regex_list = date_regex_param
+        else:
+            was_instance = db.session.query(MwWasInstance).filter_by(was_instance_id=was_instance_id).first()
+            if not was_instance:
+                return jsonify({'return_code': -2, 'message': 'Invalid was_instance_id'}), 400
+                
+            was_id = was_instance.was_id
+            tag_name = f"MS-{was_id[1:]}-{was_instance_id.split('_')[0]}"
+            
+            date_regex_list = []
+            ms_tag = db.session.query(UtTag).filter_by(tag=tag_name).first()
+            if ms_tag:
+                # 상위 tag 조회
+                for parent_tag in ms_tag.ut_parent_tag:
+                    if parent_tag.tag.startswith('log.format') and parent_tag.value1:
+                        try:
+                            date_regex_list.append(json.loads(parent_tag.value1))
+                        except Exception as e:
+                            logging.error(f'Error parsing log.format tag value1: {str(e)}')
+                            pass
+
         # 5. Parameters (추가 파라미터 구성)
         parameters = {
             "file": file_name,
-            "start": start,
-            "end": end,
+            "targetDate": date,
+            "startTime": time_from,
+            "endTime": time_to,
             "keywords": keywords,
-            "dateRegex": "\\[(\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2})\\](?:\\s*\\[[^\\]]*\\]){1,2}",
+            "dateRegex": date_regex_list,
             "abbreviatePrefix": "\tat "
         }
         

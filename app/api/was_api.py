@@ -256,23 +256,27 @@ class MwDiffDataApi(BaseApi):
     route_base = '/diff_data'
 
     @expose('/was/list', methods=['GET'])
-    @has_access
+    @protect(allow_browser_login=True)
     def get_was_diff_list(self):
         """WAS 변경 이력 리스트를 조회합니다.
         ---
         get:
           summary: WAS 변경 이력 리스트 조회
-          description: 일자 구간 및 WAS 도메인 ID를 기반으로 변경 이력 목록을 조회합니다.
+          description: >
+            일자 구간 및 WAS 도메인 ID를 기반으로 변경 이력 목록을 조회합니다.
+            시작일(start_date)과 종료일(end_date)이 모두 없으면 일자 조건 없이
+            가장 최근에 변경된 내역 1건만 조회합니다.
+            시작일 또는 종료일이 하나라도 지정되면 해당 구간의 전체 내역을 조회합니다.
           parameters:
           - name: start_date
             in: query
-            description: 시작일 (YYYY-MM-DD)
+            description: 시작일 (YYYY-MM-DD). 미지정 시 시작일 조건 없음
             required: false
             schema:
               type: string
           - name: end_date
             in: query
-            description: 종료일 (YYYY-MM-DD)
+            description: 종료일 (YYYY-MM-DD). 미지정 시 종료일 조건 없음
             required: false
             schema:
               type: string
@@ -315,8 +319,14 @@ class MwDiffDataApi(BaseApi):
         if domain_id:
             query = query.filter(MwWas.was_id == domain_id)
 
-        results = query.order_by(MwWaschangeHistory.create_on.desc()).all()
-        
+        query = query.order_by(MwWaschangeHistory.create_on.desc())
+
+        # 시작일/종료일이 모두 없으면 가장 최근 변경 내역 1건만 조회
+        if not start_date_str and not end_date_str:
+            query = query.limit(1)
+
+        results = query.all()
+
         return self.response(200, data=[
             {
                 'id': r.id,
@@ -326,23 +336,27 @@ class MwDiffDataApi(BaseApi):
         ])
 
     @expose('/web/list', methods=['GET'])
-    @has_access
+    @protect(allow_browser_login=True)
     def get_web_diff_list(self):
         """WEB 변경 이력 리스트를 조회합니다.
         ---
         get:
           summary: WEB 변경 이력 리스트 조회
-          description: 일자 구간 및 WEB 호스트 ID를 기반으로 변경 이력 목록을 조회합니다.
+          description: >
+            일자 구간 및 WEB 호스트 ID를 기반으로 변경 이력 목록을 조회합니다.
+            시작일(start_date)과 종료일(end_date)이 모두 없으면 일자 조건 없이
+            가장 최근에 변경된 내역 1건만 조회합니다.
+            시작일 또는 종료일이 하나라도 지정되면 해당 구간의 전체 내역을 조회합니다.
           parameters:
           - name: start_date
             in: query
-            description: 시작일 (YYYY-MM-DD)
+            description: 시작일 (YYYY-MM-DD). 미지정 시 시작일 조건 없음
             required: false
             schema:
               type: string
           - name: end_date
             in: query
-            description: 종료일 (YYYY-MM-DD)
+            description: 종료일 (YYYY-MM-DD). 미지정 시 종료일 조건 없음
             required: false
             schema:
               type: string
@@ -386,8 +400,14 @@ class MwDiffDataApi(BaseApi):
         if host_id:
             query = query.filter(MwWeb.host_id == host_id)
 
-        results = query.order_by(MwWebchangeHistory.create_on.desc()).all()
-        
+        query = query.order_by(MwWebchangeHistory.create_on.desc())
+
+        # 시작일/종료일이 모두 없으면 가장 최근 변경 내역 1건만 조회
+        if not start_date_str and not end_date_str:
+            query = query.limit(1)
+
+        results = query.all()
+
         return self.response(200, data=[
             {
                 'id': r.id,
@@ -398,7 +418,7 @@ class MwDiffDataApi(BaseApi):
         ])
 
     @expose('/was/<id>', methods=['GET'])
-    @has_access
+    @protect(allow_browser_login=True)
     def get_was_diff_data(self, id):
         """WAS 변경 이력 데이터를 JSON으로 반환합니다. (Unified Diff 포함)
         ---
@@ -460,7 +480,7 @@ class MwDiffDataApi(BaseApi):
         )
 
     @expose('/web/<id>', methods=['GET'])
-    @has_access
+    @protect(allow_browser_login=True)
     def get_web_diff_data(self, id):
         """WEB 변경 이력 데이터를 JSON으로 반환합니다. (Unified Diff 포함)
         ---

@@ -23,19 +23,33 @@
 - `date`가 오늘 날짜와 **같을 경우**: `/log/jeus/{was_instance_id}/JeusServer.log`
 - `date`가 오늘 날짜와 **다를 경우**: `/log/jeus/{was_instance_id}/JeusServer_{date}.log`
 
-### 3.2. 조회 기간 설정 (start, end)
-전달받은 `date`와 `time_from`, `time_to` 값을 조합하여 `yyyy.mm.dd hh:mi:ss` 포맷의 문자열을 생성합니다.
-- **start**: `date` + `time_from` => 예) `2026.08.25 14:04:39`
-- **end**: `date` + `time_to` => 예) `2026.08.25 15:00:00`
+### 3.2. 조회 기간 설정 (targetDate, startTime, endTime)
+전달받은 `date`와 `time_from`, `time_to` 파라미터 값을 변환 없이 그대로 사용합니다.
+- **targetDate**: 전달받은 `date` 값 (예: `20260825`)
+- **startTime**: 전달받은 `time_from` 값 (예: `140439`)
+- **endTime**: 전달받은 `time_to` 값 (예: `140443`)
 
-### 3.3. 대상 Agent 자동 선정
+### 3.3. 로그 포맷 정규식 (dateRegex) 추출 로직
+`dateRegex` 파라미터는 `ut_tag` 테이블을 조회하여 동적으로 리스트를 구성합니다.
+- **조회 조건**: `tag` 값이 `MS-{해당 was_id 의 맨 앞한자리를 뺀 값}-{해당 was_instance_id 의 '_'가 나타나기 전 값}`과 일치하는 데이터 조회
+- **추출 대상**: 위 조건으로 조회했을 때 상위 태그(parent tag) 중에서, `tag` 값이 `log.format`으로 시작하는 데이터들의 `value1` 값을 리스트 형태로 추출합니다. (조건을 만족하는 상위 태그가 여러 개일 수 있으므로 배열 형태로 구성)
+- **추출된 value1 예시**:
+  ```json
+  {
+    "regex": "\\[(\\d{4}\\.\\d{2}\\.\\d{2}) \\[[\\w-]+\\] (\\d{2}:\\d{2}:\\d{2})\\]",
+    "dateFormat": "yyyy.MM.dd",
+    "timeFormat": "HH:mm:ss"
+  }
+  ```
+
+### 3.4. 대상 Agent 자동 선정
 명령을 수행할 에이전트는 해당 `host_id`를 기반으로 다음 우선순위에 따라 승인된(Approved) 에이전트를 검색하여 매핑합니다.
 1. 1순위: `{host_id}_jeus_J`
 2. 2순위: `{host_id}_webtob_J`
 3. 3순위: `{host_id}_*_J` (위 조건에 맞는 에이전트가 없을 경우, `_J`로 끝나는 해당 서버의 모든 승인된 에이전트 중 1개 할당)
 - **예외 처리**: 조건을 만족하는 에이전트가 전혀 없을 경우 Error (HTTP 400) 반환.
 
-### 3.4. Command Master 테이블 등록 설정
+### 3.5. Command Master 테이블 등록 설정
 조합된 데이터를 바탕으로 `ag_command_master` 테이블에 새로운 레코드를 인서트합니다.
 - **실행 구분 (periodic_type)**: `IMMEDIATE` (즉시 실행)
 - **Command Type ID**: `EXTRACT.LOG`
@@ -43,11 +57,22 @@
   ```json
   {
     "file": "{자동 생성 또는 입력받은 파일명}",
-    "start": "{start 변환값}",
-    "end": "{end 변환값}",
+    "targetDate": "{date 파라미터 값}",
+    "startTime": "{time_from 파라미터 값}",
+    "endTime": "{time_to 파라미터 값}",
+    "dateRegex": [
+      {
+        "regex": "\\[(\\d{4}\\.\\d{2}\\.\\d{2}) \\[[\\w-]+\\] (\\d{2}:\\d{2}:\\d{2})\\]",
+        "dateFormat": "yyyy.MM.dd",
+        "timeFormat": "HH:mm:ss"
+      },
+      {
+        "regex": "\\[(\\d{2}:\\d{2}:\\d{2})\\]",
+        "timeFormat": "HH:mm:ss"
+      }
+    ],
     "keywords": ["Exception", "Fail"],
-    "dateRegex": "\\[(\\d{4}\\.\\d{2}\\.\\d{2} \\d{2}:\\d{2}:\\d{2})\\](?:\\s*\\[[^\\]]*\\]){1,2}",
     "abbreviatePrefix": "\tat "
   }
-  *참고: `keywords`에는 사용자가 입력한 배열이 지정되며, 값이 없을 경우 기본값으로 `["Exception", "Fail"]`이 할당됩니다.*
   ```
+  *참고: `keywords`에는 사용자가 입력한 배열이 지정되며, 값이 없을 경우 기본값으로 `["Exception", "Fail"]`이 할당됩니다.*
