@@ -288,20 +288,31 @@ class MwDiffDataApi(BaseApi):
               type: string
           responses:
             200:
-              description: 변경 이력 목록 (JSON)
+              description: 변경 이력 목록. 결과 배열은 data 키로 감싸서 반환됩니다.
               content:
                 application/json:
                   schema:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        domain_id:
-                          type: string
-                        create_on:
-                          type: string
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                              description: 변경 이력(mw_was_change_history) 레코드 ID
+                            domain_id:
+                              type: string
+                              description: WAS 도메인 ID
+                            create_on:
+                              type: string
+                              description: 변경 일시 (YYYY-MM-DD HH:MM:SS)
+                    example:
+                      data:
+                      - id: 7
+                        domain_id: PICI_Domain
+                        create_on: '2026-02-23 14:40:00'
         """
         from app.models.was import MwWas, MwWaschangeHistory
         
@@ -368,22 +379,35 @@ class MwDiffDataApi(BaseApi):
               type: string
           responses:
             200:
-              description: 변경 이력 목록 (JSON)
+              description: 변경 이력 목록. 결과 배열은 data 키로 감싸서 반환됩니다.
               content:
                 application/json:
                   schema:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        host_id:
-                          type: string
-                        port:
-                          type: integer
-                        create_on:
-                          type: string
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                              description: 변경 이력(mw_web_change_history) 레코드 ID
+                            host_id:
+                              type: string
+                              description: WEB 서버 Host ID
+                            port:
+                              type: integer
+                              description: WEB 서비스 Port
+                            create_on:
+                              type: string
+                              description: 변경 일시 (YYYY-MM-DD HH:MM:SS)
+                    example:
+                      data:
+                      - id: 3
+                        host_id: hennry-PN40
+                        port: 8080
+                        create_on: '2026-02-23 14:40:00'
         """
         from app.models.was import MwWeb, MwWebchangeHistory
         
