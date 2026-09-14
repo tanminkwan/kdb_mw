@@ -1,5 +1,6 @@
 import logging
 import json
+import re
 import sys
 from io import BytesIO
 from datetime import datetime, timedelta
@@ -216,15 +217,28 @@ class AgentApi(BaseApi):
 appbuilder.add_api(CommandApi)
 appbuilder.add_api(AgentApi)
 
+# JSON 규격에서 백슬래시 뒤에 올 수 있는 문자는 " \\ / b f n r t u 뿐이다.
+# 그 외 문자가 오면 "Invalid \\escape" 로 파싱이 실패하는데,
+# Windows 경로({"path":"C:\\temp\\log"} 를 의도한 {"path":"C:\temp\log"}) 처럼
+# 이스케이프가 빠진 채 저장되는 경우가 많다.
+# 이런 백슬래시를 찾아 \\ 로 바꿔주기 위한 패턴이다.
+INVALID_JSON_ESCAPE = re.compile(r'\\(?!["\\/bfnrtu])')
+
+
 def parse_additional_params(raw_params):
     """additional_params 컬럼 값을 응답에 실을 형태로 변환한다.
 
-    ag_command_detail.additional_params 는 Text 컬럼이라 두 가지 형태가 섞여 들어온다.
-      1) JSON 문자열  : 예) '{"file": "/log/jeus/...", "keywords": ["Exception"]}'
-      2) 일반 문자열  : 예) 'nginx restart' 처럼 명령어 타입이 자유롭게 쓰는 값
+    ag_command_detail.additional_params 는 Text 컬럼이라 여러 형태가 섞여 들어온다.
+      1) 정상 JSON 문자열 : 예) '{"file": "/log/jeus/...", "keywords": ["Exception"]}'
+      2) 깨진 JSON 문자열 : 예) '{"a":"ttt\iii"}'  (\i 는 JSON 이 허용하지 않는 이스케이프)
+      3) 일반 문자열      : 예) 'nginx restart' 처럼 명령어 타입이 자유롭게 쓰는 값
 
-    1) 인 경우 호출자가 다시 json.loads 하지 않도록 dict/list 로 풀어서 반환하고,
-    2) 인 경우에는 원본 문자열을 그대로 반환한다.
+    1), 2) 는 호출자가 다시 json.loads 하지 않도록 dict/list 로 풀어서 반환하고,
+    3) 은 원본 문자열을 그대로 반환한다.
+
+    2) 를 살리는 이유는 에이전트/사용자가 Windows 경로나 정규식을 넣을 때
+    백슬래시를 이스케이프하지 않고 저장하는 사례가 잦기 때문이다.
+    이 경우 백슬래시를 살린 채(\i -> 값에 그대로 \i 로 남는다) 파싱한다.
 
     주의: json.loads 는 '123', 'true', '"abc"' 같은 스칼라 문자열도 성공하지만,
     이런 값은 원래 의미가 "문자열 파라미터" 이므로 dict/list 일 때만 파싱 결과를
@@ -234,17 +248,30 @@ def parse_additional_params(raw_params):
     if not raw_params:
         return raw_params
 
-    try:
-        parsed = json.loads(raw_params)
-    except (ValueError, TypeError):
-        # JSON 이 아닌 평범한 문자열 -> 원본 유지
-        return raw_params
+    # 1차 : 있는 그대로 파싱
+    parsed = try_json_loads(raw_params)
+
+    # 2차 : JSON object/array 로 보이는데 1차가 실패했다면
+    #       잘못된 백슬래시 이스케이프를 보정한 뒤 다시 파싱해 본다.
+    if parsed is None:
+        stripped = raw_params.strip()
+        if stripped[:1] in ('{', '['):
+            parsed = try_json_loads(INVALID_JSON_ESCAPE.sub(r'\\\\', raw_params))
 
     # JSON object / array 만 구조화된 값으로 간주한다.
     if isinstance(parsed, (dict, list)):
         return parsed
 
+    # JSON 이 아닌 평범한 문자열(또는 스칼라) -> 원본 유지
     return raw_params
+
+
+def try_json_loads(text):
+    """json.loads 를 시도하고 실패하면 None 을 반환한다."""
+    try:
+        return json.loads(text)
+    except (ValueError, TypeError):
+        return None
 
 
 class CommandMasterApi(BaseApi):
@@ -653,6 +680,7 @@ class CommandMasterApi(BaseApi):
                               ag_command_detail.additional_params.
                               저장된 값이 JSON(object/array) 형태이면 파싱된 JSON 으로,
                               그 외 일반 문자열이면 문자열 그대로 반환한다.
+                              백슬래시 이스케이프가 깨진 JSON 도 보정해서 파싱한다.
                             oneOf:
                             - type: object
                             - type: array
