@@ -100,6 +100,11 @@ sequenceDiagram
     - 에이전트가 작업을 마치면 결과 API(`POST /api/v1/command/result`)를 호출합니다.
     - 서버는 `AgResult`를 생성하고, 연결된 `AgCommandDetail`의 상태를 `COMPLITED` 또는 `FAILED`로 업데이트합니다.
 
+4.  **결과 조회 (Result Retrieval)**:
+    - 외부 시스템이나 UI는 조회 API(`GET /api/v1/command_master/result`)로 실행 결과를 확인합니다.
+    - `command_id` / `agent_id` / `host_id` 중 최소 하나를 조건으로 하며, 여러 건이면 `create_on` 기준 최근 1건을 반환합니다.
+    - 상세 명세는 [SPEC 022](SPEC_022_command_result_api.md) 및 [HOWTO 012](HOWTO_012_command_master_api.md) 참고.
+
 ---
 
 ## 5. 기술적 특징 및 주의사항

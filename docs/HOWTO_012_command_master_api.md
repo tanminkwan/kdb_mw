@@ -1,12 +1,19 @@
 # HOWTO: CommandMasterApi 사용 가이드
 
 ## 1. 개요
-이 문서는 `CommandMasterApi`를 사용하여 외부 시스템 등에서 REST API로 즉시 실행 가능한 명령어(`CommandMaster`) 데이터를 생성하는 방법을 안내합니다.
+이 문서는 `CommandMasterApi`를 사용하여 외부 시스템 등에서 REST API로 즉시 실행 가능한 명령어(`CommandMaster`) 데이터를 생성하고, 그 **실행 결과를 조회**하는 방법을 안내합니다.
 
 ## 2. 엔드포인트 정보
-* **경로**: `/api/v1/command_master/create`
-* **메서드**: `POST`
+
+| 경로 | 메서드 | 용도 |
+|---|---|---|
+| `/api/v1/command_master/create` | `POST` | 즉시 실행 명령 생성 |
+| `/api/v1/command_master/extract_log` | `POST` | WAS 에러 로그 추출 명령 생성 ([SPEC 021](SPEC_021_extract_log_api.md)) |
+| `/api/v1/command_master/result` | `GET` | 명령 실행 결과 조회 ([SPEC 022](SPEC_022_command_result_api.md)) |
+
 * **인증 방식**: Session 및 API Key (Bearer 토큰 지원)
+
+이 문서의 4~7장은 `create`를, 8장은 `result`를 다룹니다.
 
 ## 3. API Key 인증 방법
 API 호출 시 HTTP Header의 `Authorization` 필드에 Bearer 토큰(API Key)을 포함하여 전달해야 합니다.
@@ -81,3 +88,108 @@ API를 통해 요청된 데이터는 `AgCommandMaster` 테이블에 기록되며
 * `cancel_yn` / `finished_yn`: `NO`
 * `command_sender` / `result_receiver`: `SERVER`
 * 파라미터로 지정된 대상에 따라 `ag_agent` 및 `ag_agent_group` 연결 매핑 자동 생성 (SQLAlchemy).
+
+## 8. 명령 실행 결과 조회 (`GET /result`)
+에이전트가 명령을 수행하고 보고한 결과(`ag_result`)를 조회합니다.
+
+### 8.1. 요청
+`command_id` / `agent_id` / `host_id` 중 **최소 하나**를 Query String으로 전달합니다.
+조건이 하나도 없으면 HTTP 400을 반환합니다.
+
+```bash
+# 명령 ID로 조회
+curl -X GET "http://<SERVER_IP>:<PORT>/api/v1/command_master/result?command_id=956065ee17ab" \
+     -H "Authorization: Bearer <YOUR_API_KEY>"
+
+# 에이전트의 가장 최근 결과 조회
+curl -X GET "http://<SERVER_IP>:<PORT>/api/v1/command_master/result?agent_id=hennry-PN40_hennry_J" \
+     -H "Authorization: Bearer <YOUR_API_KEY>"
+```
+
+| 파라미터 | 필수 | 설명 |
+|---|---|---|
+| `command_id` | 선택 | 명령어 ID (`create` 응답으로 받은 값) |
+| `agent_id` | 선택 | 에이전트 ID |
+| `host_id` | 선택 | HOST 이름 |
+
+여러 조건을 함께 주면 AND로 결합됩니다.
+**조건에 맞는 결과가 여러 건이면 `create_on` 기준 가장 최근 1건만** 반환합니다.
+
+### 8.2. 응답 (HTTP 200)
+`ag_result`의 결과 정보와 함께, `ag_command_detail`에서 조인한
+`command_type_id` / `command_class` / `additional_params`를 반환합니다.
+
+```json
+{
+  "return_code": 1,
+  "message": "OK",
+  "data": {
+    "id": 395,
+    "command_id": "03c3fb4eac3b",
+    "agent_id": "hennry-PN40_hennry_J",
+    "host_id": "hennry-PN40",
+    "repetition_seq": 1,
+    "result_status": "COMPLITED",
+    "result_text": {"domain": "www.kdb.co.kr", "certs": []},
+    "result_message": "Inserted into mw_etc_ssl_domain",
+    "create_on": "2026-08-07 10:58:26",
+    "complited_date": "2026-08-07 10:58:26",
+    "command_type_id": "CALL.GET_SSL_CERTI",
+    "command_class": "ExeAgentFunc",
+    "additional_params": {"domain_name": "www.kdb.co.kr", "port": "443"}
+  }
+}
+```
+
+조회된 결과가 없으면 에러가 아니라 `data: null`로 응답합니다.
+```json
+{ "return_code": 0, "message": "No result found", "data": null }
+```
+
+조회 조건을 하나도 주지 않으면 HTTP 400입니다.
+```json
+{ "return_code": -2, "message": "At least one of command_id, agent_id, host_id is required" }
+```
+
+### 8.3. `result_text` / `additional_params` 의 자료형
+두 항목은 DB에 Text로 저장되며 JSON과 일반 문자열이 섞여 들어옵니다.
+**저장된 값이 JSON(object/array)이면 파싱된 JSON으로, 그 외에는 문자열 그대로** 반환합니다.
+호출하는 쪽에서 다시 `json.loads`를 할 필요가 없습니다.
+
+```json
+// JSON 으로 저장된 경우 -> object
+"additional_params": {"domain_name": "www.kdb.co.kr", "port": "443"}
+
+// 일반 문자열로 저장된 경우 -> string
+"additional_params": "/home/hennry/projects/mqtt/DESIGN.md"
+```
+
+자료형이 고정되지 않으므로 클라이언트는 두 경우를 모두 처리해야 합니다.
+```python
+params = data['additional_params']
+if isinstance(params, dict):
+    file_path = params.get('file')
+else:
+    file_path = params            # 평문 문자열
+```
+
+백슬래시 이스케이프가 깨진 JSON(예: `{"a":"ttt\iii"}`)도 보정해서 파싱합니다.
+다만 `\t`, `\n`처럼 JSON이 정의한 이스케이프는 규격대로 해석되므로,
+Windows 경로는 `C:\\temp\\log`와 같이 이스케이프해서 저장해야 합니다.
+자세한 규칙은 [SPEC 022](SPEC_022_command_result_api.md)를 참고하세요.
+
+### 8.4. 사용 예시: 명령 등록 후 결과 확인
+```bash
+# 1) 파일 읽기 명령 등록
+CID=$(curl -s -X POST "http://<SERVER_IP>:<PORT>/api/v1/command_master/create" \
+  -H "Authorization: Bearer <YOUR_API_KEY>" -H "Content-Type: application/json" \
+  -d '{"command_type_id":"COMMON.READFILE",
+       "target_agent_id":["hennry-PN40_hennry_J"],
+       "parameters":"/home/hennry/projects/mqtt/DESIGN.md"}' | jq -r .command_id)
+
+# 2) 에이전트가 수행을 마칠 때까지 대기 후 결과 조회
+curl -s "http://<SERVER_IP>:<PORT>/api/v1/command_master/result?command_id=$CID" \
+  -H "Authorization: Bearer <YOUR_API_KEY>" | jq .data.result_text
+```
+명령 등록 직후에는 에이전트가 아직 결과를 보고하지 않아 `return_code: 0`이 반환될 수 있습니다.
+결과가 생길 때까지 폴링하거나, 에이전트의 명령 수신 주기를 감안해 조회하시기 바랍니다.
