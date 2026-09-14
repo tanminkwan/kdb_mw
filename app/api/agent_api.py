@@ -225,13 +225,14 @@ appbuilder.add_api(AgentApi)
 INVALID_JSON_ESCAPE = re.compile(r'\\(?!["\\/bfnrtu])')
 
 
-def parse_additional_params(raw_params):
-    """additional_params 컬럼 값을 응답에 실을 형태로 변환한다.
+def parse_json_text(raw_text):
+    """Text 컬럼 값이 JSON 이면 파싱해서, 아니면 원본 문자열 그대로 반환한다.
 
-    ag_command_detail.additional_params 는 Text 컬럼이라 여러 형태가 섞여 들어온다.
-      1) 정상 JSON 문자열 : 예) '{"file": "/log/jeus/...", "keywords": ["Exception"]}'
+    ag_result.result_text 와 ag_command_detail.additional_params 에 함께 쓴다.
+    두 컬럼 모두 Text 라 여러 형태가 섞여 들어온다.
+      1) 정상 JSON 문자열 : 예) '{"domain":"www.kdb.co.kr","certs":[...]}'
       2) 깨진 JSON 문자열 : 예) '{"a":"ttt\iii"}'  (\i 는 JSON 이 허용하지 않는 이스케이프)
-      3) 일반 문자열      : 예) 'nginx restart' 처럼 명령어 타입이 자유롭게 쓰는 값
+      3) 일반 문자열      : 예) 'nginx restart', 추출된 로그 본문 등
 
     1), 2) 는 호출자가 다시 json.loads 하지 않도록 dict/list 로 풀어서 반환하고,
     3) 은 원본 문자열을 그대로 반환한다.
@@ -241,29 +242,30 @@ def parse_additional_params(raw_params):
     이 경우 백슬래시를 살린 채(\i -> 값에 그대로 \i 로 남는다) 파싱한다.
 
     주의: json.loads 는 '123', 'true', '"abc"' 같은 스칼라 문자열도 성공하지만,
-    이런 값은 원래 의미가 "문자열 파라미터" 이므로 dict/list 일 때만 파싱 결과를
+    이런 값은 원래 의미가 "문자열 값" 이므로 dict/list 일 때만 파싱 결과를
     채택하고 나머지는 원본 문자열을 유지한다.
     """
     # None 또는 빈 문자열은 파싱할 것이 없으므로 그대로 돌려준다.
-    if not raw_params:
-        return raw_params
+    if not raw_text:
+        return raw_text
 
     # 1차 : 있는 그대로 파싱
-    parsed = try_json_loads(raw_params)
+    parsed = try_json_loads(raw_text)
 
     # 2차 : JSON object/array 로 보이는데 1차가 실패했다면
     #       잘못된 백슬래시 이스케이프를 보정한 뒤 다시 파싱해 본다.
+    #       (로그 본문 같은 일반 텍스트는 { [ 로 시작하지 않으므로 이 경로를 타지 않는다)
     if parsed is None:
-        stripped = raw_params.strip()
+        stripped = raw_text.strip()
         if stripped[:1] in ('{', '['):
-            parsed = try_json_loads(INVALID_JSON_ESCAPE.sub(r'\\\\', raw_params))
+            parsed = try_json_loads(INVALID_JSON_ESCAPE.sub(r'\\\\', raw_text))
 
     # JSON object / array 만 구조화된 값으로 간주한다.
     if isinstance(parsed, (dict, list)):
         return parsed
 
     # JSON 이 아닌 평범한 문자열(또는 스칼라) -> 원본 유지
-    return raw_params
+    return raw_text
 
 
 def try_json_loads(text):
@@ -655,7 +657,15 @@ class CommandMasterApi(BaseApi):
                           key_value2:
                             type: string
                           result_text:
-                            type: string
+                            description: >
+                              실행 결과 본문. 저장된 값이 JSON(object/array) 형태이면
+                              파싱된 JSON 으로, 그 외 일반 텍스트면 문자열 그대로 반환한다.
+                              백슬래시 이스케이프가 깨진 JSON 도 보정해서 파싱한다.
+                            oneOf:
+                            - type: object
+                            - type: array
+                            - type: string
+                            nullable: true
                           result_hash:
                             type: string
                           result_status:
@@ -740,7 +750,9 @@ class CommandMasterApi(BaseApi):
             'host_id': result.host_id,
             'key_value1': result.key_value1,
             'key_value2': result.key_value2,
-            'result_text': result.result_text,
+            # result_text 도 agent 가 수집 결과를 JSON 으로 올리는 경우가 많다.
+            # JSON 이면 파싱해서 내려주고, 로그 본문 같은 일반 텍스트면 원본 그대로 둔다.
+            'result_text': parse_json_text(result.result_text),
             'result_hash': result.result_hash,
             'result_status': result.result_status.name if result.result_status else None,
             'result_message': result.result_message,
@@ -749,8 +761,8 @@ class CommandMasterApi(BaseApi):
             'command_type_id': detail.command_type_id if detail else None,
             'command_class': detail.command_class.name if detail and detail.command_class else None,
             # additional_params 는 JSON 문자열일 수도, 일반 문자열일 수도 있다.
-            # JSON 이면 파싱해서 JSON 그대로 내려준다. (parse_additional_params 참고)
-            'additional_params': parse_additional_params(detail.additional_params) if detail else None
+            # JSON 이면 파싱해서 JSON 그대로 내려준다. (parse_json_text 참고)
+            'additional_params': parse_json_text(detail.additional_params) if detail else None
         }
 
         return jsonify({'return_code': 1, 'message': 'OK', 'data': data}), 200
