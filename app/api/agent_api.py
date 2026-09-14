@@ -19,7 +19,8 @@ from app.sqls.agent import (
     get_latest_file,
     update_expiration
 )
-from app.models.agent import AgCommandMaster, AgAgent, AgAgentGroup, AgCommandType
+from app.models.agent import AgCommandMaster, AgAgent, AgAgentGroup, AgCommandType\
+    , AgCommandDetail, AgResult
 from app.models.common import PeriodicTypeEnum, YnEnum, TargetToSendEnum, get_uuid
 from app.models.was import MwWasInstance
 from app.models.knowledge import UtTag
@@ -214,6 +215,37 @@ class AgentApi(BaseApi):
 
 appbuilder.add_api(CommandApi)
 appbuilder.add_api(AgentApi)
+
+def parse_additional_params(raw_params):
+    """additional_params 컬럼 값을 응답에 실을 형태로 변환한다.
+
+    ag_command_detail.additional_params 는 Text 컬럼이라 두 가지 형태가 섞여 들어온다.
+      1) JSON 문자열  : 예) '{"file": "/log/jeus/...", "keywords": ["Exception"]}'
+      2) 일반 문자열  : 예) 'nginx restart' 처럼 명령어 타입이 자유롭게 쓰는 값
+
+    1) 인 경우 호출자가 다시 json.loads 하지 않도록 dict/list 로 풀어서 반환하고,
+    2) 인 경우에는 원본 문자열을 그대로 반환한다.
+
+    주의: json.loads 는 '123', 'true', '"abc"' 같은 스칼라 문자열도 성공하지만,
+    이런 값은 원래 의미가 "문자열 파라미터" 이므로 dict/list 일 때만 파싱 결과를
+    채택하고 나머지는 원본 문자열을 유지한다.
+    """
+    # None 또는 빈 문자열은 파싱할 것이 없으므로 그대로 돌려준다.
+    if not raw_params:
+        return raw_params
+
+    try:
+        parsed = json.loads(raw_params)
+    except (ValueError, TypeError):
+        # JSON 이 아닌 평범한 문자열 -> 원본 유지
+        return raw_params
+
+    # JSON object / array 만 구조화된 값으로 간주한다.
+    if isinstance(parsed, (dict, list)):
+        return parsed
+
+    return raw_params
+
 
 class CommandMasterApi(BaseApi):
 
@@ -530,5 +562,169 @@ class CommandMasterApi(BaseApi):
             db.session.rollback()
             logging.error(f'Error creating CommandMaster EXTRACT.LOG: {str(e)}')
             return jsonify({'return_code': -1, 'message': 'Internal Server Error'}), 500
+
+    @expose('/result', methods=['GET'])
+    @protect(allow_browser_login=True)
+    def result(self):
+        """Command 실행 결과(ag_result) 최근 1건을 조회합니다.
+        ---
+        get:
+          summary: Command 실행 결과 조회
+          description: >
+            command_id / agent_id / host_id 중 하나 이상을 조건으로 실행 결과(ag_result)를 조회합니다.
+            조건에 해당하는 결과가 여러 건인 경우 create_on 기준 가장 최근 1건만 반환합니다.
+            해당 결과의 Command Detail(ag_command_detail) 정보인 command_type_id, command_class,
+            additional_params 도 함께 반환합니다.
+          parameters:
+          - name: command_id
+            in: query
+            description: 명령어 ID (ag_command_master.command_id)
+            required: false
+            schema:
+              type: string
+          - name: agent_id
+            in: query
+            description: 에이전트 ID
+            required: false
+            schema:
+              type: string
+          - name: host_id
+            in: query
+            description: HOST 이름
+            required: false
+            schema:
+              type: string
+          responses:
+            200:
+              description: 조회 성공
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      return_code:
+                        type: integer
+                        example: 1
+                      message:
+                        type: string
+                        example: "OK"
+                      data:
+                        type: object
+                        nullable: true
+                        description: 조회된 결과. 조건에 맞는 결과가 없으면 null
+                        properties:
+                          id:
+                            type: integer
+                          command_id:
+                            type: string
+                          agent_id:
+                            type: string
+                          repetition_seq:
+                            type: integer
+                          host_id:
+                            type: string
+                          key_value1:
+                            type: string
+                          key_value2:
+                            type: string
+                          result_text:
+                            type: string
+                          result_hash:
+                            type: string
+                          result_status:
+                            type: string
+                          result_message:
+                            type: string
+                          create_on:
+                            type: string
+                            description: 결과 생성 일시 (YYYY-MM-DD HH:MM:SS)
+                          complited_date:
+                            type: string
+                            nullable: true
+                            description: 완료 일시 (YYYY-MM-DD HH:MM:SS)
+                          command_type_id:
+                            type: string
+                            description: ag_command_detail.command_type_id
+                          command_class:
+                            type: string
+                            description: ag_command_detail.command_class
+                          additional_params:
+                            description: >
+                              ag_command_detail.additional_params.
+                              저장된 값이 JSON(object/array) 형태이면 파싱된 JSON 으로,
+                              그 외 일반 문자열이면 문자열 그대로 반환한다.
+                            oneOf:
+                            - type: object
+                            - type: array
+                            - type: string
+                            nullable: true
+            400:
+              description: 조회 조건 누락
+        """
+        # 1. 조회 조건 파싱
+        #    셋 다 선택 항목이지만 전체 조회를 막기 위해 최소 1개는 반드시 있어야 한다.
+        command_id = request.args.get('command_id')
+        agent_id = request.args.get('agent_id')
+        host_id = request.args.get('host_id')
+
+        if not (command_id or agent_id or host_id):
+            return jsonify({'return_code': -2, 'message': 'At least one of command_id, agent_id, host_id is required'}), 400
+
+        # 2. ag_result 와 ag_command_detail 조인
+        #    두 테이블은 (command_id, agent_id, repetition_seq) 조합이 연결 키다.
+        #    모델에 선언된 AgResult.ag_command_detail relationship 대신 명시적 조인을 쓰는 이유는
+        #    models/agent.py 의 ForeignKeyConstraint 가 __table_args__ 에 등록되지 않아
+        #    실제 테이블에 붙지 않기 때문이다.
+        #    결과만 있고 detail 이 없는 데이터도 조회되도록 outer join 을 사용한다.
+        query = db.session.query(AgResult, AgCommandDetail)\
+            .outerjoin(AgCommandDetail,
+                       (AgCommandDetail.command_id == AgResult.command_id)
+                       & (AgCommandDetail.agent_id == AgResult.agent_id)
+                       & (AgCommandDetail.repetition_seq == AgResult.repetition_seq))
+
+        # 3. 입력된 조건만 AND 로 붙인다. (미입력 항목은 조건에서 제외)
+        if command_id:
+            query = query.filter(AgResult.command_id == command_id)
+        if agent_id:
+            query = query.filter(AgResult.agent_id == agent_id)
+        if host_id:
+            query = query.filter(AgResult.host_id == host_id)
+
+        # 4. 여러 건이면 create_on 기준 최근 1건만 반환한다.
+        #    create_on 이 같은 초에 여러 건 쌓이는 경우를 대비해 id 역순을 2차 정렬로 둔다.
+        rec = query.order_by(AgResult.create_on.desc(), AgResult.id.desc()).first()
+
+        # 조건에 맞는 결과가 없는 것은 에러가 아니므로 200 + data:None 으로 응답한다.
+        if not rec:
+            return jsonify({'return_code': 0, 'message': 'No result found', 'data': None}), 200
+
+        result, detail = rec
+
+        # 5. 응답 구성
+        #    - Enum 컬럼(result_status, command_class)은 JSON 직렬화가 안 되므로 .name 으로 변환
+        #    - DateTime 컬럼은 'YYYY-MM-DD HH:MM:SS' 문자열로 변환
+        #    - detail 이 없을 수 있으므로(outer join) command_* 항목은 None 방어
+        data = {
+            'id': result.id,
+            'command_id': result.command_id,
+            'agent_id': result.agent_id,
+            'repetition_seq': result.repetition_seq,
+            'host_id': result.host_id,
+            'key_value1': result.key_value1,
+            'key_value2': result.key_value2,
+            'result_text': result.result_text,
+            'result_hash': result.result_hash,
+            'result_status': result.result_status.name if result.result_status else None,
+            'result_message': result.result_message,
+            'create_on': result.create_on.strftime("%Y-%m-%d %H:%M:%S") if result.create_on else None,
+            'complited_date': result.complited_date.strftime("%Y-%m-%d %H:%M:%S") if result.complited_date else None,
+            'command_type_id': detail.command_type_id if detail else None,
+            'command_class': detail.command_class.name if detail and detail.command_class else None,
+            # additional_params 는 JSON 문자열일 수도, 일반 문자열일 수도 있다.
+            # JSON 이면 파싱해서 JSON 그대로 내려준다. (parse_additional_params 참고)
+            'additional_params': parse_additional_params(detail.additional_params) if detail else None
+        }
+
+        return jsonify({'return_code': 1, 'message': 'OK', 'data': data}), 200
 
 appbuilder.add_api(CommandMasterApi)
