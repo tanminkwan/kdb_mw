@@ -192,3 +192,37 @@ IDP_INTERNAL_SERVER_URL = os.getenv('IDP_INTERNAL_SERVER_URL', 'http://mwm-idp:5
 IDP_EXTERNAL_SERVER_URL = os.getenv('IDP_EXTERNAL_SERVER_URL', 'http://localhost:5000')
 IDP_CLIENT_ID = os.getenv('IDP_CLIENT_ID', 'mwm-client')
 IDP_CLIENT_SECRET = os.getenv('IDP_CLIENT_SECRET', 'mwm-secret')
+
+# ---------------------------------------------------
+# MQTT (실시간 Command 발송)
+# ---------------------------------------------------
+# 브로커: eclipse-mosquitto:2.0 (별도 compose 프로젝트 'mqtt')
+# 컨테이너 내부에서는 localhost 가 아니라 docker 게이트웨이(172.26.0.1)를 써야 한다.
+#
+# MQTT 사용여부 스위치. 기본 False(opt-in).
+# False 이면 MQTT 관련 활성화를 일절 하지 않는다 —
+#   paho import 안 함 / 클라이언트 생성 안 함 / 백그라운드 스레드 안 뜸 /
+#   접속·재시도 안 함 / 발행 시도 안 함.
+# 전 구간이 기존 REST 폴링으로만 동작한다.
+MQTT_ENABLED = os.getenv('MQTT_ENABLED', 'False').lower() in ('true', '1', 'yes')
+MQTT_BROKER_HOST = os.getenv('MQTT_BROKER_HOST', 'localhost')
+MQTT_BROKER_PORT = int(os.getenv('MQTT_BROKER_PORT', '1883'))
+MQTT_USERNAME = os.getenv('MQTT_USERNAME', 'central')
+# 비밀번호는 코드에 두지 않는다. .env 또는 컨테이너 환경변수로만 주입한다.
+MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', '')
+# client_id 는 f"{MQTT_CLIENT_ID_PREFIX}-{socket.gethostname()}-{os.getpid()}" 로 조립한다.
+# pid 로 같은 서버의 프로세스 간 충돌을 막는다(중복 시 브로커가 기존 접속을 끊는다).
+MQTT_CLIENT_ID_PREFIX = os.getenv('MQTT_CLIENT_ID_PREFIX', 'controller')
+MQTT_KEEPALIVE = int(os.getenv('MQTT_KEEPALIVE', '60'))
+# 재접속 재시도 주기(초, 고정). paho reconnect_delay_set(min=max=이 값) 으로 지정한다.
+# 브로커가 죽어 있어도 앱 기동은 막지 않고 이 주기로 무한 재시도한다.
+MQTT_RECONNECT_DELAY = int(os.getenv('MQTT_RECONNECT_DELAY', '60'))
+# 연결성 로그 억제 창(초). 재시도가 60초마다 돌아도 사건 종류별 1시간에 1건만 남긴다.
+MQTT_LOG_THROTTLE_SECONDS = int(os.getenv('MQTT_LOG_THROTTLE_SECONDS', '3600'))
+# central 계정 ACL: topic write cmd/#  (발행 전용, 구독 시 메시지 미전달)
+MQTT_CMD_TOPIC = os.getenv('MQTT_CMD_TOPIC', 'cmd/{agent_id}/req')
+MQTT_BROADCAST_TOPIC = os.getenv('MQTT_BROADCAST_TOPIC', 'cmd/broadcast/req')
+MQTT_QOS = int(os.getenv('MQTT_QOS', '1'))
+# 명령 유효시간(초). 브로커가 이 시간이 지난 큐 메시지를 스스로 폐기한다.
+MQTT_MESSAGE_EXPIRY = int(os.getenv('MQTT_MESSAGE_EXPIRY', '3600'))
+MQTT_PUBLISH_TIMEOUT = float(os.getenv('MQTT_PUBLISH_TIMEOUT', '5'))
