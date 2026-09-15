@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import insert, JSON
 from app.models.common import get_uuid
+from app.mqtt import get_publisher
 from app.models.agent import AgCommandType, AgCommandMaster, AgCommandDetail\
     , AgResult, AgAgentGroup, AgAgent, AgFile, AgCommandHelper, AgAutorunResult
 from app.models.monitor import MoWasInstanceStatus
@@ -394,6 +395,66 @@ def finish_commands_by_scheduler():
 
     db.session.commit()
 
+# ---- MQTT 실시간 발송 ----
+
+def _queue_mqtt_publish(item):
+    """commit 이후에 발행할 Command 를 세션에 적재한다.
+
+    발행을 commit 전에 하면 Agent 가 명령을 받아 결과를 먼저 POST 할 수 있고,
+    그 시점에는 AgCommandDetail 이 아직 없어 결과가 유실된다.
+    """
+    db.session.info.setdefault('mqtt_pending', []).append(item)
+
+
+def flush_mqtt_pending(session):
+    """commit 직후 호출되어 적재된 Command 를 실제로 발행한다.
+
+    발행에 성공한 건만 command_status 를 MQTT 로 올린다. 실패한 건은 CREATE 로
+    남으므로 기존 REST 폴링이 그대로 가져간다(명령 유실 없음).
+    """
+    pending = session.info.pop('mqtt_pending', None)
+
+    if not pending:
+        return
+
+    publisher = get_publisher()
+
+    if not publisher:
+        logging.warning('MQTT publisher 없음 - Command %d건을 REST 폴링으로 fallback', len(pending))
+        return
+
+    delivered = []
+
+    for item in pending:
+        rtn = publisher.send_message(item['topic'], item['message'], key=item['key'])
+        if rtn > 0:
+            delivered.append(item)
+
+    logging.info('MQTT 발송: 성공 %d건 / 전체 %d건 (실패분은 REST 폴링으로 fallback)',
+                 len(delivered), len(pending))
+
+    if not delivered:
+        return
+
+    # 세션이 아니라 별도 커넥션으로 갱신한다. after_commit 안에서 db.session 을
+    # 다시 commit 하면 이 핸들러가 재진입한다.
+    try:
+        with db.engine.begin() as conn:
+            for item in delivered:
+                conn.execute(
+                    update(AgCommandDetail)
+                    .where(AgCommandDetail.command_id == item['command_id'],
+                           AgCommandDetail.agent_id == item['agent_id'],
+                           AgCommandDetail.repetition_seq == item['repetition_seq'],
+                           AgCommandDetail.command_status == 'CREATE')
+                    .values(command_status='MQTT')
+                )
+    except Exception:
+        # 갱신 실패 시 status 는 CREATE 로 남는다. Agent 가 push 로 이미 받았고
+        # 폴링으로 한 번 더 받을 수 있으므로, Agent 측 멱등 처리가 필요하다.
+        logging.exception('MQTT 발송 후 command_status 갱신 실패 (status 는 CREATE 유지)')
+
+
 def create_command_detail(command):
 
     logging.debug(f'Hennry create_command_detail {command}')
@@ -454,10 +515,12 @@ def create_command_detail(command):
     # Remove duplicated agents by set func
     for ag in set(ags):
 
+        # 아직 수행되지 않은 명령이 있으면 건너뛴다.
+        # CREATE(폴링 대기) 외에 MQTT/KAFKA(전달 완료, 결과 대기)도 미수행 상태다.
         commandDetail_rec = db.session.query(AgCommandDetail)\
                     .filter(AgCommandDetail.command_id==command_rec.command_id\
                         , AgCommandDetail.agent_id==ag.agent_id\
-                        , AgCommandDetail.command_status=='CREATE').first()
+                        , AgCommandDetail.command_status.in_(['CREATE', 'MQTT', 'KAFKA'])).first()
 
         if commandDetail_rec:
             continue
@@ -483,13 +546,16 @@ def create_command_detail(command):
 
         for i, t in enumerate(target_file_paths):
 
-            # REST
+            # REST 폴링 (기본)
             command_status = 'CREATE'
 
-            # Kafka
-            if command_rec.command_sender.name == 'KAFKA' and kafka_producer:
+            sender = command_rec.command_sender.name
+            mqtt_publisher = get_publisher() if sender == 'MQTT' else None
 
-                topic = 't_' + ag.agent_id
+            # message 는 Kafka/MQTT 에만 필요하다. get_result_hash 가 DB 조회라
+            # broadcast 시 Agent 수만큼 쿼리가 늘어나므로 분기 안에서만 만든다.
+            if (sender == 'KAFKA' and kafka_producer) or mqtt_publisher:
+
                 key = command_rec.command_id + '_' + str(repetition_seq + i)
                 message = dict(
                     command_id        = command_rec.command_id,
@@ -503,12 +569,40 @@ def create_command_detail(command):
                     result_hash       = get_result_hash(ag.agent_id, command_rec.command_id, repetition_seq + i)
                 )
 
-                rtn = kafka_producer.sendMessage(topic, message, key=key)
+                # Kafka
+                if sender == 'KAFKA':
 
-                if rtn > 0:
-                    command_status = 'KAFKA'
+                    rtn = kafka_producer.send_message('t_' + ag.agent_id, message, key=key)
+
+                    if rtn > 0:
+                        command_status = 'KAFKA'
+                    else:
+                        command_status = 'KAFKA_FAILED'
+
+                # MQTT : 적재만 하고 실제 발행은 commit 이후에 한다.
+                #        status 는 CREATE 로 두고, 발행 성공 시 MQTT 로 올린다.
                 else:
-                    command_status = 'KAFKA_FAILED'
+
+                    # Agent 는 MQTT 수신 시 cmdId 로 중복 실행을 걸러낸다.
+                    # (같은 cmdId 를 다시 받으면 무시) REST 폴링 payload 에는 없는
+                    # 필드이므로 MQTT 경로에서만 추가한다.
+                    mqtt_message = dict(message, cmdId=key)
+
+                    # Agent(Java) 는 이 필드들에 null 체크 없이 .length() 를 호출한다.
+                    # DB NULL 이 JSON null 로 나가면 NPE 로 명령이 조용히 버려지므로
+                    # (예외를 내부에서 삼켜 결과 보고조차 없다) 빈 문자열로 맞춘다.
+                    for _k in ('additional_params', 'target_object'):
+                        if mqtt_message.get(_k) is None:
+                            mqtt_message[_k] = ''
+
+                    _queue_mqtt_publish(dict(
+                        topic          = current_app.config['MQTT_CMD_TOPIC'].format(agent_id=ag.agent_id),
+                        key            = key,
+                        message        = mqtt_message,
+                        command_id     = command_rec.command_id,
+                        agent_id       = ag.agent_id,
+                        repetition_seq = repetition_seq + i,
+                    ))
 
             insert_dict = dict(
                     command_id        = command_rec.command_id,

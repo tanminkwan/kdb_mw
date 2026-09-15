@@ -115,11 +115,17 @@ class CommandStatusEnum(enum.Enum):
     FAILED     = 'Error 수신'
     KAFKA      = 'KAFKA로 전달'
     KAFKA_FAILED = 'KAFKA 전달 실패'
+    MQTT       = 'MQTT로 전달'
+    MQTT_FAILED = 'MQTT 전달 실패'
 
 class TargetToSendEnum(enum.Enum):
     SERVER     = 'MW Server'
     KAFKA      = 'Kafka' # result를 Kafka로만 보내는 경우 CommandDetail과 Result 생성 안함
     SERVER_N_KAFKA = 'Both of Them'
+    # MQTT 선택 시 실행구분(periodic_type)은 IMMEDIATE 로 강제된다.
+    # SERVER_N_MQTT 는 도입하지 않는다 - status 를 CREATE 로 두고 발행까지 하면
+    # Agent 가 push 와 polling 으로 같은 명령을 2회 실행할 수 있다.
+    MQTT       = 'MQTT (실시간)'
 
 class WasInstanceStatusEnum(enum.Enum):
     RUNNING    = 'RUNNING'
@@ -219,7 +225,7 @@ def getColoredText(obj):
         ApmEnum = {'JENNIFER':'brown', 'PHAROS':'green', 'NONE':'white'},
         OSEnum = {'LINUX':'#966F33', 'AIX':'#0000A0', 'WINDOWS':'#357EC7', 'HPUX':'green'},
         LocationEnum = {'PROD':'red', 'DR':'brown', 'DEV':'blue', 'TEST':'green'},
-        CommandStatusEnum = {'CREATE':'blue', 'SENDED':'brown', 'FAILED':'red', 'COMPLITED':'green','KAFKA':'brown','KAFKA_FAILED':'red'},
+        CommandStatusEnum = {'CREATE':'blue', 'SENDED':'brown', 'FAILED':'red', 'COMPLITED':'green','KAFKA':'brown','KAFKA_FAILED':'red','MQTT':'brown','MQTT_FAILED':'red'},
         ResultStatusEnum = {'CREATE':'blue', 'FAILED':'red', 'ERROR':'red', 'NOCHANGE':'#808080', 'COMPLITED':'green'}
     )
     try:

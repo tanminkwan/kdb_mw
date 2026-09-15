@@ -16,7 +16,8 @@ from app.file_manager.s3.filemanager import S3FileManager, S3FileUploadField
 from .common import FilterStartsWithFunction, get_mw_user\
     , ReadOnlyField, RequiredOnContidion, ValidateBatchFunctionName
 from app.sqls.agent import cancel_commands, create_command_detail\
-    , update_result_status, broadcast_callback_registry
+    , update_result_status, broadcast_callback_registry, flush_mqtt_pending
+from app.models.common import PeriodicTypeEnum
 from sqlalchemy import event
 
 from wtforms import Form, StringField
@@ -69,6 +70,53 @@ def delete_command_job(mapper, connection, target):
         scheduler.remove_job('RunBatch_'+ target.command_id)
     except Exception as e:
         pass
+
+def _force_immediate_for_mqtt(target):
+    """command_sender 가 MQTT 면 실행구분을 IMMEDIATE 로 강제한다.
+
+    IMMEDIATE 만이 after_insert 에서 create_command_detail() 을 동기 호출하는
+    경로다. ONETIME/PERIODIC 은 APScheduler 에 등록되어 나중에 상세가 생성되므로
+    '실시간 push' 라는 MQTT 도입 목적이 성립하지 않는다.
+    """
+    if not target.command_sender or target.command_sender.name != 'MQTT':
+        return
+
+    if target.periodic_type != PeriodicTypeEnum.IMMEDIATE:
+        logging.info('command_sender=MQTT -> periodic_type 을 IMMEDIATE 로 강제 (요청값=%s)',
+                     target.periodic_type)
+
+    target.periodic_type = PeriodicTypeEnum.IMMEDIATE
+    # 스케줄 관련 필드는 의미가 없어지므로 함께 비운다.
+    # set_interval_type 훅에 의존하지 않도록 여기서 직접 정리해 등록 순서와 무관하게 한다.
+    target.time_to_exe   = None
+    target.time_to_stop  = None
+    target.cycle_to_exe  = None
+    target.interval_type = None
+
+
+@db.event.listens_for(AgCommandMaster, 'before_insert')
+def force_immediate_for_mqtt_on_insert(mapper, connection, target):
+    _force_immediate_for_mqtt(target)
+
+
+@db.event.listens_for(AgCommandMaster, 'before_update')
+def force_immediate_for_mqtt_on_update(mapper, connection, target):
+    _force_immediate_for_mqtt(target)
+
+
+@db.event.listens_for(db.session, 'after_commit')
+def flush_mqtt_pending_after_commit(session):
+    """적재된 MQTT Command 를 commit 이후에 발행한다 (app/sqls/agent.py).
+
+    적재분이 없으면 즉시 반환하므로 MQTT 와 무관한 commit 에는 영향이 없다.
+    """
+    try:
+        flush_mqtt_pending(session)
+    except Exception:
+        # 발행 실패가 commit 을 되돌리게 해서는 안 된다.
+        # 발행 못 한 Command 는 status CREATE 로 남아 REST 폴링이 처리한다.
+        logging.exception('MQTT 발송 처리 중 예외 (REST 폴링으로 fallback)')
+
 
 @db.event.listens_for(AgCommandMaster, 'before_insert')
 def set_interval_type(mapper, connection, target):

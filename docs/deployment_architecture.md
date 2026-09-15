@@ -24,6 +24,7 @@ flowchart LR
         Minio["mwm-minio<br/>(Port: 9000)"]
         DB[("mwm-db (PostgreSQL)<br/>(Port: 5433)")]
         Redis[("mwm-redis")]
+        Mqtt["mqtt-broker<br/>(Port: 1883)"]
     end
     
     %% 서버 2
@@ -56,6 +57,7 @@ flowchart LR
 | | | `mwm-db` | 5433:5432 | PostgreSQL DB |
 | | | `mwm-redis` | 6379 | 캐시 처리 / 세션 관리 |
 | | | `mwm-minio` | 9000 (API) | S3 호환 오브젝트 스토리지 |
+| | | `mqtt-broker` | 1883 | MQTT 브로커(Mosquitto). 에이전트 실시간 명령 전달. **선택 구성** |
 
 | 물리 서버 | 역할 | 도커 컨테이너(서비스) | 포트 | 비고 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -70,6 +72,19 @@ Nginx는 `papmar11` 시스템에서 구동되며 20443 포트와 SSL 인증서�
 *   **Minio (오브젝트 디렉터리)**: `https://mwm-minio.kdb.co.kr:20443` -> `http://localhost:9000` 
 *   **Kroki**: `https://mwm-mermaid.kdb.co.kr:20443`  -> `http://papmar12:8081`
 *   **Metabase**: `https://mwm-metabase.kdb.co.kr:20443` -> `http://papmar12:3000`
+
+### 1-3. MQTT 브로커 (선택 구성)
+에이전트 실시간 명령 전달을 쓰는 경우에만 필요합니다. 구성하지 않으면
+`MQTT_ENABLED=False` 로 두고 기존 REST 폴링으로 동작합니다.
+
+*   Nginx 를 경유하지 않습니다. 에이전트가 브로커의 `1883` 에 **직접 접속**합니다.
+*   `mwm-app` 과 브로커가 **서로 다른 Docker 네트워크(별도 compose 프로젝트)** 에 있으면
+    컨테이너 이름으로 해석되지 않습니다. 이 경우 `MQTT_BROKER_HOST` 에 docker 게이트웨이
+    IP(예: `172.26.0.1`)를 지정하거나, 브로커 네트워크를 `mwm-app` 에 연결해야 합니다.
+*   방화벽에서 **에이전트 → 브로커 1883** 인바운드를 허용해야 합니다.
+*   현재 구성은 평문 1883 입니다. 운영 적용 시 TLS(8883) 또는 mTLS 검토가 필요합니다
+    ([mTLS_based_auth.md](mTLS_based_auth.md)).
+*   브로커 설정·ACL·계정 구성은 [HOWTO_016](HOWTO_016_mqtt_realtime_command.md) 참고.
 
 ---
 

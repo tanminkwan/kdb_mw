@@ -117,6 +117,14 @@ services:
       IDP_INTERNAL_SERVER_URL: https://idp.mwm.local:20443
       IDP_CLIENT_ID: mwm-client
       IDP_CLIENT_SECRET: mwm-secret
+      # MQTT 실시간 Command 발송. 기본 끔. 켤 때만 호스트 .env 에서 True 로 준다.
+      # 브로커는 별도 compose 프로젝트(mqtt)에 있어 컨테이너 이름으로 닿지 않는다.
+      # 호스트에 노출된 1883 을 게이트웨이 IP 경유로 접근한다.
+      MQTT_ENABLED: ${MQTT_ENABLED:-False}
+      MQTT_BROKER_HOST: ${MQTT_BROKER_HOST:-172.26.0.1}
+      MQTT_BROKER_PORT: ${MQTT_BROKER_PORT:-1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-central}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
     #      PLANTUML_URL: https://mwm-plantuml.kdb.co.kr:20443
     links:
       - mwm-db

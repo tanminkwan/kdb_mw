@@ -124,6 +124,10 @@ appbuilder.add_link("API Documentation", href="/swagger/v1", category="Security"
 # Use add_view with category to ensure sync_role_permissions can collect all PVMs correctly
 appbuilder.add_view(TokenView(), "개인 인증 토큰 발급", icon="fa-user", category="나의 정보")
 
+# MQTT 실시간 Command 발송 (MQTT_ENABLED=False 면 아무 작업도 하지 않는다)
+from .mqtt import init_publisher as init_mqtt_publisher
+init_mqtt_publisher(app.config)
+
 scheduler.init_app(app)
 scheduler.start()
 

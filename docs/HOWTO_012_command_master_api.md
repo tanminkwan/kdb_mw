@@ -35,6 +35,18 @@ curl -X POST "http://<SERVER_IP>:<PORT>/api/v1/command_master/create" \
 
 ### 선택 항목
 * `parameters` (String/JSON 객체): 명령어 실행 시 추가적으로 필요한 설정 값
+* `command_sender` (String): 명령 전달 방식. 기본값 `SERVER`
+  | 값 | 동작 |
+  |---|---|
+  | `SERVER` (기본) | 에이전트가 REST 폴링으로 가져감. 폴링 주기만큼 지연 발생 |
+  | `MQTT` | 생성 직후 MQTT 브로커로 즉시 push. 폴링 지연 없음 (실측 2초 내 수행 완료) |
+
+  * 값을 주지 않으면 기존과 동일하게 동작하므로 **기존 호출을 수정할 필요가 없습니다.**
+  * `MQTT` 지정 시 발행이 실패하면(브로커 장애, 에이전트 세션 없음 등) 명령이 `CREATE`
+    상태로 남아 **기존 REST 폴링으로 자동 fallback** 됩니다. 명령이 유실되지 않습니다.
+  * 서버에서 MQTT 가 비활성(`MQTT_ENABLED=False`)이면 `MQTT` 를 지정해도 폴링으로 전달됩니다.
+  * 허용되지 않는 값은 HTTP 400 으로 거부되며 응답에 허용 목록이 포함됩니다.
+  * 상세: [HOWTO_016](HOWTO_016_mqtt_realtime_command.md)
 
 ## 5. 요청 예시
 
@@ -57,6 +69,25 @@ curl -X POST "http://<SERVER_IP>:<PORT>/api/v1/command_master/create" \
   "command_type_id": "CMD_SYNC_STATUS",
   "broadcast_callback": "sync_all_agents",
   "parameters": "{\"force_sync\": true}"
+}
+```
+
+### 5.3. MQTT 로 즉시 전달
+`command_sender`에 `MQTT`를 지정하면 폴링을 기다리지 않고 바로 에이전트에 도달합니다.
+```json
+{
+  "command_type_id": "COMMON.READFILE",
+  "target_agent_id": ["hennry-PN40_hennry_J"],
+  "parameters": "/home/hennry/projects/mqtt/DESIGN.md",
+  "command_sender": "MQTT"
+}
+```
+
+실패 응답 예시 (허용되지 않는 값):
+```json
+{
+  "return_code": -2,
+  "message": "Invalid command_sender: BOGUS. Use one of ['SERVER', 'KAFKA', 'SERVER_N_KAFKA', 'MQTT']"
 }
 ```
 
@@ -86,8 +117,20 @@ API를 통해 요청된 데이터는 `AgCommandMaster` 테이블에 기록되며
 * `periodic_type`: `IMMEDIATE`
 * `publish_yn`: `YES`
 * `cancel_yn` / `finished_yn`: `NO`
-* `command_sender` / `result_receiver`: `SERVER`
+* `result_receiver`: `SERVER`
+* `command_sender`: 요청의 `command_sender` 값 (미지정 시 `SERVER`)
 * 파라미터로 지정된 대상에 따라 `ag_agent` 및 `ag_agent_group` 연결 매핑 자동 생성 (SQLAlchemy).
+
+`command_sender=MQTT` 인 경우 `AgCommandDetail.command_status` 가 다음과 같이 전이합니다.
+
+| 상황 | status 흐름 |
+|---|---|
+| 정상 | `MQTT` → (결과 수신) `COMPLITED` / `FAILED` |
+| 발행 실패·구독자 없음 | `CREATE` 유지 → (REST 폴링) `SENDED` → `COMPLITED` / `FAILED` |
+
+> `periodic_type` 은 이 API 가 항상 `IMMEDIATE` 로 설정합니다. `command_sender=MQTT` 는
+> 실시간 push 전용이므로 실행 구분이 `IMMEDIATE` 여야 하며, UI 등 다른 경로로 생성할 때도
+> 서버가 자동으로 `IMMEDIATE` 로 강제합니다.
 
 ## 8. 명령 실행 결과 조회 (`GET /result`)
 에이전트가 명령을 수행하고 보고한 결과(`ag_result`)를 조회합니다.

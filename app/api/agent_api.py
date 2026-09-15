@@ -4,7 +4,7 @@ import re
 import sys
 from io import BytesIO
 from datetime import datetime, timedelta
-from flask import g, request, jsonify, send_file
+from flask import g, request, jsonify, send_file, current_app
 from flask_appbuilder.api import BaseApi, expose, protect
 from flask_jwt_extended import create_refresh_token
 
@@ -86,10 +86,29 @@ class CommandApi(BaseApi):
 
         #최초 접속인 경우
         if agent_status == 'BOOT':
-            data.append(dict(
+
+            boot_info = dict(
                         command_class     = 'BOOT',
                         kafka_broker_address = ','.join(KAFKA_BROKERS)
-                    ))
+                    )
+
+            # MQTT 접속 정보. Agent 가 브로커 주소를 하드코딩하지 않게 한다.
+            # 비밀번호는 내려주지 않는다 - Agent 계정은 브로커 passwd/acl 에
+            # 별도 프로비저닝되어야 하며, username 은 agent_id 와 같다.
+            if current_app.config.get('MQTT_ENABLED'):
+                boot_info.update(
+                        mqtt_enabled         = True,
+                        mqtt_broker_host     = current_app.config['MQTT_BROKER_HOST'],
+                        mqtt_broker_port     = current_app.config['MQTT_BROKER_PORT'],
+                        mqtt_username        = agent_id,
+                        mqtt_topic           = current_app.config['MQTT_CMD_TOPIC'].format(agent_id=agent_id),
+                        mqtt_broadcast_topic = current_app.config['MQTT_BROADCAST_TOPIC'],
+                        mqtt_qos             = current_app.config['MQTT_QOS'],
+                    )
+            else:
+                boot_info.update(mqtt_enabled=False)
+
+            data.append(boot_info)
 
         db.session.commit()
 
@@ -316,6 +335,15 @@ class CommandMasterApi(BaseApi):
                       type: object
                       description: 명령어 실행 시 필요한 추가 파라미터 (JSON 객체 또는 문자열)
                       example: {"module": "nginx", "restart": true}
+                    command_sender:
+                      type: string
+                      enum: [SERVER, MQTT]
+                      default: SERVER
+                      description: >
+                        전달 방식. SERVER 는 Agent 의 REST 폴링으로 전달(기본).
+                        MQTT 는 생성 직후 브로커로 즉시 push 하여 폴링 지연을 없앤다.
+                        MQTT 발행이 실패하면 자동으로 REST 폴링으로 fallback 된다.
+                      example: MQTT
           responses:
             201:
               description: 생성 성공
@@ -365,6 +393,16 @@ class CommandMasterApi(BaseApi):
         elif isinstance(parameters, (dict, list)):
             parameters = json.dumps(parameters)
 
+        # 전달 방식. 기본은 SERVER(Agent 가 REST 폴링으로 가져감).
+        # MQTT 를 주면 서버가 commit 직후 cmd/{agent_id}/req 로 즉시 push 한다.
+        # 발행이 실패하면 status 가 CREATE 로 남아 REST 폴링으로 fallback 된다.
+        command_sender = data.get('command_sender', 'SERVER')
+
+        if command_sender not in TargetToSendEnum.__members__:
+            return jsonify({'return_code': -2,
+                            'message': f'Invalid command_sender: {command_sender}. '
+                                       f'Use one of {list(TargetToSendEnum.__members__)}'}), 400
+
         new_command_id = get_uuid()
 
         cmd_master = AgCommandMaster(
@@ -375,7 +413,7 @@ class CommandMasterApi(BaseApi):
             publish_yn=YnEnum.YES,
             cancel_yn=YnEnum.NO,
             finished_yn=YnEnum.NO,
-            command_sender=TargetToSendEnum.SERVER,
+            command_sender=TargetToSendEnum[command_sender],
             result_receiver=TargetToSendEnum.SERVER,
             broadcast_callback=broadcast_callback
         )

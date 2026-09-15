@@ -16,6 +16,9 @@
   - 설치 경로 분석을 통한 도메인 ID 자동 추출 및 PK 매칭.
   - 설정 파일 변경분 대사(DeepDiff) 및 히스토리 관리.
 - **가시성 최적화**: WAS/WEB 간의 복잡한 연결 관계를 시각화한 Relationship Diagram 제공.
+- **실시간 명령 전달(MQTT)**: 명령 생성 즉시 MQTT 브로커로 push 하여 에이전트 폴링 주기만큼의
+  지연을 제거 (실측 2초 내 수행 완료). 발행 실패 시 기존 REST 폴링으로 자동 fallback 되므로
+  브로커 장애가 기능 장애로 번지지 않음. 기본 비활성(`MQTT_ENABLED`)으로 opt-in.
 
 ### 🛡️ 데이터 정합성 & 보안 강화
 - **통합 인증 체계**: OIDC/OAuth2 기반의 SSO 및 **개인 인증 토큰(JWT)** 발급 시스템 구축.
@@ -36,12 +39,18 @@
   - **SQLAlchemyJobStore** 도입으로 스케줄 정보 DB 영구 저장.
   - Multi-Worker(Gunicorn) 환경에서도 안전한 단일 스케줄러 인스턴스 보장.
 - **Storage/Cache**: PostgreSQL 16+, Redis 7+ (Session & Cache)
+- **Messaging**: Eclipse Mosquitto 2.0 (MQTT 5) — 에이전트 실시간 명령 전달 채널.
+  발행 전용 ACL(`topic write cmd/#`)로 컨트롤러 권한을 최소화하고, 브로커 영속 세션으로
+  오프라인 에이전트에도 명령을 큐잉.
 - **Engine 연동**: Kroki (Mermaid 렌더링), MinIO/S3 (오브젝트 스토리지)
 
 ## 📂 주요 가이드 (Documentation)
 - **[Email API 연동 가이드 (초보용)](docs/HOWTO_010_email_api_guide.md)**: 토큰 발급부터 Python 연동 샘플까지 포함.
 - **[비상 대응 가이드 (Emergency Response)](docs/emergency_response.md)**: DB 세션 정리 및 컨테이너 복구 절차.
 - **[OAuth2 & OIDC 연동 가이드](idp/README.md)**: IDP 서버 구성 및 SSO 설정.
+- **[에이전트 명령 시스템](docs/agent_command_system.md)**: 명령 생성·배포·결과 수집의 전체 구조.
+- **[CommandMaster API 가이드](docs/HOWTO_012_command_master_api.md)**: REST 로 명령 생성 및 결과 조회.
+- **[MQTT 실시간 명령 전달](docs/HOWTO_016_mqtt_realtime_command.md)**: 브로커 구성, ACL, 재접속 정책, 구현 상세.
 
 ## 🚀 시작하기
 
@@ -58,6 +67,24 @@
    ```bash
    docker exec -it mwm-app flask fab create-admin
    ```
+
+### MQTT 실시간 명령 전달 활성화 (선택)
+기본값은 비활성이며, 켜지 않아도 기존 REST 폴링으로 정상 동작합니다.
+
+1. `.env.example` 을 복사해 `.env` 를 만들고 브로커 계정 정보를 채웁니다.
+   ```bash
+   cp .env.example .env   # MQTT_ENABLED=True, MQTT_PASSWORD=<발급받은 값>
+   ```
+2. 컨테이너를 재기동합니다. **환경변수이므로 이미지 재빌드는 필요하지 않습니다.**
+   ```bash
+   docker compose up -d --force-recreate mwm-app
+   ```
+3. 명령 생성 시 `command_sender: "MQTT"` 를 지정하면 즉시 push 됩니다
+   (미지정 시 기본값 `SERVER` = 기존 폴링 방식).
+
+> 의존성(`paho-mqtt`)을 추가·갱신했다면 base 이미지부터 다시 빌드해야 합니다.
+> `docker build -t mwm-base -f Dockerfile.base .` → `docker build -t mwm-app -f Dockerfile.app .`
+> 자세한 내용은 [HOWTO_016](docs/HOWTO_016_mqtt_realtime_command.md) 참고.
 
 ## 🛠️ 유지보수 및 진단
 - **로그 모니터링**: 

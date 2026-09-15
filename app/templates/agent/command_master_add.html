@@ -34,6 +34,32 @@
         }
         callbackField.on('change keyup', handleBroadcastChange);
         handleBroadcastChange();
+
+        // command_sender=MQTT 는 실시간 push 전용이므로 실행구분을 즉시작업으로 고정한다.
+        // 서버단 before_insert/before_update 훅이 최종 강제하지만, UI 에서 막지 않으면
+        // 사용자가 '주기작업'을 골랐다가 조용히 바뀌고, validator 가 결국 버려질
+        // cycle_to_exe/time_to_exe 입력을 요구하게 된다.
+        var senderField = $('#command_sender');
+        var scheduleFields = '#time_to_exe, #time_to_stop, #cycle_to_exe, #interval_type';
+
+        function handleSenderChange() {
+            var isMqtt = senderField.val() === 'MQTT';
+            var periodic = $('#periodic_type');
+
+            if (isMqtt) {
+                periodic.val('IMMEDIATE').trigger('change');
+                periodic.prop('disabled', true);
+                $(scheduleFields).val(null).prop('disabled', true);
+            } else {
+                periodic.prop('disabled', false);
+                $(scheduleFields).prop('disabled', false);
+            }
+        }
+
+        if (senderField.length) {
+            senderField.on('change', handleSenderChange);
+            handleSenderChange();
+        }
     });
 </script>
 {% endblock %}

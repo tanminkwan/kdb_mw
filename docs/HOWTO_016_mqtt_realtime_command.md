@@ -1,6 +1,6 @@
 # HOWTO_016: MQTT 실시간 Command 발송 구현 가이드
 
-> 상태: **설계/계획 단계** (코드 미구현). 브로커 접속 및 ACL 검증은 완료됨.
+> 상태: **구현 완료**. 실제 Agent 로 full loop 검증 완료 (발행 → MQTT push → 실행 2초 → 결과 수신 → COMPLITED).
 > 관련 문서: [agent_command_system.md](agent_command_system.md), [HOWTO_012](HOWTO_012_command_master_api.md), [SPEC_022](SPEC_022_command_result_api.md)
 
 ## 1. 개요
@@ -144,6 +144,74 @@ QoS 1 발행 시 reason code 가 유용하게 갈린다.
 존재한다는 뜻이며, 실제로 `persistence` 파일(`broker/data/mosquitto.db`)이 존재한다.
 → **`No matching subscribers` 를 "MQTT 로 전달 불가"로 판정하고 REST fallback 처리**하면
 명령 유실을 막을 수 있다. (설계 결정 D4, §7)
+
+### 4.3 Agent 측 payload 계약 (실제 Agent 검증으로 확인)
+
+살아있는 Agent(`hennry-PN40_hennry_J`)로 full loop 을 검증하며 확인한 사항이다.
+**REST 폴링 payload 를 그대로 보내면 동작하지 않는다.**
+
+#### (1) `cmdId` 가 필요하다
+
+Agent 는 MQTT 수신 시 `cmdId` 로 중복 실행을 걸러낸다(같은 값을 다시 받으면 무시).
+REST 폴링 응답에는 없는 필드이므로 MQTT 경로에서만 추가한다.
+값은 `{command_id}_{repetition_seq}` — 발행 key 와 같다.
+
+#### (2) 문자열 필드에 JSON `null` 을 보내면 명령이 조용히 사라진다
+
+Agent(Java)의 `ReadPlainFile.getFileFullName()` 은 null 체크 없이
+`commandVo.getAdditionalParams().length()` 를 호출한다.
+
+```java
+String file_name = commandVo.getTargetFileName();
+if (commandVo.getAdditionalParams().length() > 0) {   // additional_params 가 null 이면 NPE
+    file_name += "." + commandVo.getAdditionalParams();
+}
+```
+
+`AgCommandMaster.additional_params` 는 nullable 이고, `None` 은 `json.dumps` 에서
+`null` 로 직렬화된다. 그러면 Agent 는 `NullPointerException` 을 내고,
+**`ReadFile.execute()` 가 예외를 내부에서 삼킨 뒤 결과를 채우지 않고 반환**한다.
+즉 결과 보고(`sendResult`)조차 호출되지 않아 **아무 로그도 남지 않고 명령만 사라진다.**
+(브로커·토픽·QoS 는 모두 정상이었고 Agent 의 dispatch 까지 들어갔다)
+
+→ 발행 측에서 `additional_params` / `target_object` 의 `None` 을 `''` 로 보정한다.
+이 보정 하나로 full loop 이 통과했다(발행 → Agent 실행 2초 → 결과 수신 → `COMPLITED`).
+
+`additional_params` 가 null 일 때 터지는 곳은 `ReadPlainFile` 뿐이 아니다.
+
+| Agent 클래스 | 위치 | 증상 |
+|---|---|---|
+| `ReadPlainFile` | `:24`, `:36` | `.length()` 직접 호출 → NPE (2곳) |
+| `ExtractLog` | `:35-38` | `JSONParser().parse(null)` → NPE |
+| `ReadFullPathFile` | `:40` | null 안전 (경로 검증에서 거부) |
+| `ExeText` / `ExeScript` / `ExeShell` | — | null 안전 (조건 분기 또는 예외 포착) |
+
+#### `target_file_path` / `target_file_name` 은 보정하지 않는다
+
+이 둘은 NPE 를 내지 않지만 **더 조용히 망가진다.** Java 의 문자열 연결은 `null` 을
+`"null"` 문자열로 바꾸므로, `ReadPlainFile.java:28` 의
+`getTargetFilePath() + file_name` 이 `"nulldomain.xml"` 같은 경로를 만들어
+`FileNotFoundException` 으로 빠진다. (`ExeShell:47-48`, `ExeScript:49-50`,
+`DownloadFile:74,87` 도 같은 성격)
+
+그럼에도 **보정하지 않는 이유**: 이 두 필드는 `null` 이 "미지정"의 의미를 갖는
+command_class 가 있고, `''` 로 바꾸면 `"/some/path/" + ""` 가 되어 디렉터리를
+파일로 읽으려 하는 등 다른 오동작을 만든다. 보정은 `additional_params` /
+`target_object` 두 필드로 좁게 유지한다.
+
+> ⚠️ **REST 폴링 경로도 같은 위험을 갖는다.** `send_commands`
+> (`app/sqls/agent.py`)는 DB 값을 그대로 내려주므로 `additional_params` 가 NULL 인
+> 명령은 REST 로도 NPE 를 유발한다. UI 로 만든 명령은 빈 문자열 `''` 이 들어가
+> 지금까지 드러나지 않았을 뿐이다. 근본 수정은 Agent 쪽 null 체크이며
+> **mwagent 저장소 담당의 판단이 필요하다**(§11-8).
+
+#### (3) `command_class` 화이트리스트는 없다
+
+Agent 의 MQTT 핸들러는 `command_class` 값으로 `mwagent.order.{command_class}` 를
+동적 로딩한다. 별도 허용 목록이 없으므로 해당 클래스가 Agent 에 존재하면 동작한다.
+`ag_command_type` 등록 여부와 Agent 의 동적 로딩은 무관하다.
+
+---
 
 ---
 
@@ -313,7 +381,7 @@ MQTT_ENABLED = os.getenv('MQTT_ENABLED', 'False').lower() in ('true', '1', 'yes'
 | **D5** | `SERVER_N_MQTT` 는 기본 제공하지 않거나 문서에 위험을 명시 | status 를 `CREATE` 로 두고 발행까지 하면 Agent 가 push + poll 로 **2회 실행**한다. Agent 측 `(command_id, repetition_seq)` 멱등 처리가 전제 |
 | **D6** | 발행은 **DB commit 이후**에 수행한다 | commit 전에 발행하면 Agent 가 결과를 먼저 POST 해 `AgCommandDetail` 부재로 FK 위반/누락이 발생. 현재 Kafka 코드는 insert 전에 발행하는 구조라 이 순서를 그대로 베끼면 안 된다 |
 | **D7** | 브로드캐스트는 1차 구현에서 **Agent 별 개별 발행**으로 한다 | `AgCommandDetail` 이 Agent 별로 필요하고 `repetition_seq`·`result_hash` 가 Agent 별로 다름. `cmd/broadcast/req` 최적화는 payload 규격 변경이 필요해 2차 과제 |
-| **D8** | MQTT payload 는 REST 폴링 응답과 **동일한 dict 구조**를 쓴다 | Agent 파서 재사용. `app/sqls/agent.py:751-761` |
+| **D8** | MQTT payload 는 REST 폴링 응답과 **동일한 dict 구조**를 쓰되 **두 가지를 보정**한다 — `cmdId` 추가, `additional_params`/`target_object` 의 `None` 을 `''` 로 변환 | Agent 파서 재사용이 기본. 다만 Agent 의 MQTT 경로는 `cmdId` 로 중복 실행을 걸러내고, Java 측이 null 체크 없이 `.length()` 를 호출해 JSON null 이면 NPE 로 명령이 조용히 버려진다 (§4.3) |
 | **D9** | 결과 수신은 REST 유지 | §3.2 ACL 제약 |
 | **D10** | `MQTT_ENABLED` 기본값은 **False**(opt-in). 비활성 시 paho import 조차 하지 않는 지연 import 구조 | 브로커가 기본 네트워크에서 안 닿으므로(§5) 기본 True 면 기존 배포가 전부 재시도를 돌게 된다. 지연 import 로 **의존성 추가와 기능 활성화를 분리**한다 (§6.1) |
 | **D11** | `command_sender` 가 `MQTT` 면 `periodic_type` 을 **무조건 `IMMEDIATE`(즉시작업)로 강제**한다 | MQTT 의 목적은 폴링 지연 제거다. `ONETIME`/`PERIODIC` 은 APScheduler 가 나중에 상세를 만들므로 "실시간 push" 가 성립하지 않는다. 또 `IMMEDIATE` 만이 `create_command_detail()` 을 동기 호출하는 경로다 (§Step 3.1) |
@@ -715,9 +783,15 @@ ALTER TYPE targettosendenum  ADD VALUE IF NOT EXISTS 'MQTT';
 ALTER TYPE targettosendenum  ADD VALUE IF NOT EXISTS 'SERVER_N_MQTT';
 ```
 
-> `ALTER TYPE ... ADD VALUE` 는 트랜잭션 블록 안에서 실행할 수 없다.
-> 마이그레이션에서 `op.execute(text(...).execution_options(autocommit=True))` 또는
-> `COMMIT` 선행이 필요하다.
+> PG 12+ 는 트랜잭션 블록 안에서 `ALTER TYPE ... ADD VALUE` 를 허용한다
+> (추가한 값을 **같은 트랜잭션에서 사용**하는 것만 금지). DB 는 PostgreSQL 15.2 이고
+> 기존 `a1b2c3d4e5f6` 마이그레이션도 같은 방식이므로 `op.execute` 로 충분하다.
+
+> ⚠️ **이 환경의 alembic 체인은 이미 끊겨 있다.** DB `alembic_version` 이
+> `cc8f86f77bff` 인데 이 revision 이 `migrations/versions/` 와 git 이력 어디에도
+> 없어서 `flask db upgrade` 가 실패한다. 본 작업에서는 HOWTO_015 §3.2 의
+> 수동 SQL 방식으로 db 컨테이너에 직접 적용했다.
+> 마이그레이션 파일(`b7c1d9e4f2a8`)은 체인이 정상인 다른 환경용으로 남겨둔다.
 
 ### Step 5. 발송 분기 — `app/sqls/agent.py:490-511`
 
@@ -775,6 +849,46 @@ elif command_rec.command_sender.name in ('MQTT', 'SERVER_N_MQTT') and mqtt_publi
 
 > **비밀번호는 내려주지 않는다.** Agent 의 MQTT 계정은 브로커 `passwd`/`acl` 에
 > 별도 프로비저닝되어야 하며(§9), 그 배포 경로는 본 계획 범위 밖이다.
+
+### Step 7.1 REST API 로 MQTT Command 전달 (검증 완료)
+
+외부 시스템이 MQTT 로 명령을 보내려면 `POST /api/v1/command_master/create` 에
+`command_sender` 를 주면 된다. **기본값은 `SERVER`** 이므로 기존 호출은 그대로 동작한다.
+
+```bash
+# 1) 로그인
+curl -s -X POST http://mwm-app:8000/api/v1/security/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"<user>","password":"<pw>","provider":"db","refresh":true}'
+
+# 2) MQTT 로 즉시 전달
+curl -s -X POST http://mwm-app:8000/api/v1/command_master/create \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"command_type_id":"Read.domain.xml",
+       "target_agent_id":"hennry-PN40_hennry_J",
+       "parameters":"",
+       "command_sender":"MQTT"}'
+# -> 201 {"return_code":1,"message":"OK","command_id":"fce4f4d142cb"}
+
+# 3) 결과 조회
+curl -s "http://mwm-app:8000/api/v1/command_master/result?command_id=fce4f4d142cb" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+- `command_sender` 미지정 → `SERVER` (기존 동작, REST 폴링으로 전달)
+- 잘못된 값 → `400` + 허용 목록 안내
+  (`Invalid command_sender: BOGUS. Use one of ['SERVER', 'KAFKA', 'SERVER_N_KAFKA', 'MQTT']`)
+- 이 API 는 `periodic_type=IMMEDIATE` 를 이미 하드코딩하므로 D11 강제와 충돌하지 않는다
+- `parameters` 는 미지정 시 `''` 가 들어가므로 §4.3 의 JSON null 문제도 발생하지 않는다
+
+#### 실측 대조 — 같은 명령을 두 방식으로 생성
+
+| command_id | command_sender | 결과 |
+|---|---|---|
+| `fce4f4d142cb` | **MQTT** | **2초 후 `COMPLITED`** (Agent 가 push 로 수신·실행) |
+| `27ea71353212` | `SERVER` | 동시점에 여전히 `CREATE` (다음 폴링 주기 대기) |
+
+폴링 지연 제거라는 도입 목적이 그대로 확인된다.
 
 ### Step 8. 폴링 부기(bookkeeping) 보완
 
@@ -884,5 +998,13 @@ docker run --rm --network mw_app_default eclipse-mosquitto:2.0 \
 6. **`agent_id` 토픽 안전성.** `agent_id` 는 사용자/호스트 유래 자유 문자열이고
    코드에 sanitize 가 없다. `+`, `#`, `/` 가 포함되면 토픽이 깨지므로
    Agent 등록 시점(`app/sqls/agent.py:781`) 검증 추가 권장
-7. **Kafka 경로 정리.** `KAFKA_BROKERS = []` 로 사실상 사장된 코드에
+7. **Agent 의 null 체크 누락 (mwagent 저장소).**
+   `ReadPlainFile.getFileFullName()` 이 `getAdditionalParams()` 에 null 체크 없이
+   `.length()` 를 호출해 NPE 가 난다. 더 나쁜 점은 `ReadFile.execute()` 가 예외를
+   삼켜 **결과 보고 없이 명령이 사라진다**는 것이다. 서버측은 `''` 보정으로 우회했지만
+   (§4.3) 근본 수정은 Agent 쪽이며, 예외 시 실패 결과라도 보고하게 해야 진단이 가능하다.
+8. **결과 POST 의 FK 위반이 HTTP 500 으로 응답된다.**
+   서버가 만들지 않은 `command_id` 로 결과를 보내면(예: 토픽에 직접 발행한 명령)
+   `ag_result` FK 위반으로 500 이 난다. 의도된 무결성 제약이므로 4xx + 명확한 메시지가 맞다.
+9. **Kafka 경로 정리.** `KAFKA_BROKERS = []` 로 사실상 사장된 코드에
    `sendMessage` 오타 버그까지 있다. MQTT 도입 후 Kafka 분기 제거 여부 결정
