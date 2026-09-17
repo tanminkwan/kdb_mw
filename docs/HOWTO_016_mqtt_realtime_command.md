@@ -780,8 +780,10 @@ PostgreSQL native enum 이므로 `ALTER TYPE` 이 필요하다
 ALTER TYPE commandstatusenum ADD VALUE IF NOT EXISTS 'MQTT';
 ALTER TYPE commandstatusenum ADD VALUE IF NOT EXISTS 'MQTT_FAILED';
 ALTER TYPE targettosendenum  ADD VALUE IF NOT EXISTS 'MQTT';
-ALTER TYPE targettosendenum  ADD VALUE IF NOT EXISTS 'SERVER_N_MQTT';
 ```
+
+> `SERVER_N_MQTT` 는 도입하지 않았으므로 추가하지 않는다
+> (`app/models/common.py` 참고 - push/polling 이중 실행 위험).
 
 > PG 12+ 는 트랜잭션 블록 안에서 `ALTER TYPE ... ADD VALUE` 를 허용한다
 > (추가한 값을 **같은 트랜잭션에서 사용**하는 것만 금지). DB 는 PostgreSQL 15.2 이고

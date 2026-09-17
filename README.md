@@ -51,6 +51,7 @@
 - **[에이전트 명령 시스템](docs/agent_command_system.md)**: 명령 생성·배포·결과 수집의 전체 구조.
 - **[CommandMaster API 가이드](docs/HOWTO_012_command_master_api.md)**: REST 로 명령 생성 및 결과 조회.
 - **[MQTT 실시간 명령 전달](docs/HOWTO_016_mqtt_realtime_command.md)**: 브로커 구성, ACL, 재접속 정책, 구현 상세.
+- **[MQTT 프로덕션 적용 절차](docs/HOWTO_017_mqtt_production_deployment.md)**: 적용 순서, 복사 대상 소스, config/compose 설정, 롤백.
 
 ## 🚀 시작하기
 
